@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-throne-darker text-white;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-6 py-3 rounded-lg font-bold text-lg transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-gold {
+    @apply btn bg-throne-gold text-throne-darker hover:bg-yellow-400 active:scale-95;
+  }
+  .btn-green {
+    @apply btn bg-throne-green text-white hover:bg-green-400 active:scale-95;
+  }
+  .btn-red {
+    @apply btn bg-throne-red text-white hover:bg-red-400 active:scale-95;
+  }
+  .btn-purple {
+    @apply btn bg-throne-purple text-white hover:bg-purple-600 active:scale-95;
+  }
+  .btn-outline {
+    @apply btn border-2 border-throne-gold text-throne-gold hover:bg-throne-gold hover:text-throne-darker;
+  }
+  .card {
+    @apply bg-throne-dark rounded-xl p-6 border border-gray-800;
+  }
+  .input {
+    @apply w-full px-4 py-3 rounded-lg bg-throne-darker border border-gray-700 text-white text-lg focus:outline-none focus:border-throne-gold focus:ring-1 focus:ring-throne-gold;
+  }
+  .sat-counter {
+    @apply font-mono text-throne-gold;
+  }
+
+  /* Chess board squares */
+  .square-light {
+    @apply bg-amber-100;
+  }
+  .square-dark {
+    @apply bg-amber-800;
+  }
+}
+
+/* Sat counter tick animation */
+@keyframes satTick {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.sat-tick {
+  animation: satTick 0.3s ease-in-out;
+}
+
+/* Crown animation for new king */
+@keyframes crownDrop {
+  0% { transform: translateY(-100px) rotate(-20deg); opacity: 0; }
+  60% { transform: translateY(10px) rotate(5deg); opacity: 1; }
+  80% { transform: translateY(-5px) rotate(-2deg); }
+  100% { transform: translateY(0) rotate(0deg); opacity: 1; }
+}
+
+.crown-drop {
+  animation: crownDrop 1s ease-out;
+}
+
+/* Queue position pulse for on-deck player */
+@keyframes onDeckPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.4); }
+  50% { box-shadow: 0 0 0 15px rgba(255, 215, 0, 0); }
+}
+
+.on-deck-pulse {
+  animation: onDeckPulse 2s ease-in-out infinite;
+}

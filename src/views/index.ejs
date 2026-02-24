@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>960 Throne — King of the Hill Chess960</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+    </style>
+</head>
+<body class="min-h-screen bg-throne-darker flex items-center justify-center p-4">
+    <div class="max-w-md w-full">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="text-6xl mb-4">♚</div>
+            <h1 class="text-4xl font-bold text-throne-gold mb-2">960 Throne</h1>
+            <p class="text-gray-400 text-lg">King of the Hill Chess960</p>
+            <p class="text-gray-500 mt-1">Prospera, Roatán</p>
+        </div>
+
+        <!-- Current King ticker -->
+        <% if (state.king) { %>
+        <div class="card mb-6 text-center">
+            <div class="text-sm text-gray-400 mb-1">👑 Current King</div>
+            <div class="text-2xl font-bold text-throne-gold"><%= state.king.name %></div>
+            <div class="text-sm text-gray-400 mt-1"><%= state.config.satRate %> sats/sec</div>
+        </div>
+        <% } %>
+
+        <!-- Register / Login forms -->
+        <div class="card">
+            <div id="register-section">
+                <h2 class="text-xl font-bold mb-4">Register to Play</h2>
+                <form id="register-form" onsubmit="return handleRegister(event)">
+                    <input type="text" id="reg-name" class="input mb-3" placeholder="Your name" maxlength="30" required autofocus>
+                    <button type="submit" class="btn-gold w-full">Join the Arena</button>
+                </form>
+                <div id="pin-display" class="hidden mt-4 p-4 bg-throne-darker rounded-lg text-center">
+                    <p class="text-sm text-gray-400 mb-2">Your PIN (save this!):</p>
+                    <p class="text-4xl font-mono font-bold text-throne-gold" id="pin-value"></p>
+                    <p class="text-xs text-gray-500 mt-2">You'll need this PIN to log back in</p>
+                    <a href="/player" class="btn-gold inline-block mt-4">Continue →</a>
+                </div>
+            </div>
+
+            <div class="border-t border-gray-700 mt-6 pt-4">
+                <h3 class="text-sm text-gray-400 mb-3">Already registered?</h3>
+                <form id="login-form" onsubmit="return handleLogin(event)">
+                    <input type="text" id="login-name" class="input mb-2" placeholder="Your name">
+                    <input type="text" id="login-pin" class="input mb-3" placeholder="4-digit PIN" maxlength="4" inputmode="numeric">
+                    <button type="submit" class="btn-outline w-full">Log In</button>
+                </form>
+            </div>
+
+            <div id="error-msg" class="hidden mt-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-300 text-sm"></div>
+        </div>
+
+        <!-- Links -->
+        <div class="flex justify-center gap-6 mt-6 text-sm text-gray-500">
+            <a href="/throne" class="hover:text-throne-gold transition-colors">👑 Throne</a>
+            <a href="/queue" class="hover:text-throne-gold transition-colors">📋 Queue</a>
+            <a href="/leaderboard" class="hover:text-throne-gold transition-colors">🏆 Leaderboard</a>
+        </div>
+    </div>
+
+    <script>
+        function showError(msg) {
+            const el = document.getElementById('error-msg');
+            el.textContent = msg;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 5000);
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const name = document.getElementById('reg-name').value.trim();
+            if (!name) return;
+
+            try {
+                const res = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const data = await res.json();
+                if (!res.ok) return showError(data.error);
+
+                // Show PIN
+                document.getElementById('pin-value').textContent = data.pin;
+                document.getElementById('register-form').classList.add('hidden');
+                document.getElementById('pin-display').classList.remove('hidden');
+
+                // If there was a venue code from QR scan, redirect to join
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('code')) {
+                    document.querySelector('#pin-display a').href = '/join?code=' + params.get('code');
+                }
+            } catch (err) {
+                showError('Connection error. Try again.');
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const name = document.getElementById('login-name').value.trim();
+            const pin = document.getElementById('login-pin').value.trim();
+            if (!name || !pin) return showError('Enter name and PIN');
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, pin })
+                });
+                const data = await res.json();
+                if (!res.ok) return showError(data.error);
+
+                // Check for venue code redirect
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('code')) {
+                    window.location.href = '/join?code=' + params.get('code');
+                } else {
+                    window.location.href = '/player';
+                }
+            } catch (err) {
+                showError('Connection error. Try again.');
+            }
+        }
+    </script>
+</body>
+</html>

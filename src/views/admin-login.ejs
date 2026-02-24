@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }</style>
+</head>
+<body class="min-h-screen bg-throne-darker flex items-center justify-center p-4">
+    <div class="max-w-sm w-full card">
+        <h1 class="text-xl font-bold mb-4 text-center">🔧 Admin Login</h1>
+        <form onsubmit="return handleLogin(event)">
+            <input type="password" id="password" class="input mb-3" placeholder="Admin password" autofocus>
+            <button type="submit" class="btn-purple w-full">Login</button>
+        </form>
+        <div id="error" class="hidden mt-3 text-red-400 text-sm text-center"></div>
+    </div>
+    <script>
+        async function handleLogin(e) {
+            e.preventDefault();
+            const res = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: document.getElementById('password').value })
+            });
+            if (res.ok) { location.reload(); }
+            else {
+                const d = await res.json();
+                document.getElementById('error').textContent = d.error;
+                document.getElementById('error').classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>

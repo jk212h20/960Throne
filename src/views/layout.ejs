@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= typeof title !== 'undefined' ? title + ' — ' : '' %>960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        /* Inline fallback styles in case Tailwind CSS hasn't been built yet */
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+        .fallback-center { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <%- typeof body !== 'undefined' ? body : '' %>
+    <% if (typeof content !== 'undefined') { %><%- content %><% } %>
+</body>
+</html>

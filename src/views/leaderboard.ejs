@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }</style>
+</head>
+<body class="min-h-screen bg-throne-darker p-4">
+    <div class="max-w-2xl mx-auto">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold">🏆 Leaderboard</h1>
+            <a href="<%= player ? '/player' : '/' %>" class="text-gray-500 hover:text-throne-gold text-sm">← Back</a>
+        </div>
+
+        <!-- Event Stats -->
+        <div class="grid grid-cols-4 gap-3 mb-6">
+            <div class="card text-center p-3">
+                <div class="text-xl font-bold text-throne-gold"><%= stats.totalGames %></div>
+                <div class="text-xs text-gray-400">Games</div>
+            </div>
+            <div class="card text-center p-3">
+                <div class="text-xl font-bold text-throne-gold"><%= stats.totalPlayers %></div>
+                <div class="text-xs text-gray-400">Players</div>
+            </div>
+            <div class="card text-center p-3">
+                <div class="text-xl font-bold text-throne-gold"><%= stats.totalReigns %></div>
+                <div class="text-xs text-gray-400">Kings</div>
+            </div>
+            <div class="card text-center p-3">
+                <div class="text-xl font-bold text-throne-gold"><%= stats.totalSatsDistributed.toLocaleString() %></div>
+                <div class="text-xs text-gray-400">Sats Paid</div>
+            </div>
+        </div>
+
+        <!-- Top Earners -->
+        <h2 class="text-lg font-bold mb-3 text-throne-gold">💰 Top Earners</h2>
+        <% if (leaderboard.length === 0) { %>
+        <div class="card text-center text-gray-500 mb-6">No games played yet</div>
+        <% } else { %>
+        <div class="card mb-6 overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-gray-400 border-b border-gray-700">
+                        <th class="text-left py-2 px-2">#</th>
+                        <th class="text-left py-2">Player</th>
+                        <th class="text-right py-2 px-2">Sats</th>
+                        <th class="text-right py-2 px-2">W</th>
+                        <th class="text-right py-2 px-2">L</th>
+                        <th class="text-right py-2 px-2">D</th>
+                        <th class="text-right py-2 px-2">Streak</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% leaderboard.forEach((p, i) => { %>
+                    <tr class="border-b border-gray-800 <%= i < 3 ? 'text-throne-gold' : '' %>">
+                        <td class="py-2 px-2 font-bold"><%= i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1 %></td>
+                        <td class="py-2 font-bold"><%= p.name %></td>
+                        <td class="py-2 px-2 text-right font-mono"><%= p.total_sats_earned.toLocaleString() %></td>
+                        <td class="py-2 px-2 text-right text-green-400"><%= p.games_won %></td>
+                        <td class="py-2 px-2 text-right text-red-400"><%= p.games_lost %></td>
+                        <td class="py-2 px-2 text-right text-gray-400"><%= p.games_drawn %></td>
+                        <td class="py-2 px-2 text-right"><%= p.longest_win_streak %></td>
+                    </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+        <% } %>
+
+        <!-- Longest Reigns -->
+        <h2 class="text-lg font-bold mb-3 text-throne-gold">⏱️ Longest Reigns</h2>
+        <% if (longestReigns.length === 0) { %>
+        <div class="card text-center text-gray-500">No completed reigns yet</div>
+        <% } else { %>
+        <div class="space-y-2">
+            <% longestReigns.forEach((r, i) => { %>
+            <div class="card flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="text-lg font-bold text-gray-500"><%= i + 1 %></span>
+                    <span class="font-bold"><%= r.king_name %></span>
+                </div>
+                <div class="text-right">
+                    <div class="font-mono text-throne-gold"><%= Math.floor(r.total_reign_seconds / 60) %>m <%= Math.floor(r.total_reign_seconds % 60) %>s</div>
+                    <div class="text-xs text-gray-400"><%= r.consecutive_wins %> wins · <%= r.total_sats_earned.toLocaleString() %> sats</div>
+                </div>
+            </div>
+            <% }) %>
+        </div>
+        <% } %>
+
+        <div class="flex justify-center gap-6 mt-6 text-sm text-gray-500">
+            <a href="/throne" class="hover:text-throne-gold transition-colors">👑 Throne</a>
+            <a href="/queue" class="hover:text-throne-gold transition-colors">📋 Queue</a>
+        </div>
+    </div>
+</body>
+</html>

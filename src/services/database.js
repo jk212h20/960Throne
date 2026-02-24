@@ -1,0 +1,745 @@
+/**
+ * Database service — SQLite via sql.js
+ * Handles all data storage for 960 Throne
+ */
+
+const initSqlJs = require('sql.js');
+const fs = require('fs');
+const path = require('path');
+
+const DB_PATH = process.env.DATABASE_PATH || './data/throne.db';
+
+let db = null;
+
+// ============================================================
+// Initialization
+// ============================================================
+
+async function initialize() {
+    const SQL = await initSqlJs();
+    const dbDir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true });
+    }
+
+    if (fs.existsSync(DB_PATH)) {
+        const buffer = fs.readFileSync(DB_PATH);
+        db = new SQL.Database(buffer);
+        console.log('📦 Loaded existing database');
+    } else {
+        db = new SQL.Database();
+        console.log('📦 Created new database');
+    }
+
+    createTables();
+    seedConfig();
+    save();
+    return db;
+}
+
+function save() {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(DB_PATH, buffer);
+}
+
+// Auto-save every 30 seconds
+setInterval(() => {
+    if (db) save();
+}, 30000);
+
+function createTables() {
+    db.run(`
+        CREATE TABLE IF NOT EXISTS players (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            pin TEXT NOT NULL,
+            session_token TEXT,
+            sat_balance INTEGER DEFAULT 0,
+            total_sats_earned INTEGER DEFAULT 0,
+            total_sats_claimed INTEGER DEFAULT 0,
+            games_played INTEGER DEFAULT 0,
+            games_won INTEGER DEFAULT 0,
+            games_lost INTEGER DEFAULT 0,
+            games_drawn INTEGER DEFAULT 0,
+            times_as_king INTEGER DEFAULT 0,
+            total_reign_seconds REAL DEFAULT 0,
+            longest_reign_seconds REAL DEFAULT 0,
+            longest_win_streak INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            last_seen_at TEXT DEFAULT (datetime('now'))
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_id INTEGER NOT NULL,
+            position INTEGER NOT NULL,
+            status TEXT DEFAULT 'waiting',
+            timeout_count INTEGER DEFAULT 0,
+            on_deck_since TEXT,
+            joined_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (player_id) REFERENCES players(id)
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS games (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            king_id INTEGER NOT NULL,
+            challenger_id INTEGER NOT NULL,
+            chess960_position INTEGER NOT NULL,
+            started_at TEXT DEFAULT (datetime('now')),
+            ended_at TEXT,
+            king_reported TEXT,
+            challenger_reported TEXT,
+            result TEXT,
+            sats_earned INTEGER DEFAULT 0,
+            reign_id INTEGER,
+            FOREIGN KEY (king_id) REFERENCES players(id),
+            FOREIGN KEY (challenger_id) REFERENCES players(id),
+            FOREIGN KEY (reign_id) REFERENCES reigns(id)
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS reigns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            king_id INTEGER NOT NULL,
+            crowned_at TEXT DEFAULT (datetime('now')),
+            dethroned_at TEXT,
+            total_reign_seconds REAL DEFAULT 0,
+            total_sats_earned INTEGER DEFAULT 0,
+            consecutive_wins INTEGER DEFAULT 0,
+            games_played INTEGER DEFAULT 0,
+            FOREIGN KEY (king_id) REFERENCES players(id)
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS payouts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_id INTEGER NOT NULL,
+            amount_sats INTEGER NOT NULL,
+            lightning_address TEXT,
+            payment_hash TEXT,
+            status TEXT DEFAULT 'pending',
+            error_message TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            completed_at TEXT,
+            FOREIGN KEY (player_id) REFERENCES players(id)
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS venue_codes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL UNIQUE,
+            created_at TEXT DEFAULT (datetime('now')),
+            expires_at TEXT,
+            is_active INTEGER DEFAULT 1
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS admin_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            message TEXT NOT NULL,
+            game_id INTEGER,
+            resolved INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    `);
+}
+
+function seedConfig() {
+    const defaults = {
+        sat_rate_per_second: '21',
+        time_control_base: '180',
+        time_control_increment: '2',
+        queue_timeout_seconds: '30',
+        winner_only_confirm_delay: '60',
+        venue_code_rotation_minutes: '30',
+        event_active: 'false',
+        current_king_id: '',
+        current_reign_id: '',
+        current_game_id: '',
+    };
+
+    for (const [key, value] of Object.entries(defaults)) {
+        const existing = db.exec(`SELECT value FROM config WHERE key = ?`, [key]);
+        if (existing.length === 0 || existing[0].values.length === 0) {
+            db.run(`INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)`, [key, value]);
+        }
+    }
+}
+
+// ============================================================
+// Config helpers
+// ============================================================
+
+function getConfig(key) {
+    const result = db.exec(`SELECT value FROM config WHERE key = ?`, [key]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return result[0].values[0][0];
+}
+
+function setConfig(key, value) {
+    db.run(`INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)`, [key, String(value)]);
+    save();
+}
+
+function getAllConfig() {
+    const result = db.exec(`SELECT key, value FROM config ORDER BY key`);
+    if (result.length === 0) return {};
+    const config = {};
+    for (const row of result[0].values) {
+        config[row[0]] = row[1];
+    }
+    return config;
+}
+
+// ============================================================
+// Player operations
+// ============================================================
+
+function createPlayer(name, pin) {
+    db.run(`INSERT INTO players (name, pin) VALUES (?, ?)`, [name, pin]);
+    save();
+    const result = db.exec(`SELECT last_insert_rowid()`);
+    return result[0].values[0][0];
+}
+
+function getPlayerById(id) {
+    const result = db.exec(`SELECT * FROM players WHERE id = ?`, [id]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return rowToObject(result[0]);
+}
+
+function getPlayerByName(name) {
+    const result = db.exec(`SELECT * FROM players WHERE LOWER(name) = LOWER(?)`, [name]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return rowToObject(result[0]);
+}
+
+function getPlayerBySession(token) {
+    const result = db.exec(`SELECT * FROM players WHERE session_token = ?`, [token]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return rowToObject(result[0]);
+}
+
+function setPlayerSession(playerId, token) {
+    db.run(`UPDATE players SET session_token = ?, last_seen_at = datetime('now') WHERE id = ?`, [token, playerId]);
+    save();
+}
+
+function updatePlayerStats(playerId, updates) {
+    const sets = [];
+    const values = [];
+    for (const [key, value] of Object.entries(updates)) {
+        sets.push(`${key} = ?`);
+        values.push(value);
+    }
+    values.push(playerId);
+    db.run(`UPDATE players SET ${sets.join(', ')} WHERE id = ?`, values);
+    save();
+}
+
+function addSatsToPlayer(playerId, sats) {
+    db.run(`UPDATE players SET sat_balance = sat_balance + ?, total_sats_earned = total_sats_earned + ? WHERE id = ?`, [sats, sats, playerId]);
+    save();
+}
+
+function deductSatsFromPlayer(playerId, sats) {
+    db.run(`UPDATE players SET sat_balance = sat_balance - ?, total_sats_claimed = total_sats_claimed + ? WHERE id = ?`, [sats, sats, playerId]);
+    save();
+}
+
+function getAllPlayers() {
+    const result = db.exec(`SELECT * FROM players ORDER BY total_sats_earned DESC`);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
+function getLeaderboard() {
+    const result = db.exec(`
+        SELECT id, name, total_sats_earned, games_played, games_won, games_lost, games_drawn,
+               times_as_king, total_reign_seconds, longest_reign_seconds, longest_win_streak
+        FROM players 
+        WHERE games_played > 0
+        ORDER BY total_sats_earned DESC
+        LIMIT 50
+    `);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
+// ============================================================
+// Queue operations
+// ============================================================
+
+function addToQueue(playerId) {
+    // Get max position
+    const maxResult = db.exec(`SELECT COALESCE(MAX(position), 0) FROM queue WHERE status IN ('waiting', 'on_deck')`);
+    const maxPos = maxResult[0].values[0][0];
+    db.run(`INSERT INTO queue (player_id, position, status, timeout_count) VALUES (?, ?, 'waiting', 0)`, [playerId, maxPos + 1]);
+    save();
+    const result = db.exec(`SELECT last_insert_rowid()`);
+    return result[0].values[0][0];
+}
+
+function getQueue() {
+    const result = db.exec(`
+        SELECT q.*, p.name as player_name 
+        FROM queue q 
+        JOIN players p ON q.player_id = p.id 
+        WHERE q.status IN ('waiting', 'on_deck')
+        ORDER BY q.position ASC
+    `);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
+function getQueueEntry(playerId) {
+    const result = db.exec(`
+        SELECT q.*, p.name as player_name
+        FROM queue q 
+        JOIN players p ON q.player_id = p.id 
+        WHERE q.player_id = ? AND q.status IN ('waiting', 'on_deck')
+    `, [playerId]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return rowToObject(result[0]);
+}
+
+function getNextInQueue() {
+    const result = db.exec(`
+        SELECT q.*, p.name as player_name
+        FROM queue q 
+        JOIN players p ON q.player_id = p.id 
+        WHERE q.status = 'waiting'
+        ORDER BY q.position ASC
+        LIMIT 1
+    `);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return rowToObject(result[0]);
+}
+
+function getOnDeckPlayer() {
+    const result = db.exec(`
+        SELECT q.*, p.name as player_name
+        FROM queue q 
+        JOIN players p ON q.player_id = p.id 
+        WHERE q.status = 'on_deck'
+        LIMIT 1
+    `);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return rowToObject(result[0]);
+}
+
+function setOnDeck(queueId) {
+    db.run(`UPDATE queue SET status = 'on_deck', on_deck_since = datetime('now') WHERE id = ?`, [queueId]);
+    save();
+}
+
+function removeFromQueue(queueId) {
+    db.run(`DELETE FROM queue WHERE id = ?`, [queueId]);
+    // Recompact positions
+    const queue = getQueue();
+    queue.forEach((entry, index) => {
+        db.run(`UPDATE queue SET position = ? WHERE id = ?`, [index + 1, entry.id]);
+    });
+    save();
+}
+
+function sendToBackOfQueue(queueId) {
+    const entry = db.exec(`SELECT * FROM queue WHERE id = ?`, [queueId]);
+    if (entry.length === 0 || entry[0].values.length === 0) return;
+    const obj = rowToObject(entry[0]);
+    
+    const maxResult = db.exec(`SELECT COALESCE(MAX(position), 0) FROM queue WHERE status IN ('waiting', 'on_deck')`);
+    const maxPos = maxResult[0].values[0][0];
+    
+    db.run(`UPDATE queue SET status = 'waiting', position = ?, on_deck_since = NULL, timeout_count = ? WHERE id = ?`, 
+        [maxPos + 1, obj.timeout_count + 1, queueId]);
+    
+    // Recompact positions
+    const queue = getQueue();
+    queue.forEach((entry, index) => {
+        db.run(`UPDATE queue SET position = ? WHERE id = ?`, [index + 1, entry.id]);
+    });
+    save();
+}
+
+function removePlayerFromQueue(playerId) {
+    db.run(`DELETE FROM queue WHERE player_id = ? AND status IN ('waiting', 'on_deck')`, [playerId]);
+    // Recompact
+    const queue = getQueue();
+    queue.forEach((entry, index) => {
+        db.run(`UPDATE queue SET position = ? WHERE id = ?`, [index + 1, entry.id]);
+    });
+    save();
+}
+
+function isPlayerInQueue(playerId) {
+    const result = db.exec(`SELECT id FROM queue WHERE player_id = ? AND status IN ('waiting', 'on_deck')`, [playerId]);
+    return result.length > 0 && result[0].values.length > 0;
+}
+
+// ============================================================
+// Game operations
+// ============================================================
+
+function createGame(kingId, challengerId, chess960Position, reignId) {
+    db.run(`INSERT INTO games (king_id, challenger_id, chess960_position, reign_id) VALUES (?, ?, ?, ?)`,
+        [kingId, challengerId, chess960Position, reignId]);
+    save();
+    const result = db.exec(`SELECT last_insert_rowid()`);
+    return result[0].values[0][0];
+}
+
+function getGameById(id) {
+    const result = db.exec(`
+        SELECT g.*, 
+               k.name as king_name, 
+               c.name as challenger_name
+        FROM games g
+        JOIN players k ON g.king_id = k.id
+        JOIN players c ON g.challenger_id = c.id
+        WHERE g.id = ?
+    `, [id]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return rowToObject(result[0]);
+}
+
+function getActiveGame() {
+    const gameId = getConfig('current_game_id');
+    if (!gameId) return null;
+    return getGameById(parseInt(gameId));
+}
+
+function reportGameResult(gameId, reporterId, result) {
+    const game = getGameById(gameId);
+    if (!game) return null;
+
+    if (reporterId === game.king_id) {
+        db.run(`UPDATE games SET king_reported = ? WHERE id = ?`, [result, gameId]);
+    } else if (reporterId === game.challenger_id) {
+        db.run(`UPDATE games SET challenger_reported = ? WHERE id = ?`, [result, gameId]);
+    }
+    save();
+
+    // Re-fetch to check both reports
+    return getGameById(gameId);
+}
+
+function finalizeGame(gameId, result, satsEarned) {
+    db.run(`UPDATE games SET result = ?, sats_earned = ?, ended_at = datetime('now') WHERE id = ?`,
+        [result, satsEarned, gameId]);
+    save();
+}
+
+function getRecentGames(limit = 20) {
+    const result = db.exec(`
+        SELECT g.*, 
+               k.name as king_name, 
+               c.name as challenger_name
+        FROM games g
+        JOIN players k ON g.king_id = k.id
+        JOIN players c ON g.challenger_id = c.id
+        WHERE g.result IS NOT NULL
+        ORDER BY g.ended_at DESC
+        LIMIT ?
+    `, [limit]);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
+function getPlayerGames(playerId, limit = 50) {
+    const result = db.exec(`
+        SELECT g.*, 
+               k.name as king_name, 
+               c.name as challenger_name
+        FROM games g
+        JOIN players k ON g.king_id = k.id
+        JOIN players c ON g.challenger_id = c.id
+        WHERE (g.king_id = ? OR g.challenger_id = ?) AND g.result IS NOT NULL
+        ORDER BY g.ended_at DESC
+        LIMIT ?
+    `, [playerId, playerId, limit]);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
+// ============================================================
+// Reign operations
+// ============================================================
+
+function createReign(kingId) {
+    db.run(`INSERT INTO reigns (king_id) VALUES (?)`, [kingId]);
+    save();
+    const result = db.exec(`SELECT last_insert_rowid()`);
+    return result[0].values[0][0];
+}
+
+function getReignById(id) {
+    const result = db.exec(`
+        SELECT r.*, p.name as king_name
+        FROM reigns r
+        JOIN players p ON r.king_id = p.id
+        WHERE r.id = ?
+    `, [id]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return rowToObject(result[0]);
+}
+
+function updateReign(reignId, updates) {
+    const sets = [];
+    const values = [];
+    for (const [key, value] of Object.entries(updates)) {
+        sets.push(`${key} = ?`);
+        values.push(value);
+    }
+    values.push(reignId);
+    db.run(`UPDATE reigns SET ${sets.join(', ')} WHERE id = ?`, values);
+    save();
+}
+
+function endReign(reignId, totalSeconds, totalSats) {
+    db.run(`UPDATE reigns SET dethroned_at = datetime('now'), total_reign_seconds = ?, total_sats_earned = ? WHERE id = ?`,
+        [totalSeconds, totalSats, reignId]);
+    save();
+}
+
+function getLongestReigns(limit = 10) {
+    const result = db.exec(`
+        SELECT r.*, p.name as king_name
+        FROM reigns r
+        JOIN players p ON r.king_id = p.id
+        WHERE r.dethroned_at IS NOT NULL
+        ORDER BY r.total_reign_seconds DESC
+        LIMIT ?
+    `, [limit]);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
+function getCurrentReign() {
+    const reignId = getConfig('current_reign_id');
+    if (!reignId) return null;
+    return getReignById(parseInt(reignId));
+}
+
+// ============================================================
+// Venue Code operations
+// ============================================================
+
+function createVenueCode(code, expiresAt) {
+    // Deactivate all existing codes
+    db.run(`UPDATE venue_codes SET is_active = 0`);
+    db.run(`INSERT INTO venue_codes (code, expires_at) VALUES (?, ?)`, [code, expiresAt]);
+    save();
+}
+
+function getActiveVenueCode() {
+    const result = db.exec(`
+        SELECT * FROM venue_codes 
+        WHERE is_active = 1 
+        ORDER BY created_at DESC 
+        LIMIT 1
+    `);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return rowToObject(result[0]);
+}
+
+function validateVenueCode(code) {
+    const active = getActiveVenueCode();
+    if (!active) return false;
+    if (active.code !== code) return false;
+    if (active.expires_at && new Date(active.expires_at) < new Date()) return false;
+    return true;
+}
+
+// ============================================================
+// Notification operations
+// ============================================================
+
+function createNotification(type, message, gameId = null) {
+    db.run(`INSERT INTO admin_notifications (type, message, game_id) VALUES (?, ?, ?)`,
+        [type, message, gameId]);
+    save();
+}
+
+function getUnresolvedNotifications() {
+    const result = db.exec(`
+        SELECT * FROM admin_notifications 
+        WHERE resolved = 0 
+        ORDER BY created_at DESC
+    `);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
+function resolveNotification(id) {
+    db.run(`UPDATE admin_notifications SET resolved = 1 WHERE id = ?`, [id]);
+    save();
+}
+
+// ============================================================
+// Payout operations
+// ============================================================
+
+function createPayout(playerId, amountSats, lightningAddress) {
+    db.run(`INSERT INTO payouts (player_id, amount_sats, lightning_address) VALUES (?, ?, ?)`,
+        [playerId, amountSats, lightningAddress]);
+    save();
+    const result = db.exec(`SELECT last_insert_rowid()`);
+    return result[0].values[0][0];
+}
+
+function updatePayout(payoutId, updates) {
+    const sets = [];
+    const values = [];
+    for (const [key, value] of Object.entries(updates)) {
+        sets.push(`${key} = ?`);
+        values.push(value);
+    }
+    values.push(payoutId);
+    db.run(`UPDATE payouts SET ${sets.join(', ')} WHERE id = ?`, values);
+    save();
+}
+
+function getPlayerPayouts(playerId) {
+    const result = db.exec(`SELECT * FROM payouts WHERE player_id = ? ORDER BY created_at DESC`, [playerId]);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
+function getAllPayouts() {
+    const result = db.exec(`
+        SELECT p.*, pl.name as player_name
+        FROM payouts p
+        JOIN players pl ON p.player_id = pl.id
+        ORDER BY p.created_at DESC
+    `);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
+// ============================================================
+// Stats
+// ============================================================
+
+function getEventStats() {
+    const totalGames = db.exec(`SELECT COUNT(*) FROM games WHERE result IS NOT NULL`);
+    const totalPlayers = db.exec(`SELECT COUNT(*) FROM players WHERE games_played > 0`);
+    const totalSats = db.exec(`SELECT COALESCE(SUM(total_sats_earned), 0) FROM players`);
+    const totalReigns = db.exec(`SELECT COUNT(*) FROM reigns`);
+    
+    return {
+        totalGames: totalGames[0]?.values[0][0] || 0,
+        totalPlayers: totalPlayers[0]?.values[0][0] || 0,
+        totalSatsDistributed: totalSats[0]?.values[0][0] || 0,
+        totalReigns: totalReigns[0]?.values[0][0] || 0,
+    };
+}
+
+// ============================================================
+// Utility helpers
+// ============================================================
+
+function rowToObject(result) {
+    if (!result || !result.columns || !result.values || result.values.length === 0) return null;
+    const obj = {};
+    result.columns.forEach((col, i) => {
+        obj[col] = result.values[0][i];
+    });
+    return obj;
+}
+
+function rowsToObjects(result) {
+    if (!result || !result.columns || !result.values) return [];
+    return result.values.map(row => {
+        const obj = {};
+        result.columns.forEach((col, i) => {
+            obj[col] = row[i];
+        });
+        return obj;
+    });
+}
+
+module.exports = {
+    initialize,
+    save,
+    getConfig,
+    setConfig,
+    getAllConfig,
+    
+    // Players
+    createPlayer,
+    getPlayerById,
+    getPlayerByName,
+    getPlayerBySession,
+    setPlayerSession,
+    updatePlayerStats,
+    addSatsToPlayer,
+    deductSatsFromPlayer,
+    getAllPlayers,
+    getLeaderboard,
+    
+    // Queue
+    addToQueue,
+    getQueue,
+    getQueueEntry,
+    getNextInQueue,
+    getOnDeckPlayer,
+    setOnDeck,
+    removeFromQueue,
+    sendToBackOfQueue,
+    removePlayerFromQueue,
+    isPlayerInQueue,
+    
+    // Games
+    createGame,
+    getGameById,
+    getActiveGame,
+    reportGameResult,
+    finalizeGame,
+    getRecentGames,
+    getPlayerGames,
+    
+    // Reigns
+    createReign,
+    getReignById,
+    updateReign,
+    endReign,
+    getLongestReigns,
+    getCurrentReign,
+    
+    // Venue codes
+    createVenueCode,
+    getActiveVenueCode,
+    validateVenueCode,
+    
+    // Notifications
+    createNotification,
+    getUnresolvedNotifications,
+    resolveNotification,
+    
+    // Payouts
+    createPayout,
+    updatePayout,
+    getPlayerPayouts,
+    getAllPayouts,
+    
+    // Stats
+    getEventStats,
+};

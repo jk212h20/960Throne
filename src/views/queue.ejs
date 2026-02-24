@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Queue — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }</style>
+</head>
+<body class="min-h-screen bg-throne-darker p-4">
+    <div class="max-w-lg mx-auto">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold">📋 Queue</h1>
+            <a href="<%= player ? '/player' : '/' %>" class="text-gray-500 hover:text-throne-gold text-sm">← Back</a>
+        </div>
+
+        <% if (state.king) { %>
+        <div class="card mb-4 text-center">
+            <div class="text-sm text-gray-400">Current King</div>
+            <div class="text-2xl font-bold text-throne-gold">👑 <%= state.king.name %></div>
+        </div>
+        <% } %>
+
+        <% if (state.queue.length === 0) { %>
+        <div class="card text-center text-gray-500">
+            <div class="text-3xl mb-2">🏰</div>
+            <div>No challengers in line</div>
+        </div>
+        <% } else { %>
+        <div class="space-y-2">
+            <% state.queue.forEach((entry, i) => { %>
+            <div class="card <%= entry.status === 'on_deck' ? 'border-throne-gold on-deck-pulse' : '' %>">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <span class="text-3xl font-bold <%= entry.status === 'on_deck' ? 'text-throne-gold' : 'text-gray-600' %>">
+                            <%= entry.status === 'on_deck' ? '🔔' : '#' + entry.position %>
+                        </span>
+                        <span class="<%= i === 0 ? 'text-xl font-bold text-throne-gold' : 'text-lg' %>">
+                            <%= entry.player_name %>
+                        </span>
+                    </div>
+                    <% if (entry.status === 'on_deck') { %>
+                    <span class="text-throne-gold font-mono text-sm">ON DECK</span>
+                    <% } %>
+                </div>
+            </div>
+            <% }) %>
+        </div>
+        <% } %>
+
+        <div class="flex justify-center gap-6 mt-6 text-sm text-gray-500">
+            <a href="/throne" class="hover:text-throne-gold transition-colors">👑 Throne</a>
+            <a href="/leaderboard" class="hover:text-throne-gold transition-colors">🏆 Leaderboard</a>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        socket.on('queue_updated', () => location.reload());
+        socket.on('on_deck', () => location.reload());
+    </script>
+</body>
+</html>

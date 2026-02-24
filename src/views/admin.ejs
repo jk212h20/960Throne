@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }</style>
+</head>
+<body class="min-h-screen bg-throne-darker p-4">
+    <div class="max-w-4xl mx-auto">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold">🔧 Admin Panel</h1>
+            <div class="flex gap-3">
+                <a href="/throne" class="text-sm text-gray-400 hover:text-throne-gold">👑 Throne</a>
+                <a href="/leaderboard" class="text-sm text-gray-400 hover:text-throne-gold">🏆 Board</a>
+            </div>
+        </div>
+
+        <!-- Notifications -->
+        <% if (notifications.length > 0) { %>
+        <div class="card border-red-700 mb-4">
+            <h2 class="text-lg font-bold mb-3 text-red-400">⚠️ Notifications (<%= notifications.length %>)</h2>
+            <div class="space-y-2">
+                <% notifications.forEach(n => { %>
+                <div class="bg-throne-darker rounded-lg p-3 flex items-center justify-between">
+                    <div>
+                        <span class="text-xs text-gray-500"><%= n.type %></span>
+                        <div class="text-sm"><%= n.message %></div>
+                    </div>
+                    <button onclick="resolveNotification(<%= n.id %>)" class="text-xs text-gray-500 hover:text-white">✓ Dismiss</button>
+                </div>
+                <% }) %>
+            </div>
+        </div>
+        <% } %>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Game Control -->
+            <div class="card">
+                <h2 class="text-lg font-bold mb-3">🎮 Game Control</h2>
+                <% if (state.king) { %>
+                <div class="mb-3 p-3 bg-throne-darker rounded-lg">
+                    <div class="text-sm text-gray-400">Current King</div>
+                    <div class="text-xl font-bold text-throne-gold">👑 <%= state.king.name %></div>
+                </div>
+                <% } %>
+                <% if (state.game) { %>
+                <div class="mb-3 p-3 bg-throne-darker rounded-lg">
+                    <div class="text-sm text-gray-400">Active Game #<%= state.game.id %></div>
+                    <div><%= state.game.king_name %> vs <%= state.game.challenger_name %></div>
+                    <div class="text-xs text-gray-500">Position #<%= state.game.chess960_position %></div>
+                    <div class="flex gap-2 mt-2">
+                        <button onclick="overrideResult(<%= state.game.id %>, 'king_won')" class="text-xs bg-green-800 px-2 py-1 rounded">King Won</button>
+                        <button onclick="overrideResult(<%= state.game.id %>, 'challenger_won')" class="text-xs bg-red-800 px-2 py-1 rounded">Challenger Won</button>
+                        <button onclick="overrideResult(<%= state.game.id %>, 'draw')" class="text-xs bg-gray-700 px-2 py-1 rounded">Draw</button>
+                    </div>
+                </div>
+                <% } else { %>
+                <button onclick="startGame()" class="btn-gold w-full mb-3" <%= !state.king || !state.onDeck ? 'disabled' : '' %>>
+                    ⚔️ Start Game
+                </button>
+                <% if (!state.king) { %><p class="text-xs text-gray-500">Crown a king first</p><% } %>
+                <% if (!state.onDeck) { %><p class="text-xs text-gray-500">No challenger on deck</p><% } %>
+                <% } %>
+
+                <!-- Crown a King -->
+                <div class="mt-4 pt-4 border-t border-gray-700">
+                    <div class="text-sm text-gray-400 mb-2">Crown a King</div>
+                    <select id="crown-select" class="input mb-2">
+                        <option value="">Select player...</option>
+                        <% players.forEach(p => { %>
+                        <option value="<%= p.id %>"><%= p.name %></option>
+                        <% }) %>
+                    </select>
+                    <button onclick="crownKing()" class="btn-purple w-full text-sm">👑 Crown Selected Player</button>
+                </div>
+            </div>
+
+            <!-- Venue Code -->
+            <div class="card">
+                <h2 class="text-lg font-bold mb-3">🔑 Venue Code</h2>
+                <% if (venueCode) { %>
+                <div class="text-center mb-4">
+                    <div class="text-5xl font-mono font-bold text-throne-gold tracking-widest"><%= venueCode.code %></div>
+                    <div class="text-xs text-gray-500 mt-2">
+                        Expires: <%= venueCode.expires_at ? new Date(venueCode.expires_at).toLocaleTimeString() : 'never' %>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">
+                        QR URL: <code class="text-gray-400"><%= process.env.BASE_URL || 'http://localhost:3000' %>/join?code=<%= venueCode.code %></code>
+                    </div>
+                </div>
+                <% } %>
+                <button onclick="rotateCode()" class="btn-outline w-full text-sm">🔄 Generate New Code</button>
+
+                <!-- Event Toggle -->
+                <div class="mt-4 pt-4 border-t border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <span>Event Active</span>
+                        <button onclick="toggleEvent()" class="<%= state.eventActive ? 'btn-red' : 'btn-green' %> text-sm">
+                            <%= state.eventActive ? 'Pause Event' : 'Start Event' %>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Queue Management -->
+            <div class="card">
+                <h2 class="text-lg font-bold mb-3">📋 Queue (<%= state.queue.length %>)</h2>
+                <% if (state.queue.length === 0) { %>
+                <p class="text-gray-500 text-sm">Queue empty</p>
+                <% } else { %>
+                <div class="space-y-1 mb-3 max-h-48 overflow-y-auto">
+                    <% state.queue.forEach(q => { %>
+                    <div class="flex items-center justify-between bg-throne-darker rounded p-2">
+                        <span class="text-sm <%= q.status === 'on_deck' ? 'text-throne-gold font-bold' : '' %>">
+                            #<%= q.position %> <%= q.player_name %>
+                            <% if (q.status === 'on_deck') { %> 🔔<% } %>
+                            <% if (q.timeout_count > 0) { %> <span class="text-red-400">(⚠ timeout x<%= q.timeout_count %>)</span><% } %>
+                        </span>
+                        <button onclick="removeFromQueue(<%= q.player_id %>)" class="text-xs text-red-400 hover:text-red-300">Remove</button>
+                    </div>
+                    <% }) %>
+                </div>
+                <% } %>
+                <div class="flex gap-2">
+                    <select id="add-queue-select" class="input text-sm flex-1">
+                        <option value="">Add to queue...</option>
+                        <% players.forEach(p => { %>
+                        <option value="<%= p.id %>"><%= p.name %></option>
+                        <% }) %>
+                    </select>
+                    <button onclick="addToQueue()" class="btn-purple text-sm">Add</button>
+                </div>
+            </div>
+
+            <!-- Config -->
+            <div class="card">
+                <h2 class="text-lg font-bold mb-3">⚙️ Config</h2>
+                <div class="space-y-2 text-sm">
+                    <% const editableKeys = ['sat_rate_per_second','time_control_base','time_control_increment','queue_timeout_seconds','winner_only_confirm_delay','venue_code_rotation_minutes']; %>
+                    <% editableKeys.forEach(key => { %>
+                    <div class="flex items-center gap-2">
+                        <label class="text-gray-400 flex-1 text-xs"><%= key %></label>
+                        <input type="text" value="<%= config[key] || '' %>" class="input text-sm w-24 text-right py-1 px-2"
+                            onchange="updateConfig('<%= key %>', this.value)">
+                    </div>
+                    <% }) %>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Games -->
+        <div class="card mt-4">
+            <h2 class="text-lg font-bold mb-3">📜 Recent Games</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead><tr class="text-gray-500 border-b border-gray-700">
+                        <th class="py-1 text-left">#</th><th class="py-1 text-left">King</th><th class="py-1 text-left">Challenger</th>
+                        <th class="py-1 text-left">Result</th><th class="py-1 text-right">Sats</th><th class="py-1 text-right">Pos</th>
+                    </tr></thead>
+                    <tbody>
+                    <% recentGames.forEach(g => { %>
+                    <tr class="border-b border-gray-800">
+                        <td class="py-1"><%= g.id %></td>
+                        <td class="py-1 <%= g.result === 'king_won' ? 'text-green-400' : g.result === 'challenger_won' ? 'text-red-400' : '' %>"><%= g.king_name %></td>
+                        <td class="py-1 <%= g.result === 'challenger_won' ? 'text-green-400' : g.result === 'king_won' ? 'text-red-400' : '' %>"><%= g.challenger_name %></td>
+                        <td class="py-1"><%= g.result %></td>
+                        <td class="py-1 text-right text-throne-gold"><%= g.sats_earned %></td>
+                        <td class="py-1 text-right text-gray-500">#<%= g.chess960_position %></td>
+                    </tr>
+                    <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="admin-status" class="hidden fixed bottom-4 right-4 p-3 rounded-lg text-sm max-w-xs"></div>
+    </div>
+
+    <script>
+        const socket = io();
+        function showStatus(msg, ok) {
+            const el = document.getElementById('admin-status');
+            el.textContent = msg;
+            el.className = `fixed bottom-4 right-4 p-3 rounded-lg text-sm max-w-xs ${ok ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`;
+            setTimeout(() => el.className = 'hidden', 3000);
+        }
+        async function api(url, body) {
+            const res = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (!res.ok) { showStatus(data.error, false); return null; }
+            showStatus('Done!', true);
+            return data;
+        }
+        async function startGame() { if (await api('/api/admin/start-game', {})) setTimeout(() => location.reload(), 500); }
+        async function crownKing() {
+            const id = document.getElementById('crown-select').value;
+            if (!id) return;
+            if (await api('/api/admin/crown', { playerId: parseInt(id) })) setTimeout(() => location.reload(), 500);
+        }
+        async function overrideResult(gameId, result) {
+            if (!confirm(`Override as ${result}?`)) return;
+            if (await api('/api/admin/override-result', { gameId, result })) setTimeout(() => location.reload(), 500);
+        }
+        async function rotateCode() { if (await api('/api/admin/rotate-venue-code', {})) setTimeout(() => location.reload(), 500); }
+        async function toggleEvent() {
+            const active = '<%= state.eventActive %>' !== 'true';
+            if (await api('/api/admin/event-active', { active })) setTimeout(() => location.reload(), 500);
+        }
+        async function removeFromQueue(playerId) { if (await api('/api/admin/queue/remove', { playerId })) setTimeout(() => location.reload(), 500); }
+        async function addToQueue() {
+            const id = document.getElementById('add-queue-select').value;
+            if (!id) return;
+            if (await api('/api/admin/queue/add', { playerId: parseInt(id) })) setTimeout(() => location.reload(), 500);
+        }
+        async function updateConfig(key, value) { await api('/api/admin/config', { key, value }); }
+        async function resolveNotification(id) { if (await api('/api/admin/notifications/resolve', { id })) setTimeout(() => location.reload(), 500); }
+
+        socket.on('game_ended', () => setTimeout(() => location.reload(), 1000));
+        socket.on('new_king', () => setTimeout(() => location.reload(), 1000));
+        socket.on('queue_updated', () => setTimeout(() => location.reload(), 1000));
+    </script>
+</body>
+</html>

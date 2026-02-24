@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Join Queue — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }</style>
+</head>
+<body class="min-h-screen bg-throne-darker flex items-center justify-center p-4">
+    <div class="max-w-md w-full">
+        <div class="text-center mb-6">
+            <div class="text-4xl mb-2">📋</div>
+            <h1 class="text-2xl font-bold">Join the Queue</h1>
+            <p class="text-gray-400 mt-1">Welcome, <span class="text-throne-gold"><%= player.name %></span></p>
+        </div>
+
+        <div class="card">
+            <% if (venueCode) { %>
+            <div class="text-center">
+                <p class="text-gray-300 mb-4">Ready to challenge the King?</p>
+                <button onclick="joinQueue()" id="join-btn" class="btn-gold w-full text-xl">⚔️ Join Queue</button>
+            </div>
+            <% } else { %>
+            <div class="text-center">
+                <p class="text-gray-300 mb-4">Enter the venue code shown on the screen:</p>
+                <input type="text" id="venue-code-input" class="input text-center text-2xl font-mono tracking-widest mb-4"
+                    placeholder="ABC123" maxlength="6" style="text-transform: uppercase;">
+                <button onclick="joinWithCode()" id="join-btn" class="btn-gold w-full text-xl">⚔️ Join Queue</button>
+            </div>
+            <% } %>
+
+            <div id="result" class="hidden mt-4 p-3 rounded-lg text-center"></div>
+        </div>
+
+        <div class="text-center mt-4">
+            <a href="/player" class="text-gray-500 hover:text-throne-gold transition-colors">← Back to Dashboard</a>
+        </div>
+    </div>
+
+    <script>
+        const venueCode = '<%= venueCode %>';
+
+        async function joinQueue() {
+            const btn = document.getElementById('join-btn');
+            const result = document.getElementById('result');
+            btn.disabled = true;
+            btn.textContent = 'Joining...';
+
+            try {
+                const res = await fetch('/api/queue/join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ venueCode })
+                });
+                const data = await res.json();
+                result.classList.remove('hidden');
+                if (!res.ok) {
+                    result.className = 'mt-4 p-3 rounded-lg text-center bg-red-900/50 border border-red-700 text-red-300';
+                    result.textContent = data.error;
+                    btn.disabled = false;
+                    btn.textContent = '⚔️ Join Queue';
+                } else {
+                    result.className = 'mt-4 p-3 rounded-lg text-center bg-green-900/50 border border-green-700 text-green-300';
+                    result.textContent = `You're #${data.position} in line!`;
+                    setTimeout(() => window.location.href = '/player', 1500);
+                }
+            } catch (err) {
+                result.classList.remove('hidden');
+                result.className = 'mt-4 p-3 rounded-lg text-center bg-red-900/50 border border-red-700 text-red-300';
+                result.textContent = 'Connection error';
+                btn.disabled = false;
+                btn.textContent = '⚔️ Join Queue';
+            }
+        }
+
+        function joinWithCode() {
+            const input = document.getElementById('venue-code-input');
+            const code = input.value.trim().toUpperCase();
+            if (!code) { alert('Enter the venue code'); return; }
+            window.location.href = '/join?code=' + code;
+        }
+
+        // Auto-join if we have a venue code
+        <% if (venueCode) { %>
+        // Code present from QR scan — ready to join
+        <% } %>
+    </script>
+</body>
+</html>
