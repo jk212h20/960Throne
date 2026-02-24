@@ -18,6 +18,7 @@
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h1 class="text-2xl font-bold">Hey, <%= player.name %> 👋</h1>
+                <div class="text-xs text-gray-500 mt-1">PIN: <%= player.pin %> (save this to log in later)</div>
             </div>
             <div class="text-right">
                 <div class="text-2xl font-mono text-throne-gold font-bold">⚡ <%= player.sat_balance.toLocaleString() %></div>
@@ -97,6 +98,35 @@
             <% } %>
             <a href="/join" class="btn-gold inline-block text-lg px-8">📋 Get in Line</a>
             <div class="text-xs text-gray-500 mt-3">You'll need the venue code (displayed at the event)</div>
+        </div>
+        <% } %>
+
+        <!-- ====== THE LINE (full queue) ====== -->
+        <% if (state.queue.length > 0) { %>
+        <div class="card mb-4">
+            <h3 class="text-lg font-bold mb-3">📋 The Line</h3>
+            <% if (state.king) { %>
+            <div class="flex items-center gap-3 p-2 mb-2 bg-throne-gold/10 border border-throne-gold/30 rounded-lg">
+                <span class="text-xl">👑</span>
+                <span class="font-bold text-throne-gold"><%= state.king.name %></span>
+                <span class="text-xs text-gray-500 ml-auto">defending</span>
+            </div>
+            <% } %>
+            <div class="space-y-1">
+                <% state.queue.forEach((entry, i) => { %>
+                <div class="flex items-center gap-3 p-2 rounded-lg <%= entry.player_id === player.id ? 'bg-throne-gold/10 border border-throne-gold/30' : 'bg-throne-darker' %> <%= entry.status === 'on_deck' ? 'border border-throne-gold' : '' %>">
+                    <span class="text-sm font-mono w-6 text-center <%= entry.status === 'on_deck' ? 'text-throne-gold' : 'text-gray-600' %>">
+                        <%= entry.status === 'on_deck' ? '🔔' : entry.position %>
+                    </span>
+                    <span class="<%= entry.player_id === player.id ? 'text-throne-gold font-bold' : '' %>">
+                        <%= entry.player_name %><%= entry.player_id === player.id ? ' (you)' : '' %>
+                    </span>
+                    <% if (entry.status === 'on_deck') { %>
+                    <span class="text-xs text-throne-gold ml-auto">UP NEXT</span>
+                    <% } %>
+                </div>
+                <% }) %>
+            </div>
         </div>
         <% } %>
 
@@ -186,13 +216,7 @@
         <!-- Nav -->
         <div class="flex justify-center gap-6 text-sm text-gray-500 mb-4">
             <a href="/throne" class="hover:text-throne-gold transition-colors">👑 Throne</a>
-            <a href="/queue" class="hover:text-throne-gold transition-colors">📋 Queue</a>
             <a href="/leaderboard" class="hover:text-throne-gold transition-colors">🏆 Leaderboard</a>
-        </div>
-
-        <!-- Account info (subtle) -->
-        <div class="text-center text-xs text-gray-600">
-            Your PIN: <span class="text-gray-500"><%= player.pin %></span> (for logging in on another device)
         </div>
     </div>
 
@@ -224,22 +248,19 @@
         }, 1000);
         <% } %>
 
-        // Socket events
+        // Socket events — reload on any state change
         socket.on('game_started', (data) => {
             if (data.king.id === playerId || data.challenger.id === playerId) {
                 window.location.href = '/game';
             }
         });
-        socket.on('on_deck', (data) => {
-            if (data.player.player_id === playerId) location.reload();
-        });
-        socket.on('new_king', (data) => {
-            if (data.king.id === playerId) location.reload();
-        });
+        socket.on('on_deck', () => location.reload());
+        socket.on('new_king', () => location.reload());
         socket.on('game_ended', () => location.reload());
+        socket.on('queue_updated', () => location.reload());
 
         async function leaveQueue() {
-            if (!confirm('Leave the queue?')) return;
+            if (!confirm('Leave the line?')) return;
             await fetch('/api/queue/leave', { method: 'POST' });
             location.reload();
         }

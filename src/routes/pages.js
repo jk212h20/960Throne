@@ -29,28 +29,36 @@ router.use(attachAdmin);
 // Home — Register / Login
 router.get('/', (req, res) => {
     if (req.player) {
+        // If they have a venue code, auto-join queue before redirecting
+        const code = req.query.code;
+        if (code && db.validateVenueCode(code) && !db.isPlayerInQueue(req.player.id)) {
+            gameEngine.joinQueue(req.player.id);
+        }
         return res.redirect('/player');
     }
     const state = gameEngine.getThoneState();
-    res.render('index', { state, error: null });
+    const venueCode = req.query.code || '';
+    res.render('index', { state, error: null, venueCode });
 });
 
 // Register via form POST (sets cookie + redirects server-side)
 router.post('/register', (req, res) => {
     const { name } = req.body;
+    const code = req.body.venueCode || '';
+    
     if (!name || name.trim().length < 1) {
         const state = gameEngine.getThoneState();
-        return res.render('index', { state, error: 'Name is required' });
+        return res.render('index', { state, error: 'Name is required', venueCode: code });
     }
     if (name.trim().length > 30) {
         const state = gameEngine.getThoneState();
-        return res.render('index', { state, error: 'Name must be 30 characters or less' });
+        return res.render('index', { state, error: 'Name must be 30 characters or less', venueCode: code });
     }
 
     const existing = db.getPlayerByName(name.trim());
     if (existing) {
         const state = gameEngine.getThoneState();
-        return res.render('index', { state, error: 'Name already taken — use "Already registered?" below' });
+        return res.render('index', { state, error: 'Name already taken — use "Already registered?" below', venueCode: code });
     }
 
     const { v4: uuidv4 } = require('uuid');
@@ -61,11 +69,12 @@ router.post('/register', (req, res) => {
 
     res.cookie('session', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, path: '/' });
 
-    // If there's a venue code, redirect to join
-    const code = req.body.venueCode || req.query.code;
-    if (code) {
-        return res.redirect('/join?code=' + code);
+    // If there's a valid venue code, auto-join the queue
+    if (code && db.validateVenueCode(code)) {
+        const result = gameEngine.joinQueue(playerId);
+        // Even if joinQueue fails (e.g. already in queue), just redirect to player
     }
+
     res.redirect('/player');
 });
 
