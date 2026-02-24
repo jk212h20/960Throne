@@ -1,7 +1,7 @@
 # 960 Throne — Active Context
 
 ## Current State (Feb 24, 2026)
-MVP is **built and running**. Critical session bug fixed. Registration → player dashboard flow works end-to-end.
+MVP is **built and running**. Session bug fixed. Queue auto-join from QR working. Full player flow tested end-to-end.
 
 ## What Was Just Fixed
 ### Critical Bug: `save()` before `last_insert_rowid()` in sql.js
@@ -16,10 +16,16 @@ MVP is **built and running**. Critical session bug fixed. Registration → playe
 - Now: `<form method="POST" action="/register">` → server sets cookie + `res.redirect('/player')`
 - Login also uses form POST via `POST /login` in pages.js
 
+## Player Flow (working)
+1. QR at venue → `/?code=JSAM9D` → "Get in Line" form → enter name → auto-joined to queue
+2. Player dashboard shows: position in line, full queue ("The Line"), PIN, stats
+3. Already-registered players visiting QR link also auto-join queue
+
 ## Known Issues Still Open
 1. **Admin password** — `.env` has `ADMIN_PASSWORD=changeme`, needs to be updated before event
 2. **Lightning not tested** — Voltage LND credentials not configured yet
 3. **Full game flow untested** — Need to test: crown king → start game → report result → new king cycle
+4. **Venue code in old QR links** — Code rotates every 30min; QR needs to point to a stable URL or code must be entered manually
 
 ## Key Files
 | File | Purpose |

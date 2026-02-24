@@ -543,6 +543,8 @@ function getThoneState() {
         },
         stats: db.getEventStats(),
         recentGames: db.getRecentGames(5),
+        venueCode: db.getActiveVenueCode(),
+        baseUrl: process.env.BASE_URL || 'http://localhost:3000',
     };
 }
 
