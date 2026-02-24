@@ -65,6 +65,15 @@
                 <% if (!state.onDeck) { %><p class="text-xs text-gray-500">No challenger on deck</p><% } %>
                 <% } %>
 
+                <!-- Undo Last Game -->
+                <% if (recentGames.length > 0) { %>
+                <div class="mt-3 pt-3 border-t border-gray-700">
+                    <button onclick="undoGame(<%= recentGames[0].id %>)" class="w-full text-xs bg-red-900 hover:bg-red-800 text-red-300 px-3 py-2 rounded">
+                        ↩️ Undo Last Game (#<%= recentGames[0].id %>: <%= recentGames[0].king_name %> vs <%= recentGames[0].challenger_name %> — <%= recentGames[0].result %>)
+                    </button>
+                </div>
+                <% } %>
+
                 <!-- Crown a King -->
                 <div class="mt-4 pt-4 border-t border-gray-700">
                     <div class="text-sm text-gray-400 mb-2">Crown a King</div>
@@ -75,6 +84,18 @@
                         <% }) %>
                     </select>
                     <button onclick="crownKing()" class="btn-purple w-full text-sm">👑 Crown Selected Player</button>
+                </div>
+
+                <!-- Set Challenger -->
+                <div class="mt-4 pt-4 border-t border-gray-700">
+                    <div class="text-sm text-gray-400 mb-2">Set Challenger (bypass queue)</div>
+                    <select id="challenger-select" class="input mb-2">
+                        <option value="">Select player...</option>
+                        <% players.forEach(p => { %>
+                        <option value="<%= p.id %>"><%= p.name %></option>
+                        <% }) %>
+                    </select>
+                    <button onclick="setChallenger()" class="btn-purple w-full text-sm">⚔️ Set as Challenger</button>
                 </div>
             </div>
 
@@ -216,6 +237,15 @@
             if (await api('/api/admin/queue/add', { playerId: parseInt(id) })) setTimeout(() => location.reload(), 500);
         }
         async function updateConfig(key, value) { await api('/api/admin/config', { key, value }); }
+        async function undoGame(gameId) {
+            if (!confirm('Undo this game? This will reverse all stat changes and restore the previous king if needed.')) return;
+            if (await api('/api/admin/undo-game', { gameId })) setTimeout(() => location.reload(), 500);
+        }
+        async function setChallenger() {
+            const id = document.getElementById('challenger-select').value;
+            if (!id) return;
+            if (await api('/api/admin/set-challenger', { playerId: parseInt(id) })) setTimeout(() => location.reload(), 500);
+        }
         async function resolveNotification(id) { if (await api('/api/admin/notifications/resolve', { id })) setTimeout(() => location.reload(), 500); }
 
         socket.on('game_ended', () => setTimeout(() => location.reload(), 1000));

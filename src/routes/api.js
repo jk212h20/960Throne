@@ -266,6 +266,22 @@ router.post('/admin/override-result', requireAdmin, (req, res) => {
     res.json(outcome);
 });
 
+router.post('/admin/undo-game', requireAdmin, (req, res) => {
+    const { gameId } = req.body;
+    if (!gameId) return res.status(400).json({ error: 'Game ID required' });
+    const outcome = gameEngine.adminUndoGame(parseInt(gameId));
+    if (outcome.error) return res.status(400).json(outcome);
+    res.json(outcome);
+});
+
+router.post('/admin/set-challenger', requireAdmin, (req, res) => {
+    const { playerId } = req.body;
+    if (!playerId) return res.status(400).json({ error: 'Player ID required' });
+    const outcome = gameEngine.adminSetChallenger(parseInt(playerId));
+    if (outcome.error) return res.status(400).json(outcome);
+    res.json(outcome);
+});
+
 router.post('/admin/event-active', requireAdmin, (req, res) => {
     const { active } = req.body;
     gameEngine.setEventActive(!!active);

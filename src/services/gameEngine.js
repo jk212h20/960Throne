@@ -90,6 +90,17 @@ function joinQueue(playerId) {
     const queue = db.getQueue();
     broadcast('queue_updated', { queue });
 
+    // If no king, auto-crown the first person in queue
+    if (!kingId || kingId === '') {
+        const first = db.getNextInQueue();
+        if (first) {
+            console.log(`👑 Auto-crowning ${first.player_name} (first in queue, no king)`);
+            db.removeFromQueue(first.id);
+            crownKing(first.player_id);
+            return { success: true, queueId, position: queue.length, autoCrowned: first.player_id === playerId };
+        }
+    }
+
     // If no one is on deck and no active game, call next
     const onDeck = db.getOnDeckPlayer();
     const activeGame = db.getActiveGame();
@@ -483,11 +494,130 @@ function adminOverrideResult(gameId, result) {
     if (!game) return { error: 'Game not found' };
 
     if (game.result) {
-        return { error: 'Game already finalized' };
+        return { error: 'Game already finalized. Use "Undo Last Game" to reverse it.' };
     }
 
     console.log(`🔧 Admin override: Game #${gameId} → ${result}`);
     return finalizeGameResult(gameId, result);
+}
+
+/**
+ * Undo a finalized game — reverses all stat changes and restores the previous king.
+ * Use case: king misclicked a loss, admin needs to fix it.
+ */
+function adminUndoGame(gameId) {
+    const game = db.getGameById(gameId);
+    if (!game) return { error: 'Game not found' };
+    if (!game.result) return { error: 'Game is not finalized yet' };
+
+    const king = db.getPlayerById(game.king_id);
+    const challenger = db.getPlayerById(game.challenger_id);
+    if (!king || !challenger) return { error: 'Players not found' };
+
+    // Reverse player stats
+    if (game.result === 'king_won') {
+        db.updatePlayerStats(game.king_id, {
+            games_played: king.games_played - 1,
+            games_won: king.games_won - 1,
+        });
+        db.updatePlayerStats(game.challenger_id, {
+            games_played: challenger.games_played - 1,
+            games_lost: challenger.games_lost - 1,
+        });
+    } else if (game.result === 'challenger_won') {
+        db.updatePlayerStats(game.king_id, {
+            games_played: king.games_played - 1,
+            games_lost: king.games_lost - 1,
+        });
+        db.updatePlayerStats(game.challenger_id, {
+            games_played: challenger.games_played - 1,
+            games_won: challenger.games_won - 1,
+        });
+    } else if (game.result === 'draw') {
+        db.updatePlayerStats(game.king_id, {
+            games_played: king.games_played - 1,
+            games_drawn: king.games_drawn - 1,
+        });
+        db.updatePlayerStats(game.challenger_id, {
+            games_played: challenger.games_played - 1,
+            games_drawn: challenger.games_drawn - 1,
+        });
+    }
+
+    // Reverse sats credited to the king
+    if (game.sats_earned > 0) {
+        db.addSatsToPlayer(game.king_id, -game.sats_earned); // negative to subtract
+    }
+
+    // Clear the game result (mark it as undone)
+    db.finalizeGame(gameId, null, 0);
+
+    // If the challenger was crowned (challenger_won), we need to restore the original king
+    if (game.result === 'challenger_won') {
+        // End the challenger's reign that was created after this game
+        const currentReignId = db.getConfig('current_reign_id');
+        if (currentReignId) {
+            const currentReign = db.getReignById(parseInt(currentReignId));
+            if (currentReign && currentReign.king_id === game.challenger_id) {
+                db.endReign(parseInt(currentReignId), 0, 0);
+            }
+        }
+
+        // Restore the original king — re-crown them
+        crownKing(game.king_id);
+        console.log(`🔧 Admin undo: Restored ${king.name} as King (game #${gameId} reversed)`);
+    } else {
+        // King stayed on throne — just clear the game state
+        db.setConfig('current_game_id', '');
+        console.log(`🔧 Admin undo: Game #${gameId} reversed (${king.name} still King)`);
+    }
+
+    broadcast('game_undone', { gameId, originalResult: game.result });
+    db.createNotification('game_undone', `Game #${gameId} was undone by admin (was: ${game.result})`, gameId);
+
+    return { success: true, message: `Game #${gameId} undone. ${game.result === 'challenger_won' ? king.name + ' restored as King.' : 'King unchanged.'}` };
+}
+
+/**
+ * Admin sets a specific player as the challenger, bypassing the queue.
+ * Puts them on-deck immediately.
+ */
+function adminSetChallenger(playerId) {
+    const player = db.getPlayerById(playerId);
+    if (!player) return { error: 'Player not found' };
+
+    const kingId = db.getConfig('current_king_id');
+    if (kingId && parseInt(kingId) === playerId) {
+        return { error: "Can't set the King as their own challenger" };
+    }
+
+    // Cancel any existing on-deck timer
+    if (onDeckTimer) clearTimeout(onDeckTimer);
+
+    // Remove any current on-deck player (send them back to waiting)
+    const currentOnDeck = db.getOnDeckPlayer();
+    if (currentOnDeck) {
+        db.sendToBackOfQueue(currentOnDeck.id);
+    }
+
+    // If the player is already in queue, remove them first
+    if (db.isPlayerInQueue(playerId)) {
+        db.removePlayerFromQueue(playerId);
+    }
+
+    // Add them to queue and immediately set as on-deck
+    const queueId = db.addToQueue(playerId);
+    db.setOnDeck(queueId);
+
+    broadcast('on_deck', {
+        player: { ...db.getQueueEntry(playerId), player_name: player.name },
+        timeoutSeconds: 9999, // No timeout for admin-set challenger
+        queue: db.getQueue()
+    });
+    broadcast('queue_updated', { queue: db.getQueue() });
+
+    console.log(`🔧 Admin set ${player.name} as challenger`);
+    return { success: true, message: `${player.name} set as next challenger` };
 }
 
 // ============================================================
@@ -606,6 +736,8 @@ module.exports = {
     startGame,
     reportResult,
     adminOverrideResult,
+    adminUndoGame,
+    adminSetChallenger,
     // State
     getThoneState,
     // Admin
