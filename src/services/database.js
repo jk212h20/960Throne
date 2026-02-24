@@ -214,9 +214,10 @@ function getAllConfig() {
 
 function createPlayer(name, pin) {
     db.run(`INSERT INTO players (name, pin) VALUES (?, ?)`, [name, pin]);
-    save();
     const result = db.exec(`SELECT last_insert_rowid()`);
-    return result[0].values[0][0];
+    const id = result[0].values[0][0];
+    save();
+    return id;
 }
 
 function getPlayerById(id) {
@@ -292,9 +293,10 @@ function addToQueue(playerId) {
     const maxResult = db.exec(`SELECT COALESCE(MAX(position), 0) FROM queue WHERE status IN ('waiting', 'on_deck')`);
     const maxPos = maxResult[0].values[0][0];
     db.run(`INSERT INTO queue (player_id, position, status, timeout_count) VALUES (?, ?, 'waiting', 0)`, [playerId, maxPos + 1]);
-    save();
     const result = db.exec(`SELECT last_insert_rowid()`);
-    return result[0].values[0][0];
+    const id = result[0].values[0][0];
+    save();
+    return id;
 }
 
 function getQueue() {
@@ -401,9 +403,10 @@ function isPlayerInQueue(playerId) {
 function createGame(kingId, challengerId, chess960Position, reignId) {
     db.run(`INSERT INTO games (king_id, challenger_id, chess960_position, reign_id) VALUES (?, ?, ?, ?)`,
         [kingId, challengerId, chess960Position, reignId]);
-    save();
     const result = db.exec(`SELECT last_insert_rowid()`);
-    return result[0].values[0][0];
+    const id = result[0].values[0][0];
+    save();
+    return id;
 }
 
 function getGameById(id) {
@@ -485,9 +488,10 @@ function getPlayerGames(playerId, limit = 50) {
 
 function createReign(kingId) {
     db.run(`INSERT INTO reigns (king_id) VALUES (?)`, [kingId]);
-    save();
     const result = db.exec(`SELECT last_insert_rowid()`);
-    return result[0].values[0][0];
+    const id = result[0].values[0][0];
+    save();
+    return id;
 }
 
 function getReignById(id) {
@@ -600,9 +604,10 @@ function resolveNotification(id) {
 function createPayout(playerId, amountSats, lightningAddress) {
     db.run(`INSERT INTO payouts (player_id, amount_sats, lightning_address) VALUES (?, ?, ?)`,
         [playerId, amountSats, lightningAddress]);
-    save();
     const result = db.exec(`SELECT last_insert_rowid()`);
-    return result[0].values[0][0];
+    const id = result[0].values[0][0];
+    save();
+    return id;
 }
 
 function updatePayout(payoutId, updates) {

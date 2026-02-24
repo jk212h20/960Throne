@@ -6,89 +6,119 @@
     <title><%= player.name %> — 960 Throne</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/socket.io/socket.io.js"></script>
-    <style>body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }</style>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+        @keyframes pulseGold { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,215,0,0.4); } 50% { box-shadow: 0 0 20px 5px rgba(255,215,0,0.2); } }
+        .pulse-gold { animation: pulseGold 2s infinite; }
+    </style>
 </head>
 <body class="min-h-screen bg-throne-darker p-4 pb-24">
     <div class="max-w-lg mx-auto">
         <!-- Header -->
         <div class="flex items-center justify-between mb-6">
             <div>
-                <h1 class="text-2xl font-bold"><%= player.name %></h1>
-                <p class="text-gray-400 text-sm">PIN: <%= player.pin %></p>
+                <h1 class="text-2xl font-bold">Hey, <%= player.name %> 👋</h1>
             </div>
             <div class="text-right">
-                <div class="text-2xl font-mono text-throne-gold font-bold"><%= player.sat_balance.toLocaleString() %></div>
-                <div class="text-xs text-gray-400">sats available</div>
+                <div class="text-2xl font-mono text-throne-gold font-bold">⚡ <%= player.sat_balance.toLocaleString() %></div>
+                <div class="text-xs text-gray-400">sats earned</div>
             </div>
         </div>
 
-        <!-- Active Game Banner -->
+        <!-- ====== KING BANNER ====== -->
+        <% if (state.king && state.king.id === player.id) { %>
+        <div class="card border-throne-gold mb-4 text-center pulse-gold">
+            <div class="text-4xl mb-2">👑</div>
+            <div class="text-xl font-bold text-throne-gold">You are the King!</div>
+            <div class="text-sm text-gray-400 mt-1">Earning <span class="text-throne-gold font-bold"><%= state.config.satRate %></span> sats/sec right now</div>
+            <div class="text-4xl font-mono text-throne-gold mt-3" id="live-sats"><%= state.liveSats.toLocaleString() %></div>
+            <div class="text-xs text-gray-500">sats this reign</div>
+            <div class="text-sm text-gray-400 mt-3">Defend your throne against all challengers!</div>
+        </div>
+        <% } %>
+
+        <!-- ====== ACTIVE GAME BANNER ====== -->
         <% if (state.game && (state.game.king_id === player.id || state.game.challenger_id === player.id)) { %>
-        <a href="/game" class="block card border-throne-gold mb-4 text-center animate-pulse">
-            <div class="text-lg font-bold text-throne-gold">⚔️ You're in an active game!</div>
-            <div class="text-sm text-gray-400 mt-1">Tap to report result</div>
+        <a href="/game" class="block card border-throne-gold mb-4 text-center pulse-gold">
+            <div class="text-2xl font-bold text-throne-gold">⚔️ Game in Progress!</div>
+            <div class="text-gray-300 mt-2">
+                <%= state.game.king_name %> <span class="text-gray-500">vs</span> <%= state.game.challenger_name %>
+            </div>
+            <div class="text-sm text-gray-500 mt-1">Position #<%= state.game.chess960_position %></div>
+            <div class="btn-gold inline-block mt-3 text-sm">Report Result →</div>
         </a>
         <% } %>
 
-        <!-- King Banner -->
-        <% if (state.king && state.king.id === player.id) { %>
-        <div class="card border-throne-gold mb-4 text-center">
-            <div class="text-4xl mb-2">👑</div>
-            <div class="text-xl font-bold text-throne-gold">You are the King!</div>
-            <div class="text-sm text-gray-400 mt-1">Earning <span class="text-throne-gold"><%= state.config.satRate %></span> sats/sec</div>
-            <div class="text-3xl font-mono text-throne-gold mt-3" id="live-sats"><%= state.liveSats.toLocaleString() %></div>
-            <div class="text-xs text-gray-500">sats this reign</div>
+        <!-- ====== ON DECK ====== -->
+        <% if (queueEntry && queueEntry.status === 'on_deck') { %>
+        <div class="card border-throne-gold mb-4 text-center pulse-gold">
+            <div class="text-3xl font-bold text-throne-gold mb-2">🔔 YOU'RE UP NEXT!</div>
+            <div class="text-lg text-gray-300">Head to the board now!</div>
+            <div class="text-5xl font-mono text-red-400 mt-3" id="on-deck-timer">30</div>
+            <div class="text-xs text-gray-500">seconds to show up</div>
         </div>
-        <% } %>
 
-        <!-- Queue Status -->
-        <% if (queueEntry) { %>
-        <div class="card mb-4 <%= queueEntry.status === 'on_deck' ? 'border-throne-gold on-deck-pulse' : '' %>">
-            <% if (queueEntry.status === 'on_deck') { %>
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-throne-gold mb-2">🔔 YOU'RE UP!</div>
-                    <div class="text-gray-300">Get to the board now!</div>
-                    <div class="text-4xl font-mono text-throne-red mt-3" id="on-deck-timer">30</div>
-                    <div class="text-xs text-gray-500">seconds to show up</div>
-                </div>
-            <% } else { %>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm text-gray-400">Queue Position</div>
-                        <div class="text-3xl font-bold text-throne-gold">#<%= queueEntry.position %></div>
-                    </div>
-                    <button onclick="leaveQueue()" class="btn-red text-sm">Leave Queue</button>
-                </div>
-            <% } %>
-        </div>
-        <% } else if (!state.king || state.king.id !== player.id) { %>
-        <!-- Join Queue -->
+        <!-- ====== IN QUEUE ====== -->
+        <% } else if (queueEntry) { %>
         <div class="card mb-4">
-            <div class="text-center">
-                <div class="text-gray-400 mb-3">Ready to challenge the King?</div>
-                <a href="/join" class="btn-gold inline-block">📋 Scan QR to Join Queue</a>
-                <div class="text-xs text-gray-500 mt-2">Must be at the venue</div>
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-sm text-gray-400">Your position in line</div>
+                    <div class="text-4xl font-bold text-throne-gold">#<%= queueEntry.position %></div>
+                    <div class="text-xs text-gray-500 mt-1">
+                        <% if (queueEntry.position === 1) { %>
+                            You're next! Wait for the current game to finish.
+                        <% } else if (queueEntry.position <= 3) { %>
+                            Almost there — stay close to the board!
+                        <% } else { %>
+                            Hang tight, games move fast ⚡
+                        <% } %>
+                    </div>
+                </div>
+                <button onclick="leaveQueue()" class="text-sm text-red-400 hover:text-red-300 border border-red-800 px-3 py-2 rounded-lg">Leave Line</button>
             </div>
         </div>
+
+        <!-- ====== NOT IN QUEUE — CTA TO JOIN ====== -->
+        <% } else if (!state.king || state.king.id !== player.id) { %>
+        <div class="card mb-4 text-center">
+            <div class="text-lg font-bold mb-2">Ready to play?</div>
+            <% if (state.king) { %>
+            <div class="text-gray-400 mb-4">
+                <span class="text-throne-gold font-bold"><%= state.king.name %></span> is on the throne.
+                <% if (state.queue.length === 0) { %>
+                    No one in line — you could be next!
+                <% } else { %>
+                    <%= state.queue.length %> challenger<%= state.queue.length === 1 ? '' : 's' %> in line.
+                <% } %>
+            </div>
+            <% } else { %>
+            <div class="text-gray-400 mb-4">No King yet — be the first to claim the throne!</div>
+            <% } %>
+            <a href="/join" class="btn-gold inline-block text-lg px-8">📋 Get in Line</a>
+            <div class="text-xs text-gray-500 mt-3">You'll need the venue code (displayed at the event)</div>
+        </div>
         <% } %>
 
-        <!-- Claim Sats -->
+        <!-- ====== CLAIM SATS ====== -->
         <% if (player.sat_balance > 0) { %>
         <div class="card mb-4">
-            <h3 class="text-lg font-bold mb-3">⚡ Claim Your Sats</h3>
+            <h3 class="text-lg font-bold mb-3">⚡ Cash Out</h3>
+            <p class="text-sm text-gray-400 mb-3">Send your <span class="text-throne-gold font-bold"><%= player.sat_balance.toLocaleString() %> sats</span> to your Lightning wallet</p>
             <form id="claim-form" onsubmit="return handleClaim(event)">
-                <input type="text" id="ln-address" class="input mb-2" placeholder="user@walletofsatoshi.com">
-                <input type="number" id="claim-amount" class="input mb-3" placeholder="Amount (default: all)" max="<%= player.sat_balance %>">
-                <button type="submit" class="btn-gold w-full">Claim <%= player.sat_balance.toLocaleString() %> sats</button>
+                <input type="text" id="ln-address" class="input mb-2" placeholder="Lightning address (e.g. you@walletofsatoshi.com)">
+                <input type="number" id="claim-amount" class="input mb-3" placeholder="Amount (leave blank for all)" max="<%= player.sat_balance %>">
+                <button type="submit" class="btn-gold w-full">⚡ Send <%= player.sat_balance.toLocaleString() %> sats</button>
             </form>
             <div id="claim-result" class="hidden mt-3 p-3 rounded-lg text-sm"></div>
         </div>
         <% } %>
 
-        <!-- Stats -->
+        <!-- ====== STATS ====== -->
+        <% if (player.games_played > 0) { %>
         <div class="card mb-4">
             <h3 class="text-lg font-bold mb-3">📊 Your Stats</h3>
-            <div class="grid grid-cols-2 gap-3 text-center">
+            <div class="grid grid-cols-3 gap-2 text-center">
                 <div class="bg-throne-darker rounded-lg p-3">
                     <div class="text-2xl font-bold"><%= player.games_played %></div>
                     <div class="text-xs text-gray-400">Games</div>
@@ -99,11 +129,11 @@
                 </div>
                 <div class="bg-throne-darker rounded-lg p-3">
                     <div class="text-2xl font-bold text-throne-gold"><%= player.times_as_king %></div>
-                    <div class="text-xs text-gray-400">Times King</div>
+                    <div class="text-xs text-gray-400">👑 Reigns</div>
                 </div>
                 <div class="bg-throne-darker rounded-lg p-3">
                     <div class="text-2xl font-bold text-throne-gold"><%= player.total_sats_earned.toLocaleString() %></div>
-                    <div class="text-xs text-gray-400">Total Earned</div>
+                    <div class="text-xs text-gray-400">Total Sats</div>
                 </div>
                 <div class="bg-throne-darker rounded-lg p-3">
                     <div class="text-2xl font-bold"><%= player.longest_win_streak %></div>
@@ -111,12 +141,13 @@
                 </div>
                 <div class="bg-throne-darker rounded-lg p-3">
                     <div class="text-2xl font-bold"><%= Math.floor(player.longest_reign_seconds / 60) %>m</div>
-                    <div class="text-xs text-gray-400">Longest Reign</div>
+                    <div class="text-xs text-gray-400">Long Reign</div>
                 </div>
             </div>
         </div>
+        <% } %>
 
-        <!-- Recent Games -->
+        <!-- ====== RECENT GAMES ====== -->
         <% if (games.length > 0) { %>
         <div class="card mb-4">
             <h3 class="text-lg font-bold mb-3">Recent Games</h3>
@@ -153,10 +184,15 @@
         <% } %>
 
         <!-- Nav -->
-        <div class="flex justify-center gap-6 text-sm text-gray-500">
+        <div class="flex justify-center gap-6 text-sm text-gray-500 mb-4">
             <a href="/throne" class="hover:text-throne-gold transition-colors">👑 Throne</a>
             <a href="/queue" class="hover:text-throne-gold transition-colors">📋 Queue</a>
             <a href="/leaderboard" class="hover:text-throne-gold transition-colors">🏆 Leaderboard</a>
+        </div>
+
+        <!-- Account info (subtle) -->
+        <div class="text-center text-xs text-gray-600">
+            Your PIN: <span class="text-gray-500"><%= player.pin %></span> (for logging in on another device)
         </div>
     </div>
 
@@ -188,7 +224,7 @@
         }, 1000);
         <% } %>
 
-        // Socket events — reload on important changes
+        // Socket events
         socket.on('game_started', (data) => {
             if (data.king.id === playerId || data.challenger.id === playerId) {
                 window.location.href = '/game';
@@ -197,12 +233,10 @@
         socket.on('on_deck', (data) => {
             if (data.player.player_id === playerId) location.reload();
         });
-        socket.on('queue_updated', () => {
-            // Soft reload queue position
-        });
         socket.on('new_king', (data) => {
             if (data.king.id === playerId) location.reload();
         });
+        socket.on('game_ended', () => location.reload());
 
         async function leaveQueue() {
             if (!confirm('Leave the queue?')) return;
@@ -219,7 +253,7 @@
             if (!address) { alert('Enter a Lightning address'); return; }
 
             resultEl.className = 'mt-3 p-3 rounded-lg text-sm bg-blue-900/50 border border-blue-700 text-blue-300';
-            resultEl.textContent = 'Sending payment...';
+            resultEl.textContent = '⚡ Sending payment...';
             resultEl.classList.remove('hidden');
 
             try {

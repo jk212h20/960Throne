@@ -58,7 +58,7 @@ router.post('/register', (req, res) => {
     const token = uuidv4();
     db.setPlayerSession(playerId, token);
 
-    res.cookie('session', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie('session', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, path: '/' });
     res.json({
         success: true,
         player: { id: playerId, name: name.trim() },

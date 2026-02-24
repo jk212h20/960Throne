@@ -32,7 +32,68 @@ router.get('/', (req, res) => {
         return res.redirect('/player');
     }
     const state = gameEngine.getThoneState();
-    res.render('index', { state });
+    res.render('index', { state, error: null });
+});
+
+// Register via form POST (sets cookie + redirects server-side)
+router.post('/register', (req, res) => {
+    const { name } = req.body;
+    if (!name || name.trim().length < 1) {
+        const state = gameEngine.getThoneState();
+        return res.render('index', { state, error: 'Name is required' });
+    }
+    if (name.trim().length > 30) {
+        const state = gameEngine.getThoneState();
+        return res.render('index', { state, error: 'Name must be 30 characters or less' });
+    }
+
+    const existing = db.getPlayerByName(name.trim());
+    if (existing) {
+        const state = gameEngine.getThoneState();
+        return res.render('index', { state, error: 'Name already taken — use "Already registered?" below' });
+    }
+
+    const { v4: uuidv4 } = require('uuid');
+    const pin = String(Math.floor(1000 + Math.random() * 9000));
+    const playerId = db.createPlayer(name.trim(), pin);
+    const token = uuidv4();
+    db.setPlayerSession(playerId, token);
+
+    res.cookie('session', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, path: '/' });
+
+    // If there's a venue code, redirect to join
+    const code = req.body.venueCode || req.query.code;
+    if (code) {
+        return res.redirect('/join?code=' + code);
+    }
+    res.redirect('/player');
+});
+
+// Login via form POST
+router.post('/login', (req, res) => {
+    const { name, pin } = req.body;
+    if (!name || !pin) {
+        const state = gameEngine.getThoneState();
+        return res.render('index', { state, error: 'Enter name and PIN' });
+    }
+
+    const player = db.getPlayerByName(name.trim());
+    if (!player || player.pin !== pin) {
+        const state = gameEngine.getThoneState();
+        return res.render('index', { state, error: 'Invalid name or PIN' });
+    }
+
+    const { v4: uuidv4 } = require('uuid');
+    const token = uuidv4();
+    db.setPlayerSession(player.id, token);
+
+    res.cookie('session', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, path: '/' });
+
+    const code = req.body.venueCode || req.query.code;
+    if (code) {
+        return res.redirect('/join?code=' + code);
+    }
+    res.redirect('/player');
 });
 
 // Player Dashboard
