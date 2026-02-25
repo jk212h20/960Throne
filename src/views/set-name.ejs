@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Choose Your Name — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+    </style>
+</head>
+<body class="min-h-screen bg-throne-darker flex items-center justify-center p-4">
+    <div class="max-w-md w-full">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="text-6xl mb-4">⚡</div>
+            <h1 class="text-3xl font-bold text-throne-gold mb-2">You're In!</h1>
+            <p class="text-gray-400 text-lg">Lightning login successful</p>
+        </div>
+
+        <!-- Name form -->
+        <div class="card">
+            <h2 class="text-xl font-bold mb-2">Choose Your Display Name</h2>
+            <p class="text-sm text-gray-400 mb-4">This is how other players will see you on the throne</p>
+
+            <div id="error-msg" class="hidden mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-300 text-sm"></div>
+
+            <form id="name-form" onsubmit="return handleSetName(event)">
+                <input type="text" id="player-name" class="input mb-3 text-lg" placeholder="Your name" maxlength="30" required autofocus>
+                <button type="submit" id="submit-btn" class="btn-gold w-full text-lg">
+                    ⚔️ Enter the Arena
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const venueCode = new URLSearchParams(window.location.search).get('code') || '';
+
+        async function handleSetName(e) {
+            e.preventDefault();
+            const name = document.getElementById('player-name').value.trim();
+            const errorEl = document.getElementById('error-msg');
+            const submitBtn = document.getElementById('submit-btn');
+
+            if (!name) {
+                errorEl.textContent = 'Name is required';
+                errorEl.classList.remove('hidden');
+                return false;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Setting name...';
+            errorEl.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/auth/set-name', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name }),
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    errorEl.textContent = data.error || 'Failed to set name';
+                    errorEl.classList.remove('hidden');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '⚔️ Enter the Arena';
+                    return false;
+                }
+
+                // Success — redirect to player dashboard (or join queue if venue code)
+                if (venueCode) {
+                    window.location.href = '/join?code=' + venueCode;
+                } else {
+                    window.location.href = '/player';
+                }
+            } catch (err) {
+                errorEl.textContent = 'Connection error. Try again.';
+                errorEl.classList.remove('hidden');
+                submitBtn.disabled = false;
+                submitBtn.textContent = '⚔️ Enter the Arena';
+            }
+
+            return false;
+        }
+    </script>
+</body>
+</html>

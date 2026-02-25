@@ -1,61 +1,72 @@
 # 960 Throne — Active Context
 
 ## Current State (Feb 24, 2026)
-MVP is **built and running**. Session bug fixed. Queue auto-join from QR working. Full player flow tested end-to-end.
+MVP is **deployed to Railway** and live at https://960throne-production.up.railway.app
 
-## What Was Just Fixed
-### Critical Bug: `save()` before `last_insert_rowid()` in sql.js
-- `db.export()` (called by `save()`) resets `last_insert_rowid()` to 0 in sql.js
-- `createPlayer()` was returning id=0, so `setPlayerSession()` did `UPDATE WHERE id=0` (no match)
-- All session_tokens stayed null → no player could ever stay logged in
-- **Fixed in**: `createPlayer`, `createGame`, `createReign`, `createPayout`, `addToQueue`
-- **Rule**: In sql.js, ALWAYS call `last_insert_rowid()` BEFORE `save()`
+**GitHub repo**: https://github.com/jk212h20/960Throne (public)
+**Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
-### Registration switched to form POST
-- Was: fetch() API call + client-side redirect (cookie issues in some browsers)
-- Now: `<form method="POST" action="/register">` → server sets cookie + `res.redirect('/player')`
-- Login also uses form POST via `POST /login` in pages.js
+## What Was Just Done
+### Lightning Login (LNURL-auth) — Replaced PIN Login
+- Built extensible auth system at `src/services/auth/` with strategy pattern
+- Implemented LNURL-auth (LUD-04) for "Login with Lightning" via QR code
+- New flow: scan QR with Lightning wallet → cryptographic auth → choose display name → play
+- Added `auth_type` and `auth_id` columns to `players` table (with migration for existing DBs)
+- PIN login kept as hidden fallback for existing players
+- New dependencies: `secp256k1`, `qrcode`
 
-## Player Flow (working)
-1. QR at venue → `/?code=JSAM9D` → "Get in Line" form → enter name → auto-joined to queue
-2. Player dashboard shows: position in line, full queue ("The Line"), PIN, stats
-3. Already-registered players visiting QR link also auto-join queue
+### Auth Architecture (extensible for future methods)
+```
+src/services/auth/
+  ├── index.js      # Auth manager — challenge store, strategy routing
+  └── lightning.js   # LNURL-auth: bech32 encoding, secp256k1 sig verification
+```
+To add new auth (e.g., Nostr): create `src/services/auth/nostr.js`, register in `index.js` strategies map.
 
-## Known Issues Still Open
-1. **Admin password** — `.env` has `ADMIN_PASSWORD=changeme`, needs to be updated before event
-2. **Lightning not tested** — Voltage LND credentials not configured yet
-3. **Full game flow untested** — Need to test: crown king → start game → report result → new king cycle
-4. **Venue code in old QR links** — Code rotates every 30min; QR needs to point to a stable URL or code must be entered manually
+### New/Modified Files
+| File | Change |
+|------|--------|
+| `src/services/auth/index.js` | NEW — Auth manager with in-memory challenge store |
+| `src/services/auth/lightning.js` | NEW — LNURL-auth strategy (bech32, secp256k1) |
+| `src/services/database.js` | Added `auth_type`, `auth_id` columns, migration, `createPlayerWithAuth`, `getPlayerByAuthId`, `setPlayerName` |
+| `src/routes/api.js` | Added `/api/auth/lightning`, `/api/auth/lightning/callback`, `/api/auth/status`, `/api/auth/set-name` |
+| `src/routes/pages.js` | Added `/set-name` route, name-check redirects on `/` and `/player` |
+| `src/views/index.ejs` | Replaced name+PIN form with Lightning QR code + polling |
+| `src/views/set-name.ejs` | NEW — Name selection page after Lightning auth |
+| `src/views/player.ejs` | Shows "⚡ Lightning login" instead of PIN for lightning users |
+
+## Player Flow (updated)
+1. QR at venue → `/?code=XXXXX` → Lightning login QR displayed
+2. Player scans with Lightning wallet (Phoenix, Zeus, Alby, etc.)
+3. Wallet signs challenge → callback verified → session created
+4. If new player: choose display name on `/set-name`
+5. Player dashboard → join queue → play games → cash out sats
 
 ## Key Files
 | File | Purpose |
 |------|---------|
 | `src/index.js` | Express server + Socket.io setup |
+| `src/services/auth/index.js` | Extensible auth manager |
+| `src/services/auth/lightning.js` | LNURL-auth implementation |
 | `src/services/database.js` | SQLite schema, all DB queries |
-| `src/services/gameEngine.js` | Game state machine, sat tracking, king transitions |
-| `src/services/chess960.js` | Chess960 random position generator |
-| `src/services/lightning.js` | Voltage LND Lightning payments |
-| `src/routes/api.js` | All REST API endpoints |
-| `src/routes/pages.js` | Page rendering + form POST registration/login |
-| `src/views/*.ejs` | All frontend templates |
-| `.env` | Config (admin pass, LN creds, base URL) |
+| `src/services/gameEngine.js` | Game state machine, sat tracking |
+| `src/routes/api.js` | All REST API endpoints (auth, game, admin) |
+| `src/routes/pages.js` | Page rendering + auth flow routing |
+
+## Known Issues Still Open
+1. **Railway deploy is manual** — `railway up` needed after each push
+2. **No persistent volume** — DB resets on redeploy
+3. **Lightning payouts not tested** — Voltage LND credentials not configured
+4. **BASE_URL not set on Railway** — Required for LNURL-auth callbacks to work in production!
+5. **Need to redeploy** — Lightning login changes are local only, not yet pushed
 
 ## Architecture
 ```
-Player Phone → Website (EJS) → Express API → SQLite (sql.js in-memory + file persist)
+Player Phone → Website (EJS) → Express API → SQLite (sql.js)
                     ↕ Socket.io (real-time)
 Venue Screen → /throne (auto-updates)
 Admin Phone → /admin (game control)
                     ↕
-              Voltage LND (Lightning payouts)
-```
-
-## Critical sql.js Gotcha
-**NEVER call `save()` before `last_insert_rowid()`** — `db.export()` resets the rowid counter to 0. Pattern:
-```js
-db.run(`INSERT INTO ...`, [params]);
-const result = db.exec(`SELECT last_insert_rowid()`);  // BEFORE save()
-const id = result[0].values[0][0];
-save();  // AFTER getting the id
-return id;
+Auth: LNURL-auth (Lightning wallet signs challenge)
+Payouts: Voltage LND (not yet configured)
 ```

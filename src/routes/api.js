@@ -7,6 +7,8 @@ const router = express.Router();
 const db = require('../services/database');
 const gameEngine = require('../services/gameEngine');
 const lightning = require('../services/lightning');
+const auth = require('../services/auth');
+const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 
 // ============================================================
@@ -32,59 +34,8 @@ function requireAdmin(req, res, next) {
 }
 
 // ============================================================
-// Player Auth
+// Player Auth (Lightning login via /api/auth/* routes below)
 // ============================================================
-
-// Register
-router.post('/register', (req, res) => {
-    const { name } = req.body;
-    if (!name || name.trim().length < 1) {
-        return res.status(400).json({ error: 'Name is required' });
-    }
-    if (name.trim().length > 30) {
-        return res.status(400).json({ error: 'Name must be 30 characters or less' });
-    }
-
-    const existing = db.getPlayerByName(name.trim());
-    if (existing) {
-        return res.status(400).json({ error: 'Name already taken. Try logging in instead.' });
-    }
-
-    // Generate 4-digit PIN
-    const pin = String(Math.floor(1000 + Math.random() * 9000));
-    const playerId = db.createPlayer(name.trim(), pin);
-
-    // Create session
-    const token = uuidv4();
-    db.setPlayerSession(playerId, token);
-
-    res.cookie('session', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, path: '/' });
-    res.json({
-        success: true,
-        player: { id: playerId, name: name.trim() },
-        pin,
-        message: `Your PIN is ${pin}. Remember it to log back in!`
-    });
-});
-
-// Login
-router.post('/login', (req, res) => {
-    const { name, pin } = req.body;
-    if (!name || !pin) {
-        return res.status(400).json({ error: 'Name and PIN required' });
-    }
-
-    const player = db.getPlayerByName(name.trim());
-    if (!player || player.pin !== pin) {
-        return res.status(401).json({ error: 'Invalid name or PIN' });
-    }
-
-    const token = uuidv4();
-    db.setPlayerSession(player.id, token);
-
-    res.cookie('session', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
-    res.json({ success: true, player: { id: player.id, name: player.name } });
-});
 
 // Logout
 router.post('/logout', (req, res) => {
@@ -231,6 +182,123 @@ router.post('/claim', requirePlayer, async (req, res) => {
 });
 
 // ============================================================
+// Auth — Lightning Login (LNURL-auth) + extensible strategies
+// ============================================================
+
+// Generate a new auth challenge (returns QR code data for scanning)
+router.get('/auth/lightning', async (req, res) => {
+    try {
+        const challenge = auth.createChallenge('lightning');
+        
+        // Generate QR code as data URL
+        const qrDataUrl = await QRCode.toDataURL(challenge.encodedUrl, {
+            width: 400,
+            margin: 2,
+            color: { dark: '#000000', light: '#ffffff' },
+        });
+
+        res.json({
+            k1: challenge.k1,
+            lnurl: challenge.encodedUrl,
+            qr: qrDataUrl,
+            deepLink: challenge.deepLink,
+        });
+    } catch (err) {
+        console.error('Auth challenge error:', err);
+        res.status(500).json({ error: 'Failed to generate auth challenge' });
+    }
+});
+
+// LNURL-auth callback — wallet hits this URL with sig + key
+router.get('/auth/lightning/callback', (req, res) => {
+    const { k1, sig, key, tag } = req.query;
+
+    if (!k1 || !sig || !key) {
+        return res.json({ status: 'ERROR', reason: 'Missing required parameters (k1, sig, key)' });
+    }
+
+    // Verify the signature
+    const result = auth.processCallback(k1, { sig, key });
+
+    if (!result.success) {
+        return res.json({ status: 'ERROR', reason: result.error });
+    }
+
+    // Signature valid — find or create the player
+    const authId = result.authId;
+    let player = db.getPlayerByAuthId('lightning', authId);
+    let isNewPlayer = false;
+
+    if (!player) {
+        // New player — create account with lightning auth
+        const playerId = db.createPlayerWithAuth('lightning', authId);
+        player = db.getPlayerById(playerId);
+        isNewPlayer = true;
+    }
+
+    // Create session
+    const token = uuidv4();
+    db.setPlayerSession(player.id, token);
+    auth.completeChallenge(k1, token);
+
+    // LNURL spec requires { status: "OK" } response
+    return res.json({ status: 'OK' });
+});
+
+// Poll auth status — frontend polls this to know when wallet has completed auth
+router.get('/auth/status', (req, res) => {
+    const { k1 } = req.query;
+    if (!k1) return res.status(400).json({ error: 'k1 required' });
+
+    const status = auth.getChallengeStatus(k1);
+
+    if (status.status === 'complete' && status.sessionToken) {
+        // Auth complete — set session cookie and return success
+        res.cookie('session', status.sessionToken, { 
+            httpOnly: true, 
+            maxAge: 7 * 24 * 60 * 60 * 1000, 
+            path: '/' 
+        });
+
+        // Check if player needs to set a name
+        const player = db.getPlayerBySession(status.sessionToken);
+        const needsName = !player || !player.name;
+
+        // Clean up the challenge
+        auth.consumeChallenge(k1);
+
+        return res.json({ 
+            status: 'complete', 
+            needsName,
+            player: player ? { id: player.id, name: player.name } : null,
+        });
+    }
+
+    return res.json({ status: status.status });
+});
+
+// Set display name after Lightning auth (for new players)
+router.post('/auth/set-name', requirePlayer, (req, res) => {
+    const { name } = req.body;
+    
+    if (!name || name.trim().length < 1) {
+        return res.status(400).json({ error: 'Name is required' });
+    }
+    if (name.trim().length > 30) {
+        return res.status(400).json({ error: 'Name must be 30 characters or less' });
+    }
+
+    // Check name isn't taken
+    const existing = db.getPlayerByName(name.trim());
+    if (existing && existing.id !== req.player.id) {
+        return res.status(400).json({ error: 'Name already taken. Choose a different name.' });
+    }
+
+    db.setPlayerName(req.player.id, name.trim());
+    res.json({ success: true, name: name.trim() });
+});
+
+// ============================================================
 // Admin API
 // ============================================================
 
@@ -333,6 +401,20 @@ router.post('/admin/config', requireAdmin, (req, res) => {
     if (!key || value === undefined) return res.status(400).json({ error: 'Key and value required' });
     db.setConfig(key, value);
     res.json({ success: true });
+});
+
+// Merge two player accounts (for locked-out players who created a new account)
+router.post('/admin/merge-accounts', requireAdmin, (req, res) => {
+    const { targetPlayerId, sourcePlayerId } = req.body;
+    if (!targetPlayerId || !sourcePlayerId) {
+        return res.status(400).json({ error: 'Both targetPlayerId and sourcePlayerId required' });
+    }
+    try {
+        const result = db.mergeAccounts(parseInt(targetPlayerId), parseInt(sourcePlayerId));
+        res.json(result);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
 });
 
 router.get('/admin/players', requireAdmin, (req, res) => {

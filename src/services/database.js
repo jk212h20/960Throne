@@ -32,6 +32,7 @@ async function initialize() {
     }
 
     createTables();
+    migrateSchema();
     seedConfig();
     save();
     return db;
@@ -52,8 +53,10 @@ function createTables() {
     db.run(`
         CREATE TABLE IF NOT EXISTS players (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            pin TEXT NOT NULL,
+            name TEXT,
+            pin TEXT DEFAULT '',
+            auth_type TEXT DEFAULT 'pin',
+            auth_id TEXT,
             session_token TEXT,
             sat_balance INTEGER DEFAULT 0,
             total_sats_earned INTEGER DEFAULT 0,
@@ -161,6 +164,26 @@ function createTables() {
     `);
 }
 
+function migrateSchema() {
+    // Add auth_type and auth_id columns if they don't exist (for existing databases)
+    try {
+        const tableInfo = db.exec(`PRAGMA table_info(players)`);
+        if (tableInfo.length > 0) {
+            const columns = tableInfo[0].values.map(row => row[1]);
+            if (!columns.includes('auth_type')) {
+                db.run(`ALTER TABLE players ADD COLUMN auth_type TEXT DEFAULT 'pin'`);
+                console.log('🔧 Migration: Added auth_type column to players');
+            }
+            if (!columns.includes('auth_id')) {
+                db.run(`ALTER TABLE players ADD COLUMN auth_id TEXT`);
+                console.log('🔧 Migration: Added auth_id column to players');
+            }
+        }
+    } catch (err) {
+        console.log('Migration check (non-critical):', err.message);
+    }
+}
+
 function seedConfig() {
     const defaults = {
         sat_rate_per_second: '21',
@@ -219,6 +242,69 @@ function createPlayer(name, pin) {
     save();
     return id;
 }
+
+function createPlayerWithAuth(authType, authId) {
+    db.run(`INSERT INTO players (auth_type, auth_id, pin) VALUES (?, ?, '')`, [authType, authId]);
+    const result = db.exec(`SELECT last_insert_rowid()`);
+    const id = result[0].values[0][0];
+    save();
+    return id;
+}
+
+function getPlayerByAuthId(authType, authId) {
+    const result = db.exec(`SELECT * FROM players WHERE auth_type = ? AND auth_id = ?`, [authType, authId]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return rowToObject(result[0]);
+}
+
+function setPlayerName(playerId, name) {
+    db.run(`UPDATE players SET name = ? WHERE id = ?`, [name, playerId]);
+    save();
+}
+
+// Merge two player accounts: absorb source into target, delete source
+function mergeAccounts(targetPlayerId, sourcePlayerId) {
+    const target = getPlayerById(targetPlayerId);
+    const source = getPlayerById(sourcePlayerId);
+    if (!target || !source) throw new Error('Both players must exist');
+    if (targetPlayerId === sourcePlayerId) throw new Error('Cannot merge a player with themselves');
+
+    // Transfer sat balance
+    db.run(`UPDATE players SET sat_balance = sat_balance + ? WHERE id = ?`, [source.sat_balance, targetPlayerId]);
+
+    // Reassign all games where source was king or challenger
+    db.run(`UPDATE games SET king_id = ? WHERE king_id = ?`, [targetPlayerId, sourcePlayerId]);
+    db.run(`UPDATE games SET challenger_id = ? WHERE challenger_id = ?`, [targetPlayerId, sourcePlayerId]);
+
+    // Reassign reigns, queue, payouts
+    db.run(`UPDATE reigns SET king_id = ? WHERE king_id = ?`, [targetPlayerId, sourcePlayerId]);
+    db.run(`UPDATE queue SET player_id = ? WHERE player_id = ?`, [targetPlayerId, sourcePlayerId]);
+    db.run(`UPDATE payouts SET player_id = ? WHERE player_id = ?`, [targetPlayerId, sourcePlayerId]);
+
+    // Recalculate aggregate stats from games
+    const stats = db.exec(`
+        SELECT 
+            COUNT(*) as games_played,
+            SUM(CASE WHEN (king_id = ? AND result = 'king_won') OR (challenger_id = ? AND result = 'challenger_won') THEN 1 ELSE 0 END) as games_won,
+            SUM(CASE WHEN king_id = ? THEN 1 ELSE 0 END) as times_as_king,
+            COALESCE(SUM(CASE WHEN king_id = ? THEN sats_earned ELSE 0 END), 0) as total_sats_earned
+        FROM games 
+        WHERE (king_id = ? OR challenger_id = ?) AND result IS NOT NULL
+    `, [targetPlayerId, targetPlayerId, targetPlayerId, targetPlayerId, targetPlayerId, targetPlayerId]);
+
+    if (stats.length > 0 && stats[0].values.length > 0) {
+        const s = stats[0].values[0];
+        db.run(`UPDATE players SET games_played = ?, games_won = ?, times_as_king = ?, total_sats_earned = ? WHERE id = ?`,
+            [s[0], s[1], s[2], s[3], targetPlayerId]);
+    }
+
+    // Delete source player
+    db.run(`DELETE FROM players WHERE id = ?`, [sourcePlayerId]);
+    save();
+
+    return { success: true, message: `Merged player #${sourcePlayerId} (${source.name}) into #${targetPlayerId} (${target.name})` };
+}
+
 
 function getPlayerById(id) {
     const result = db.exec(`SELECT * FROM players WHERE id = ?`, [id]);
@@ -690,6 +776,10 @@ module.exports = {
     
     // Players
     createPlayer,
+    createPlayerWithAuth,
+    getPlayerByAuthId,
+    setPlayerName,
+    mergeAccounts,
     getPlayerById,
     getPlayerByName,
     getPlayerBySession,

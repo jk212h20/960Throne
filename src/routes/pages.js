@@ -1,5 +1,6 @@
 /**
  * Page Routes — EJS rendered pages
+ * Auth is handled via Lightning login (LNURL-auth) through API routes
  */
 
 const express = require('express');
@@ -26,9 +27,14 @@ function attachAdmin(req, res, next) {
 router.use(attachPlayer);
 router.use(attachAdmin);
 
-// Home — Register / Login
+// Home — Lightning Login
 router.get('/', (req, res) => {
     if (req.player) {
+        // If player has no name yet, redirect to set-name
+        if (!req.player.name) {
+            const code = req.query.code || '';
+            return res.redirect('/set-name' + (code ? '?code=' + code : ''));
+        }
         // If they have a venue code, auto-join queue before redirecting
         const code = req.query.code;
         if (code && db.validateVenueCode(code) && !db.isPlayerInQueue(req.player.id)) {
@@ -41,73 +47,17 @@ router.get('/', (req, res) => {
     res.render('index', { state, error: null, venueCode });
 });
 
-// Register via form POST (sets cookie + redirects server-side)
-router.post('/register', (req, res) => {
-    const { name } = req.body;
-    const code = req.body.venueCode || '';
-    
-    if (!name || name.trim().length < 1) {
-        const state = gameEngine.getThoneState();
-        return res.render('index', { state, error: 'Name is required', venueCode: code });
-    }
-    if (name.trim().length > 30) {
-        const state = gameEngine.getThoneState();
-        return res.render('index', { state, error: 'Name must be 30 characters or less', venueCode: code });
-    }
-
-    const existing = db.getPlayerByName(name.trim());
-    if (existing) {
-        const state = gameEngine.getThoneState();
-        return res.render('index', { state, error: 'Name already taken — use "Already registered?" below', venueCode: code });
-    }
-
-    const { v4: uuidv4 } = require('uuid');
-    const pin = String(Math.floor(1000 + Math.random() * 9000));
-    const playerId = db.createPlayer(name.trim(), pin);
-    const token = uuidv4();
-    db.setPlayerSession(playerId, token);
-
-    res.cookie('session', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, path: '/' });
-
-    // If there's a valid venue code, auto-join the queue
-    if (code && db.validateVenueCode(code)) {
-        const result = gameEngine.joinQueue(playerId);
-        // Even if joinQueue fails (e.g. already in queue), just redirect to player
-    }
-
-    res.redirect('/player');
-});
-
-// Login via form POST
-router.post('/login', (req, res) => {
-    const { name, pin } = req.body;
-    if (!name || !pin) {
-        const state = gameEngine.getThoneState();
-        return res.render('index', { state, error: 'Enter name and PIN' });
-    }
-
-    const player = db.getPlayerByName(name.trim());
-    if (!player || player.pin !== pin) {
-        const state = gameEngine.getThoneState();
-        return res.render('index', { state, error: 'Invalid name or PIN' });
-    }
-
-    const { v4: uuidv4 } = require('uuid');
-    const token = uuidv4();
-    db.setPlayerSession(player.id, token);
-
-    res.cookie('session', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, path: '/' });
-
-    const code = req.body.venueCode || req.query.code;
-    if (code) {
-        return res.redirect('/join?code=' + code);
-    }
-    res.redirect('/player');
+// Set name page (for new Lightning auth users who haven't chosen a name yet)
+router.get('/set-name', (req, res) => {
+    if (!req.player) return res.redirect('/');
+    if (req.player.name) return res.redirect('/player');
+    res.render('set-name');
 });
 
 // Player Dashboard
 router.get('/player', (req, res) => {
     if (!req.player) return res.redirect('/');
+    if (!req.player.name) return res.redirect('/set-name');
     const state = gameEngine.getThoneState();
     const games = db.getPlayerGames(req.player.id, 20);
     const queueEntry = db.getQueueEntry(req.player.id);
@@ -144,7 +94,7 @@ router.get('/game', (req, res) => {
 router.get('/join', (req, res) => {
     const { code } = req.query;
     if (!req.player) {
-        // Store the code and redirect to register
+        // Store the code and redirect to login
         res.cookie('venue_code', code || '', { maxAge: 10 * 60 * 1000 });
         return res.redirect('/?join=true&code=' + (code || ''));
     }

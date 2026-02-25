@@ -170,6 +170,33 @@
                     <% }) %>
                 </div>
             </div>
+
+            <!-- Merge Accounts -->
+            <div class="card">
+                <h2 class="text-lg font-bold mb-3">🔀 Merge Accounts</h2>
+                <p class="text-xs text-gray-500 mb-3">For players locked out of their wallet who created a new account. Merges source → target (source is deleted).</p>
+                <div class="space-y-2">
+                    <div>
+                        <label class="text-xs text-gray-400">Keep this account (target)</label>
+                        <select id="merge-target" class="input text-sm">
+                            <option value="">Select player to KEEP...</option>
+                            <% players.forEach(p => { %>
+                            <option value="<%= p.id %>">#<%= p.id %> — <%= p.name || '(no name)' %> (<%= p.games_played %> games, <%= p.sat_balance %> sats)</option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Delete this account (source — stats merged into target)</label>
+                        <select id="merge-source" class="input text-sm">
+                            <option value="">Select player to DELETE...</option>
+                            <% players.forEach(p => { %>
+                            <option value="<%= p.id %>">#<%= p.id %> — <%= p.name || '(no name)' %> (<%= p.games_played %> games, <%= p.sat_balance %> sats)</option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <button onclick="mergeAccounts()" class="w-full text-sm bg-red-900 hover:bg-red-800 text-red-300 px-3 py-2 rounded">🔀 Merge Accounts</button>
+                </div>
+            </div>
         </div>
 
         <!-- Recent Games -->
@@ -237,6 +264,15 @@
             if (await api('/api/admin/queue/add', { playerId: parseInt(id) })) setTimeout(() => location.reload(), 500);
         }
         async function updateConfig(key, value) { await api('/api/admin/config', { key, value }); }
+        async function mergeAccounts() {
+            const targetId = document.getElementById('merge-target').value.trim();
+            const sourceId = document.getElementById('merge-source').value.trim();
+            if (!targetId || !sourceId) return alert('Both player IDs required');
+            if (targetId === sourceId) return alert('Cannot merge a player with themselves');
+            if (!confirm(`Merge player #${sourceId} INTO player #${targetId}? This will delete player #${sourceId} and transfer all their stats/sats to #${targetId}. This cannot be undone.`)) return;
+            const result = await api('/api/admin/merge-accounts', { targetPlayerId: parseInt(targetId), sourcePlayerId: parseInt(sourceId) });
+            if (result) { alert(result.message || 'Accounts merged'); setTimeout(() => location.reload(), 500); }
+        }
         async function undoGame(gameId) {
             if (!confirm('Undo this game? This will reverse all stat changes and restore the previous king if needed.')) return;
             if (await api('/api/admin/undo-game', { gameId })) setTimeout(() => location.reload(), 500);

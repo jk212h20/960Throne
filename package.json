@@ -10,7 +10,13 @@
     "dev": "node --watch src/index.js",
     "test": "echo \"No tests yet\" && exit 0"
   },
-  "keywords": ["chess", "chess960", "bitcoin", "lightning", "king-of-the-hill"],
+  "keywords": [
+    "chess",
+    "chess960",
+    "bitcoin",
+    "lightning",
+    "king-of-the-hill"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -19,6 +25,8 @@
     "ejs": "^3.1.9",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
+    "qrcode": "^1.5.4",
+    "secp256k1": "^5.0.1",
     "socket.io": "^4.8.1",
     "sql.js": "^1.10.2",
     "tailwindcss": "^3.4.19",

@@ -7,6 +7,11 @@
     <link rel="stylesheet" href="/styles.css">
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { animation: spin 1s linear infinite; display: inline-block; }
+        #qr-container img { border-radius: 12px; }
     </style>
 </head>
 <body class="min-h-screen bg-throne-darker flex items-center justify-center p-4">
@@ -35,11 +40,11 @@
         <div class="card mb-4">
             <h2 class="text-lg font-bold mb-3">⚡ How it works</h2>
             <div class="space-y-2 text-sm text-gray-300">
-                <div class="flex gap-2"><span class="text-throne-gold">1.</span> Enter your name below to join</div>
+                <div class="flex gap-2"><span class="text-throne-gold">1.</span> Login with your Lightning wallet below</div>
                 <div class="flex gap-2"><span class="text-throne-gold">2.</span> Get in line to challenge the King</div>
                 <div class="flex gap-2"><span class="text-throne-gold">3.</span> Beat the King → become the new King</div>
                 <div class="flex gap-2"><span class="text-throne-gold">4.</span> The King earns <strong class="text-throne-gold">21 sats/second</strong> while on the throne</div>
-                <div class="flex gap-2"><span class="text-throne-gold">5.</span> Collect your sats via Lightning ⚡</div>
+                <div class="flex gap-2"><span class="text-throne-gold">5.</span> Cash out your sats via Lightning ⚡</div>
             </div>
         </div>
 
@@ -48,36 +53,34 @@
         <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-300 text-sm"><%= error %></div>
         <% } %>
 
-        <!-- Register — simple form POST -->
-        <div class="card">
-            <% if (venueCode) { %>
-            <h2 class="text-xl font-bold mb-2">⚔️ Get in Line</h2>
-            <p class="text-sm text-gray-400 mb-4">Enter your name and you'll be added to the challenger queue</p>
-            <% } else { %>
-            <h2 class="text-xl font-bold mb-4">Enter the Arena</h2>
-            <% } %>
-            <form method="POST" action="/register">
-                <input type="hidden" name="venueCode" value="<%= venueCode %>">
-                <input type="text" name="name" class="input mb-3" placeholder="Your name" maxlength="30" required autofocus>
-                <button type="submit" class="btn-gold w-full text-lg">
-                    <% if (venueCode) { %>
-                    ⚔️ Join the Line
-                    <% } else { %>
-                    ⚔️ Join
-                    <% } %>
-                </button>
-            </form>
-
-            <div class="border-t border-gray-700 mt-5 pt-4">
-                <details class="text-sm">
-                    <summary class="text-gray-500 cursor-pointer hover:text-gray-300">Already registered? Log in</summary>
-                    <form method="POST" action="/login" class="mt-3">
-                        <input type="hidden" name="venueCode" value="<%= venueCode %>">
-                        <input type="text" name="name" class="input mb-2" placeholder="Your name">
-                        <input type="text" name="pin" class="input mb-3" placeholder="4-digit PIN" maxlength="4" inputmode="numeric">
-                        <button type="submit" class="btn-outline w-full">Log In</button>
-                    </form>
-                </details>
+        <!-- Lightning Login -->
+        <div class="card" id="login-card">
+            <h2 class="text-xl font-bold mb-2 text-center">⚡ Login with Lightning</h2>
+            <p class="text-sm text-gray-400 mb-4 text-center">Scan with your Lightning wallet to login instantly</p>
+            
+            <!-- QR Code Area -->
+            <div id="qr-container" class="flex flex-col items-center">
+                <div id="qr-loading" class="text-center py-8">
+                    <div class="spinner text-2xl mb-2">⚡</div>
+                    <div class="text-sm text-gray-400">Generating login code...</div>
+                </div>
+                <div id="qr-code" class="hidden text-center">
+                    <img id="qr-img" alt="Scan with Lightning wallet" class="mx-auto mb-3" style="width: 280px; height: 280px;">
+                    <!-- Mobile deep link button -->
+                    <a id="ln-deeplink" href="#" class="btn-gold inline-block text-lg px-8 mb-3 w-full text-center">
+                        ⚡ Open Wallet
+                    </a>
+                    <div class="text-xs text-gray-500 mt-1">Works with Phoenix, Zeus, Alby, Breez, and more</div>
+                </div>
+                <div id="qr-error" class="hidden text-center py-8">
+                    <div class="text-red-400 mb-2">Failed to load login code</div>
+                    <button onclick="loadChallenge()" class="btn-outline text-sm">Try Again</button>
+                </div>
+                <div id="qr-success" class="hidden text-center py-8">
+                    <div class="text-4xl mb-2">✅</div>
+                    <div class="text-lg font-bold text-green-400">Authenticated!</div>
+                    <div class="text-sm text-gray-400">Redirecting...</div>
+                </div>
             </div>
         </div>
 
@@ -88,5 +91,86 @@
             <a href="/leaderboard" class="hover:text-throne-gold transition-colors">🏆 Leaderboard</a>
         </div>
     </div>
+
+    <script>
+        let currentK1 = null;
+        let pollInterval = null;
+        const venueCode = '<%= venueCode %>';
+
+        async function loadChallenge() {
+            // Show loading state
+            document.getElementById('qr-loading').classList.remove('hidden');
+            document.getElementById('qr-code').classList.add('hidden');
+            document.getElementById('qr-error').classList.add('hidden');
+            document.getElementById('qr-success').classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/auth/lightning');
+                if (!res.ok) throw new Error('Failed to generate challenge');
+                const data = await res.json();
+
+                currentK1 = data.k1;
+
+                // Show QR code
+                document.getElementById('qr-img').src = data.qr;
+                document.getElementById('ln-deeplink').href = data.deepLink;
+                
+                document.getElementById('qr-loading').classList.add('hidden');
+                document.getElementById('qr-code').classList.remove('hidden');
+
+                // Start polling for auth completion
+                startPolling();
+            } catch (err) {
+                console.error('Failed to load challenge:', err);
+                document.getElementById('qr-loading').classList.add('hidden');
+                document.getElementById('qr-error').classList.remove('hidden');
+            }
+        }
+
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            
+            pollInterval = setInterval(async () => {
+                if (!currentK1) return;
+
+                try {
+                    const res = await fetch(`/api/auth/status?k1=${currentK1}`);
+                    const data = await res.json();
+
+                    if (data.status === 'complete') {
+                        clearInterval(pollInterval);
+                        
+                        // Show success
+                        document.getElementById('qr-code').classList.add('hidden');
+                        document.getElementById('qr-success').classList.remove('hidden');
+
+                        // Redirect based on whether they need to set a name
+                        setTimeout(() => {
+                            if (data.needsName) {
+                                window.location.href = '/set-name' + (venueCode ? '?code=' + venueCode : '');
+                            } else {
+                                window.location.href = '/player';
+                            }
+                        }, 800);
+                    } else if (data.status === 'expired' || data.status === 'failed') {
+                        clearInterval(pollInterval);
+                        // Reload a new challenge
+                        loadChallenge();
+                    }
+                } catch (err) {
+                    // Network error — keep trying
+                    console.error('Poll error:', err);
+                }
+            }, 1500); // Poll every 1.5 seconds
+        }
+
+        // Auto-refresh challenge every 4 minutes (before 5min expiry)
+        setInterval(() => {
+            loadChallenge();
+        }, 4 * 60 * 1000);
+
+        // Start on page load
+        loadChallenge();
+    </script>
 </body>
 </html>

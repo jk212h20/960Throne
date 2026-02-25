@@ -3,8 +3,10 @@
 ## What Works ✅
 - [x] Express server with Socket.io real-time
 - [x] SQLite database with full schema (players, games, queue, reigns, config, venue_codes, notifications)
-- [x] Player registration (name → auto-generated 4-digit PIN)
-- [x] Player login (name + PIN → session cookie)
+- [x] Player registration via Lightning login (LNURL-auth QR scan)
+- [x] Player login via Lightning wallet (cryptographic, no passwords)
+- [x] Extensible auth system (`src/services/auth/`) — strategy pattern for future methods
+- [x] Legacy PIN login preserved as hidden fallback
 - [x] Chess960 position generator (all 960 valid positions)
 - [x] Game engine state machine (start game → report result → king transitions)
 - [x] Sat accumulation tracking (21 sats/sec, calculated on game end)
@@ -22,10 +24,11 @@
 ## What's Left to Build 🔨
 
 ### High Priority
-- [ ] Fix session cookie persistence (registration → player redirect broken)
 - [ ] End-to-end test of full game flow (crown king → start game → report → new king)
 - [ ] Configure Voltage LND credentials and test Lightning payouts
-- [ ] Set real admin password in `.env`
+- [ ] Add Railway persistent volume (mount `/app/data` for SQLite persistence across deploys)
+- [ ] Set `BASE_URL` env var on Railway to `https://960throne-production.up.railway.app`
+- [ ] Connect Railway to GitHub for auto-deploy (currently manual `railway up`)
 
 ### Medium Priority
 - [ ] QR code generation for venue code URLs
@@ -42,7 +45,7 @@
 ## Database Schema
 | Table | Purpose |
 |-------|---------|
-| `players` | id, name, pin, lightning_address, sats_balance, created_at |
+| `players` | id, name, pin, auth_type, auth_id, session_token, sats_balance, created_at |
 | `games` | id, king_id, challenger_id, chess960_position, result, sats_earned, timestamps |
 | `queue` | id, player_id, position, status (waiting/on_deck/called), timeout_count |
 | `reigns` | id, king_id, start_time, end_time, games_won, games_played, total_sats |
@@ -53,8 +56,12 @@
 ## API Routes
 | Method | Route | Purpose |
 |--------|-------|---------|
-| POST | `/api/register` | Create player |
-| POST | `/api/login` | Login with name+PIN |
+| GET | `/api/auth/lightning` | Generate LNURL-auth challenge + QR |
+| GET | `/api/auth/lightning/callback` | Wallet callback (sig verification) |
+| GET | `/api/auth/status` | Poll auth status (frontend) |
+| POST | `/api/auth/set-name` | Set display name after Lightning auth |
+| POST | `/api/register` | Create player (legacy) |
+| POST | `/api/login` | Login with name+PIN (legacy) |
 | POST | `/api/queue/join` | Join queue (requires venue code) |
 | POST | `/api/queue/leave` | Leave queue |
 | POST | `/api/game/:id/result` | Report game result |
@@ -67,3 +74,5 @@
 | POST | `/api/admin/config` | Update config values |
 | POST | `/api/admin/queue/add` | Add player to queue |
 | POST | `/api/admin/queue/remove` | Remove from queue |
+| POST | `/api/admin/undo-game` | Undo finalized game, reverse stats, restore king |
+| POST | `/api/admin/set-challenger` | Set specific player as challenger (bypass queue) |
