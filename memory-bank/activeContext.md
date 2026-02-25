@@ -7,6 +7,15 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Sat Persistence & Correctness Fix (Feb 25, 2026)
+- **Sats now accumulate continuously from the moment a king is crowned** (not just during games)
+- **Single source of truth**: `sats = floor((now - crowned_at) * sat_rate)` — a pure function of time
+- Server-side accumulator flushes to DB every 10s so sats survive page reloads/restarts
+- Client-side counters use the same formula (derive from `crowned_at` timestamp)
+- Reign finalization computes exact final sats from timestamps, no incremental drift
+- Leaderboard shows active reign with live sats/time
+- All sat crediting goes through `crownKing()` → no double-counting on dethronement
+
 ### Throne Page Split — Admin-Protected + Public Live View (Feb 25, 2026)
 - `/throne` now requires admin password (reuses same `admin_token` cookie as `/admin`)
 - `/live` — new public web view with same throne info but **no QR code/venue code**
