@@ -202,7 +202,7 @@ function crownKing(playerId) {
         if (reign && !reign.dethroned_at) {
             const reignSeconds = (transitionMs - new Date(reign.crowned_at).getTime()) / 1000;
             const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
-            const finalSats = Math.floor(reignSeconds * satRate);
+            const finalSats = Math.floor(reignSeconds) * satRate;
             // Credit any remaining sats delta not yet flushed
             const satsDelta = finalSats - reign.total_sats_earned;
             if (satsDelta > 0) {
@@ -415,7 +415,7 @@ function finalizeGameResult(gameId, result) {
 
     // Finalize the game record (sats_earned = total reign sats at time of game end, for record)
     const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
-    const gameSats = Math.floor(gameDuration * satRate);
+    const gameSats = Math.floor(gameDuration) * satRate;
     db.finalizeGame(gameId, result, gameSats);
     db.setConfig('current_game_id', '');
 
@@ -657,10 +657,10 @@ function flushAccumulatedSats() {
     const reign = db.getReignById(parseInt(reignId));
     if (!reign || reign.dethroned_at) return;
 
-    // Calculate total sats earned since crowned
+    // Calculate total sats earned since crowned — whole seconds only, no fractional rounding
     const reignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
     const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
-    const totalSatsNow = Math.floor(reignSeconds * satRate);
+    const totalSatsNow = Math.floor(reignSeconds) * satRate;
 
     // Only update if sats increased (avoid unnecessary writes)
     if (totalSatsNow > reign.total_sats_earned) {
@@ -699,7 +699,7 @@ function getThoneState() {
     let reignSeconds = 0;
     if (reign && !reign.dethroned_at) {
         reignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
-        liveSats = Math.floor(reignSeconds * satRate);
+        liveSats = Math.floor(reignSeconds) * satRate;
     }
 
     return {
@@ -807,7 +807,7 @@ function executeScheduledReset() {
         if (reign && !reign.dethroned_at) {
             const reignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
             const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
-            const finalSats = Math.floor(reignSeconds * satRate);
+            const finalSats = Math.floor(reignSeconds) * satRate;
             const satsDelta = finalSats - reign.total_sats_earned;
             if (satsDelta > 0) db.addSatsToPlayer(reign.king_id, satsDelta);
             db.endReign(parseInt(currentReignId), reignSeconds, finalSats);

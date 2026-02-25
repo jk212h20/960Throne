@@ -829,13 +829,13 @@ function getAccountingAudit(satRate) {
         const reign = getReignById(parseInt(currentReignId));
         if (reign && !reign.dethroned_at) {
             activeReignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
-            activeReignSats = Math.floor(activeReignSeconds * satRate);
+            activeReignSats = Math.floor(activeReignSeconds) * satRate;
         }
     }
 
     // Expected total = all throne-occupied seconds × rate
     const totalThroneSeconds = completedReignSeconds + activeReignSeconds;
-    const expectedTotalSats = Math.floor(totalThroneSeconds * satRate);
+    const expectedTotalSats = Math.floor(totalThroneSeconds) * satRate;
 
     // Discrepancy = expected - actual (positive = player got too few)
     const discrepancy = expectedTotalSats - totalPlayerSats;
@@ -850,7 +850,7 @@ function getAccountingAudit(satRate) {
         totalThroneSeconds: Math.floor(totalThroneSeconds),
         expectedTotalSats,
         discrepancy,
-        isClean: Math.abs(discrepancy) <= completedReignCount + 1, // allow 1 sat rounding per reign transition
+        isClean: discrepancy === 0, // with whole-second accounting, there should be zero discrepancy
     };
 }
 
