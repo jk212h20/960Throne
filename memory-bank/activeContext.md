@@ -7,13 +7,21 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
-### Lightning Login (LNURL-auth) — Replaced PIN Login
+### Throne Page Split — Admin-Protected + Public Live View (Feb 25, 2026)
+- `/throne` now requires admin password (reuses same `admin_token` cookie as `/admin`)
+- `/live` — new public web view with same throne info but **no QR code/venue code**
+- Public live view shows URL hint instead of QR ("Watch live at .../live")
+- New file: `src/views/throne-live.ejs`
+
+### Lightning Login (LNURL-auth) — Replaced PIN Login (Feb 25, 2026)
 - Built extensible auth system at `src/services/auth/` with strategy pattern
 - Implemented LNURL-auth (LUD-04) for "Login with Lightning" via QR code
 - New flow: scan QR with Lightning wallet → cryptographic auth → choose display name → play
 - Added `auth_type` and `auth_id` columns to `players` table (with migration for existing DBs)
-- PIN login kept as hidden fallback for existing players
+- **PIN system fully removed** — Lightning is the only auth method
+- Admin merge accounts feature added (for locked-out players who create new accounts)
 - New dependencies: `secp256k1`, `qrcode`
+- `BASE_URL` env var set on Railway for LNURL-auth callbacks
 
 ### Auth Architecture (extensible for future methods)
 ```
@@ -57,8 +65,6 @@ To add new auth (e.g., Nostr): create `src/services/auth/nostr.js`, register in 
 1. **Railway deploy is manual** — `railway up` needed after each push
 2. **No persistent volume** — DB resets on redeploy
 3. **Lightning payouts not tested** — Voltage LND credentials not configured
-4. **BASE_URL not set on Railway** — Required for LNURL-auth callbacks to work in production!
-5. **Need to redeploy** — Lightning login changes are local only, not yet pushed
 
 ## Architecture
 ```

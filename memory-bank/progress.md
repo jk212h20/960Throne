@@ -6,7 +6,7 @@
 - [x] Player registration via Lightning login (LNURL-auth QR scan)
 - [x] Player login via Lightning wallet (cryptographic, no passwords)
 - [x] Extensible auth system (`src/services/auth/`) — strategy pattern for future methods
-- [x] Legacy PIN login preserved as hidden fallback
+- [x] Admin merge accounts (for locked-out players who create new accounts)
 - [x] Chess960 position generator (all 960 valid positions)
 - [x] Game engine state machine (start game → report result → king transitions)
 - [x] Sat accumulation tracking (21 sats/sec, calculated on game end)
@@ -27,7 +27,7 @@
 - [ ] End-to-end test of full game flow (crown king → start game → report → new king)
 - [ ] Configure Voltage LND credentials and test Lightning payouts
 - [ ] Add Railway persistent volume (mount `/app/data` for SQLite persistence across deploys)
-- [ ] Set `BASE_URL` env var on Railway to `https://960throne-production.up.railway.app`
+- [x] Set `BASE_URL` env var on Railway to `https://960throne-production.up.railway.app`
 - [ ] Connect Railway to GitHub for auto-deploy (currently manual `railway up`)
 
 ### Medium Priority
@@ -60,8 +60,7 @@
 | GET | `/api/auth/lightning/callback` | Wallet callback (sig verification) |
 | GET | `/api/auth/status` | Poll auth status (frontend) |
 | POST | `/api/auth/set-name` | Set display name after Lightning auth |
-| POST | `/api/register` | Create player (legacy) |
-| POST | `/api/login` | Login with name+PIN (legacy) |
+| POST | `/api/admin/merge-accounts` | Merge two player accounts (admin) |
 | POST | `/api/queue/join` | Join queue (requires venue code) |
 | POST | `/api/queue/leave` | Leave queue |
 | POST | `/api/game/:id/result` | Report game result |
