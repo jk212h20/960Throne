@@ -1,12 +1,27 @@
 # 960 Throne — Active Context
 
-## Current State (Feb 24, 2026)
+## Current State (Feb 25, 2026)
 MVP is **deployed to Railway** and live at https://960throne-production.up.railway.app
 
 **GitHub repo**: https://github.com/jk212h20/960Throne (public)
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Scheduled Event Reset (Feb 25, 2026)
+- Admin can schedule a future time to reset all event data (stats, sats, games, reigns, queue)
+- Requires re-entering admin password (high security double-check)
+- Live countdown timer on admin page shows time until reset
+- Auto-creates timestamped DB backup before reset (`data/throne_pre-reset_*.db`)
+- Keeps player accounts & config, only clears event data
+- Persists across server restarts (stored in `config.scheduled_reset_at`, timer resumes on boot)
+- Socket events notify all clients when reset fires/is scheduled/cancelled
+- Files: `database.js` (backupDatabase, resetEventData), `gameEngine.js` (scheduleReset, cancelReset, executeScheduledReset), `api.js` (3 endpoints), `admin.ejs` (UI)
+
+### Balance vs Total Sats Distinction (Feb 25, 2026)
+- Player header now shows "sat balance" (withdrawable) vs "total earned" (lifetime, unaffected by withdrawals)
+- `sat_balance` decreases on withdrawal; `total_sats_earned` never decreases
+- Throne displays show king's all-time stats (total sats, total reign time, # reigns) below current reign
+
 ### Sat Persistence & Correctness Fix (Feb 25, 2026)
 - **Sats now accumulate continuously from the moment a king is crowned** (not just during games)
 - **Single source of truth**: `sats = floor((now - crowned_at) * sat_rate)` — a pure function of time

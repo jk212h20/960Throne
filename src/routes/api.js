@@ -449,6 +449,12 @@ router.get('/admin/scheduled-reset', requireAdmin, (req, res) => {
     res.json({ reset });
 });
 
+router.get('/admin/accounting', requireAdmin, (req, res) => {
+    const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
+    const audit = db.getAccountingAudit(satRate);
+    res.json(audit);
+});
+
 router.get('/admin/lightning-status', requireAdmin, async (req, res) => {
     const status = await lightning.isConfigured();
     if (status.configured) {

@@ -625,8 +625,12 @@ function getPlayerGames(playerId, limit = 50) {
 // Reign operations
 // ============================================================
 
-function createReign(kingId) {
-    db.run(`INSERT INTO reigns (king_id) VALUES (?)`, [kingId]);
+function createReign(kingId, crownedAt = null) {
+    if (crownedAt) {
+        db.run(`INSERT INTO reigns (king_id, crowned_at) VALUES (?, ?)`, [kingId, crownedAt]);
+    } else {
+        db.run(`INSERT INTO reigns (king_id) VALUES (?)`, [kingId]);
+    }
     const result = db.exec(`SELECT last_insert_rowid()`);
     const id = result[0].values[0][0];
     save();
@@ -656,9 +660,14 @@ function updateReign(reignId, updates) {
     save();
 }
 
-function endReign(reignId, totalSeconds, totalSats) {
-    db.run(`UPDATE reigns SET dethroned_at = datetime('now'), total_reign_seconds = ?, total_sats_earned = ? WHERE id = ?`,
-        [totalSeconds, totalSats, reignId]);
+function endReign(reignId, totalSeconds, totalSats, dethronedAt = null) {
+    if (dethronedAt) {
+        db.run(`UPDATE reigns SET dethroned_at = ?, total_reign_seconds = ?, total_sats_earned = ? WHERE id = ?`,
+            [dethronedAt, totalSeconds, totalSats, reignId]);
+    } else {
+        db.run(`UPDATE reigns SET dethroned_at = datetime('now'), total_reign_seconds = ?, total_sats_earned = ? WHERE id = ?`,
+            [totalSeconds, totalSats, reignId]);
+    }
     save();
 }
 
@@ -796,6 +805,55 @@ function getEventStats() {
     };
 }
 
+/**
+ * Accounting audit: verify total sats credited to players matches
+ * total throne-occupied seconds × sat_rate.
+ * Returns detailed breakdown for admin.
+ */
+function getAccountingAudit(satRate) {
+    // Sum of all sats credited to players (total_sats_earned)
+    const playerSatsResult = db.exec(`SELECT COALESCE(SUM(total_sats_earned), 0) FROM players`);
+    const totalPlayerSats = playerSatsResult[0]?.values[0][0] || 0;
+
+    // Sum of all completed reign sats
+    const completedReignsResult = db.exec(`SELECT COALESCE(SUM(total_sats_earned), 0), COALESCE(SUM(total_reign_seconds), 0), COUNT(*) FROM reigns WHERE dethroned_at IS NOT NULL`);
+    const completedReignSats = completedReignsResult[0]?.values[0][0] || 0;
+    const completedReignSeconds = completedReignsResult[0]?.values[0][1] || 0;
+    const completedReignCount = completedReignsResult[0]?.values[0][2] || 0;
+
+    // Current active reign
+    const currentReignId = getConfig('current_reign_id');
+    let activeReignSats = 0;
+    let activeReignSeconds = 0;
+    if (currentReignId) {
+        const reign = getReignById(parseInt(currentReignId));
+        if (reign && !reign.dethroned_at) {
+            activeReignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
+            activeReignSats = Math.floor(activeReignSeconds * satRate);
+        }
+    }
+
+    // Expected total = all throne-occupied seconds × rate
+    const totalThroneSeconds = completedReignSeconds + activeReignSeconds;
+    const expectedTotalSats = Math.floor(totalThroneSeconds * satRate);
+
+    // Discrepancy = expected - actual (positive = player got too few)
+    const discrepancy = expectedTotalSats - totalPlayerSats;
+
+    return {
+        totalPlayerSats,
+        completedReignSats,
+        completedReignCount,
+        completedReignSeconds: Math.floor(completedReignSeconds),
+        activeReignSats,
+        activeReignSeconds: Math.floor(activeReignSeconds),
+        totalThroneSeconds: Math.floor(totalThroneSeconds),
+        expectedTotalSats,
+        discrepancy,
+        isClean: Math.abs(discrepancy) <= completedReignCount + 1, // allow 1 sat rounding per reign transition
+    };
+}
+
 // ============================================================
 // Utility helpers
 // ============================================================
@@ -892,4 +950,5 @@ module.exports = {
     
     // Stats
     getEventStats,
+    getAccountingAudit,
 };

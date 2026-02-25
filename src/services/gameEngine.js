@@ -192,12 +192,15 @@ function crownKing(playerId) {
     if (!player) return { error: 'Player not found' };
 
     // End any existing reign — flush sats first to get final accurate count
+    // Capture a single timestamp so old reign end and new reign start are identical (no gap/overlap)
+    const transitionTime = new Date().toISOString();
+    const transitionMs = Date.now();
     const currentReignId = db.getConfig('current_reign_id');
     if (currentReignId) {
         flushAccumulatedSats(); // Ensure DB has latest sats before ending reign
         const reign = db.getReignById(parseInt(currentReignId));
         if (reign && !reign.dethroned_at) {
-            const reignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
+            const reignSeconds = (transitionMs - new Date(reign.crowned_at).getTime()) / 1000;
             const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
             const finalSats = Math.floor(reignSeconds * satRate);
             // Credit any remaining sats delta not yet flushed
@@ -205,7 +208,7 @@ function crownKing(playerId) {
             if (satsDelta > 0) {
                 db.addSatsToPlayer(reign.king_id, satsDelta);
             }
-            db.endReign(parseInt(currentReignId), reignSeconds, finalSats);
+            db.endReign(parseInt(currentReignId), reignSeconds, finalSats, transitionTime);
             // Update the old king's reign time stats
             const oldKing = db.getPlayerById(reign.king_id);
             if (oldKing) {
@@ -217,8 +220,8 @@ function crownKing(playerId) {
         }
     }
 
-    // Create new reign
-    const reignId = db.createReign(playerId);
+    // Create new reign starting at exact same moment old one ended
+    const reignId = db.createReign(playerId, transitionTime);
     db.setConfig('current_king_id', String(playerId));
     db.setConfig('current_reign_id', String(reignId));
     db.setConfig('current_game_id', '');

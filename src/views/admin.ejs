@@ -171,6 +171,15 @@
                 </div>
             </div>
 
+            <!-- Accounting Audit -->
+            <div class="card" id="accounting-card">
+                <h2 class="text-lg font-bold mb-3">📊 Sat Accounting</h2>
+                <p class="text-xs text-gray-500 mb-3">Verifies total sats credited = throne-occupied seconds × rate. Discrepancy should be ≤1 sat per reign transition (rounding).</p>
+                <div id="accounting-data" class="text-sm space-y-1">
+                    <button onclick="loadAccounting()" class="btn-outline w-full text-sm">🔍 Run Audit</button>
+                </div>
+            </div>
+
             <!-- Scheduled Reset -->
             <div class="card <%= scheduledReset ? 'border-red-700' : '' %>">
                 <h2 class="text-lg font-bold mb-3">🧹 Scheduled Reset</h2>
@@ -311,6 +320,27 @@
             if (await api('/api/admin/set-challenger', { playerId: parseInt(id) })) setTimeout(() => location.reload(), 500);
         }
         async function resolveNotification(id) { if (await api('/api/admin/notifications/resolve', { id })) setTimeout(() => location.reload(), 500); }
+
+        // Accounting Audit
+        async function loadAccounting() {
+            const res = await fetch('/api/admin/accounting');
+            const d = await res.json();
+            const el = document.getElementById('accounting-data');
+            const statusColor = d.isClean ? 'text-green-400' : 'text-red-400';
+            const statusIcon = d.isClean ? '✅' : '⚠️';
+            el.innerHTML = `
+                <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+                    <span class="text-gray-400">Total player sats (credited)</span><span class="text-right font-mono">${d.totalPlayerSats.toLocaleString()}</span>
+                    <span class="text-gray-400">Expected sats (time × rate)</span><span class="text-right font-mono">${d.expectedTotalSats.toLocaleString()}</span>
+                    <span class="text-gray-400">Throne-occupied time</span><span class="text-right font-mono">${Math.floor(d.totalThroneSeconds / 60)}m ${d.totalThroneSeconds % 60}s</span>
+                    <span class="text-gray-400">Completed reigns</span><span class="text-right font-mono">${d.completedReignCount}</span>
+                    <span class="text-gray-400">Active reign sats (live)</span><span class="text-right font-mono">${d.activeReignSats.toLocaleString()}</span>
+                    <span class="text-gray-400 font-bold">Discrepancy</span><span class="text-right font-mono font-bold ${statusColor}">${statusIcon} ${d.discrepancy > 0 ? '+' : ''}${d.discrepancy} sats</span>
+                </div>
+                <div class="text-xs text-gray-500 mt-2">${d.isClean ? 'Accounting is clean (within rounding tolerance).' : 'Discrepancy exceeds rounding tolerance — investigate!'}</div>
+                <button onclick="loadAccounting()" class="btn-outline w-full text-sm mt-2">🔄 Refresh</button>
+            `;
+        }
 
         // Scheduled Reset
         async function scheduleReset() {
