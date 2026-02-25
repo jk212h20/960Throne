@@ -115,7 +115,8 @@ router.get('/leaderboard', (req, res) => {
     const leaderboard = db.getLeaderboard();
     const longestReigns = db.getLongestReigns();
     const stats = db.getEventStats();
-    res.render('leaderboard', { leaderboard, longestReigns, stats, player: req.player });
+    const state = gameEngine.getThoneState();
+    res.render('leaderboard', { leaderboard, longestReigns, stats, player: req.player, state });
 });
 
 // Admin

@@ -182,31 +182,29 @@
         const socket = io();
         let reignStart = <%= state.reign ? `new Date('${state.reign.crowned_at}').getTime()` : 'null' %>;
         let gameStart = <%= state.game ? `new Date('${state.game.started_at}').getTime()` : 'null' %>;
-        let reignSatsBase = <%= state.reign ? state.reign.total_sats_earned : 0 %>;
         const satRate = <%= state.config.satRate %>;
 
-        // Live sat counter
+        // Live counters — sats accumulate continuously from crowning, not just during games
         function updateCounters() {
             const now = Date.now();
 
-            // Reign time
+            // Reign time + sat counter (continuous from crowning)
             if (reignStart) {
                 const reignSec = Math.floor((now - reignStart) / 1000);
                 const el = document.getElementById('reign-time');
                 if (el) el.textContent = `${Math.floor(reignSec / 60)}:${String(reignSec % 60).padStart(2, '0')}`;
+
+                // Sats = total reign time * rate
+                const totalSats = reignSec * satRate;
+                const satEl = document.getElementById('sat-counter');
+                if (satEl) satEl.textContent = totalSats.toLocaleString();
             }
 
-            // Game elapsed
+            // Game elapsed timer
             if (gameStart) {
                 const gameSec = Math.floor((now - gameStart) / 1000);
                 const el = document.getElementById('game-elapsed');
                 if (el) el.textContent = gameSec;
-
-                // Sat counter = base + game sats
-                const gameSats = gameSec * satRate;
-                const totalSats = reignSatsBase + gameSats;
-                const satEl = document.getElementById('sat-counter');
-                if (satEl) satEl.textContent = totalSats.toLocaleString();
             }
         }
 

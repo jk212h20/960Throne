@@ -12,6 +12,7 @@ let gameStartTime = null; // When current game started (for sat calculation)
 let onDeckTimer = null; // Timer for on-deck timeout
 let winnerConfirmTimer = null; // Timer for auto-confirm when only winner reports
 let venueCodeTimer = null; // Timer for venue code rotation
+let satAccumulatorTimer = null; // Timer for periodic sat persistence
 
 /**
  * Initialize the game engine with Socket.io
@@ -31,6 +32,9 @@ function init(socketIo) {
 
     // Start the on-deck check loop
     setInterval(checkOnDeckTimeout, 5000);
+
+    // Start the sat accumulator — persists earned sats to DB every 10 seconds
+    startSatAccumulator();
 
     console.log('♟️  Game engine initialized');
 }
@@ -183,13 +187,29 @@ function crownKing(playerId) {
     const player = db.getPlayerById(playerId);
     if (!player) return { error: 'Player not found' };
 
-    // End any existing reign
+    // End any existing reign — flush sats first to get final accurate count
     const currentReignId = db.getConfig('current_reign_id');
     if (currentReignId) {
+        flushAccumulatedSats(); // Ensure DB has latest sats before ending reign
         const reign = db.getReignById(parseInt(currentReignId));
         if (reign && !reign.dethroned_at) {
             const reignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
-            db.endReign(parseInt(currentReignId), reignSeconds, reign.total_sats_earned);
+            const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
+            const finalSats = Math.floor(reignSeconds * satRate);
+            // Credit any remaining sats delta not yet flushed
+            const satsDelta = finalSats - reign.total_sats_earned;
+            if (satsDelta > 0) {
+                db.addSatsToPlayer(reign.king_id, satsDelta);
+            }
+            db.endReign(parseInt(currentReignId), reignSeconds, finalSats);
+            // Update the old king's reign time stats
+            const oldKing = db.getPlayerById(reign.king_id);
+            if (oldKing) {
+                db.updatePlayerStats(reign.king_id, {
+                    total_reign_seconds: oldKing.total_reign_seconds + reignSeconds,
+                    longest_reign_seconds: Math.max(oldKing.longest_reign_seconds, reignSeconds)
+                });
+            }
         }
     }
 
@@ -375,33 +395,31 @@ function finalizeGameResult(gameId, result) {
     const game = db.getGameById(gameId);
     if (!game) return { error: 'Game not found' };
 
-    // Calculate sats earned by king during this game
-    const gameDuration = gameStartTime ? (Date.now() - gameStartTime) / 1000 : 0;
-    const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
-    const satsEarned = Math.floor(gameDuration * satRate);
+    // Flush accumulated sats before finalizing (ensures DB is up to date)
+    flushAccumulatedSats();
 
-    // Finalize the game record
-    db.finalizeGame(gameId, result, satsEarned);
+    // Calculate game duration for record keeping
+    const gameDuration = gameStartTime ? (Date.now() - gameStartTime) / 1000 : 0;
+
+    // Get current reign sats for the game record (sats are accumulated continuously, not per-game)
+    const reignId = parseInt(db.getConfig('current_reign_id') || '0');
+    const reign = reignId ? db.getReignById(reignId) : null;
+    const satsEarned = reign ? reign.total_sats_earned : 0;
+
+    // Finalize the game record (sats_earned = total reign sats at time of game end, for record)
+    const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
+    const gameSats = Math.floor(gameDuration * satRate);
+    db.finalizeGame(gameId, result, gameSats);
     db.setConfig('current_game_id', '');
 
-    // Credit sats to king
-    if (satsEarned > 0) {
-        db.addSatsToPlayer(game.king_id, satsEarned);
-    }
-
-    // Update reign stats
-    const reignId = parseInt(db.getConfig('current_reign_id') || '0');
-    if (reignId) {
-        const reign = db.getReignById(reignId);
-        if (reign) {
-            db.updateReign(reignId, {
-                total_sats_earned: reign.total_sats_earned + satsEarned,
-                games_played: reign.games_played + 1,
-                consecutive_wins: result === 'king_won' || result === 'draw'
-                    ? reign.consecutive_wins + 1
-                    : reign.consecutive_wins
-            });
-        }
+    // Update reign stats (games played, win streak — sats are handled by accumulator)
+    if (reignId && reign) {
+        db.updateReign(reignId, {
+            games_played: reign.games_played + 1,
+            consecutive_wins: result === 'king_won' || result === 'draw'
+                ? reign.consecutive_wins + 1
+                : reign.consecutive_wins
+        });
     }
 
     // Update player stats
@@ -458,23 +476,11 @@ function finalizeGameResult(gameId, result) {
 
     // Handle throne transition
     if (result === 'challenger_won') {
-        // Dethrone the king
-        if (reignId) {
-            const reign = db.getReignById(reignId);
-            const totalReignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
-            db.endReign(reignId, totalReignSeconds, reign.total_sats_earned + satsEarned);
-
-            // Update king's total reign time
-            db.updatePlayerStats(game.king_id, {
-                total_reign_seconds: king.total_reign_seconds + totalReignSeconds,
-                longest_reign_seconds: Math.max(king.longest_reign_seconds, totalReignSeconds)
-            });
-        }
-
-        console.log(`⚔️  ${game.challenger_name} dethroned ${game.king_name}! Earned ${satsEarned} sats.`);
+        // crownKing() handles ending the old reign (with proper sat finalization)
+        console.log(`⚔️  ${game.challenger_name} dethroned ${game.king_name}! Earned ${satsEarned} sats this reign.`);
         broadcast('game_ended', gameResult);
 
-        // Crown the challenger as new king
+        // Crown the challenger as new king (this ends the old reign internally)
         crownKing(game.challenger_id);
     } else {
         // King stays (won or draw)
@@ -621,6 +627,49 @@ function adminSetChallenger(playerId) {
 }
 
 // ============================================================
+// Sat Accumulation — Continuous while king is on the throne
+// ============================================================
+
+/**
+ * Periodically flush accumulated sats to the database so they persist
+ * across page reloads and server restarts. Runs every 10 seconds.
+ * 
+ * Sats accumulate continuously from the moment a king is crowned,
+ * NOT just during active games.
+ */
+function startSatAccumulator() {
+    if (satAccumulatorTimer) clearInterval(satAccumulatorTimer);
+    satAccumulatorTimer = setInterval(flushAccumulatedSats, 10000);
+}
+
+function flushAccumulatedSats() {
+    const reignId = db.getConfig('current_reign_id');
+    const kingId = db.getConfig('current_king_id');
+    if (!reignId || !kingId) return;
+
+    const reign = db.getReignById(parseInt(reignId));
+    if (!reign || reign.dethroned_at) return;
+
+    // Calculate total sats earned since crowned
+    const reignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
+    const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
+    const totalSatsNow = Math.floor(reignSeconds * satRate);
+
+    // Only update if sats increased (avoid unnecessary writes)
+    if (totalSatsNow > reign.total_sats_earned) {
+        const satsDelta = totalSatsNow - reign.total_sats_earned;
+
+        // Update reign record
+        db.updateReign(parseInt(reignId), {
+            total_sats_earned: totalSatsNow
+        });
+
+        // Credit the delta to the king's balance and total
+        db.addSatsToPlayer(parseInt(kingId), satsDelta);
+    }
+}
+
+// ============================================================
 // State Queries
 // ============================================================
 
@@ -636,18 +685,14 @@ function getThoneState() {
     const queue = db.getQueue();
     const onDeck = db.getOnDeckPlayer();
 
-    // Calculate live sat count
-    let liveSats = reign ? reign.total_sats_earned : 0;
-    if (gameStartTime && game && !game.result) {
-        const elapsed = (Date.now() - gameStartTime) / 1000;
-        const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
-        liveSats += Math.floor(elapsed * satRate);
-    }
+    const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
 
-    // Calculate reign duration
+    // Calculate live sat count — sats accumulate from the moment of crowning
+    let liveSats = 0;
     let reignSeconds = 0;
     if (reign && !reign.dethroned_at) {
         reignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
+        liveSats = Math.floor(reignSeconds * satRate);
     }
 
     return {
@@ -664,7 +709,7 @@ function getThoneState() {
         queue,
         onDeck,
         config: {
-            satRate: parseInt(db.getConfig('sat_rate_per_second') || '21'),
+            satRate,
             timeControl: {
                 base: parseInt(db.getConfig('time_control_base') || '180'),
                 increment: parseInt(db.getConfig('time_control_increment') || '2'),

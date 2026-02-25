@@ -71,9 +71,24 @@
 
         <!-- Longest Reigns -->
         <h2 class="text-lg font-bold mb-3 text-throne-gold">⏱️ Longest Reigns</h2>
-        <% if (longestReigns.length === 0) { %>
+
+        <% if (state.reign && !state.reign.dethroned_at) { %>
+        <div class="card flex items-center justify-between mb-2 border border-throne-gold/50 bg-throne-gold/10">
+            <div class="flex items-center gap-3">
+                <span class="text-lg font-bold text-throne-gold">👑</span>
+                <span class="font-bold text-throne-gold"><%= state.king ? state.king.name : 'Unknown' %></span>
+                <span class="text-xs text-throne-gold/70">(active)</span>
+            </div>
+            <div class="text-right">
+                <div class="font-mono text-throne-gold"><%= Math.floor(state.reignSeconds / 60) %>m <%= Math.floor(state.reignSeconds % 60) %>s</div>
+                <div class="text-xs text-gray-400"><%= state.reign.consecutive_wins %> wins · <%= state.liveSats.toLocaleString() %> sats</div>
+            </div>
+        </div>
+        <% } %>
+
+        <% if (longestReigns.length === 0 && !(state.reign && !state.reign.dethroned_at)) { %>
         <div class="card text-center text-gray-500">No completed reigns yet</div>
-        <% } else { %>
+        <% } else if (longestReigns.length > 0) { %>
         <div class="space-y-2">
             <% longestReigns.forEach((r, i) => { %>
             <div class="card flex items-center justify-between">
