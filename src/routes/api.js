@@ -425,6 +425,30 @@ router.get('/admin/payouts', requireAdmin, (req, res) => {
     res.json({ payouts: db.getAllPayouts() });
 });
 
+// Scheduled Reset
+router.post('/admin/schedule-reset', requireAdmin, (req, res) => {
+    const { resetAt, password } = req.body;
+    // Double-check password for this high-security action
+    const adminPassword = process.env.ADMIN_PASSWORD || 'changeme';
+    if (password !== adminPassword) {
+        return res.status(403).json({ error: 'Password required to schedule a reset' });
+    }
+    if (!resetAt) return res.status(400).json({ error: 'resetAt (ISO datetime) required' });
+    const result = gameEngine.scheduleReset(resetAt);
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+});
+
+router.post('/admin/cancel-reset', requireAdmin, (req, res) => {
+    const result = gameEngine.cancelReset();
+    res.json(result);
+});
+
+router.get('/admin/scheduled-reset', requireAdmin, (req, res) => {
+    const reset = gameEngine.getScheduledReset();
+    res.json({ reset });
+});
+
 router.get('/admin/lightning-status', requireAdmin, async (req, res) => {
     const status = await lightning.isConfigured();
     if (status.configured) {

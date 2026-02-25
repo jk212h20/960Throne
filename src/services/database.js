@@ -49,6 +49,59 @@ setInterval(() => {
     if (db) save();
 }, 30000);
 
+/**
+ * Create a timestamped backup of the database file.
+ * Returns the backup file path.
+ */
+function backupDatabase(label = 'backup') {
+    if (!db) return null;
+    save(); // Ensure latest data is on disk
+    const dbDir = path.dirname(DB_PATH);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = path.join(dbDir, `throne_${label}_${timestamp}.db`);
+    const data = db.export();
+    fs.writeFileSync(backupPath, Buffer.from(data));
+    console.log(`💾 Database backed up to ${backupPath}`);
+    return backupPath;
+}
+
+/**
+ * Reset all event data for a clean run.
+ * Keeps: player accounts (name, auth), config settings
+ * Resets: all stats, sats, games, reigns, queue, notifications, payouts
+ */
+function resetEventData() {
+    // Reset player stats but keep accounts
+    db.run(`UPDATE players SET 
+        sat_balance = 0,
+        total_sats_earned = 0,
+        total_sats_claimed = 0,
+        games_played = 0,
+        games_won = 0,
+        games_lost = 0,
+        games_drawn = 0,
+        times_as_king = 0,
+        total_reign_seconds = 0,
+        longest_reign_seconds = 0,
+        longest_win_streak = 0
+    `);
+
+    // Clear event tables
+    db.run(`DELETE FROM games`);
+    db.run(`DELETE FROM reigns`);
+    db.run(`DELETE FROM queue`);
+    db.run(`DELETE FROM admin_notifications`);
+    db.run(`DELETE FROM payouts`);
+
+    // Reset state config
+    setConfig('current_king_id', '');
+    setConfig('current_reign_id', '');
+    setConfig('current_game_id', '');
+
+    save();
+    console.log('🧹 Event data reset complete — all stats, games, and reigns cleared');
+}
+
 function createTables() {
     db.run(`
         CREATE TABLE IF NOT EXISTS players (
@@ -770,6 +823,8 @@ function rowsToObjects(result) {
 module.exports = {
     initialize,
     save,
+    backupDatabase,
+    resetEventData,
     getConfig,
     setConfig,
     getAllConfig,

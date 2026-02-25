@@ -13,6 +13,7 @@ let onDeckTimer = null; // Timer for on-deck timeout
 let winnerConfirmTimer = null; // Timer for auto-confirm when only winner reports
 let venueCodeTimer = null; // Timer for venue code rotation
 let satAccumulatorTimer = null; // Timer for periodic sat persistence
+let scheduledResetTimer = null; // Timer for scheduled event reset
 
 /**
  * Initialize the game engine with Socket.io
@@ -35,6 +36,9 @@ function init(socketIo) {
 
     // Start the sat accumulator — persists earned sats to DB every 10 seconds
     startSatAccumulator();
+
+    // Resume any scheduled reset from before a restart
+    resumeScheduledReset();
 
     console.log('♟️  Game engine initialized');
 }
@@ -745,6 +749,116 @@ function adminAddToQueue(playerId) {
 }
 
 // ============================================================
+// Scheduled Reset — Admin sets a future time for a clean slate
+// ============================================================
+
+/**
+ * Schedule an event data reset at a specific ISO time.
+ * Backs up DB before reset, then clears all stats/games/reigns.
+ * Stores the scheduled time in config so it persists across restarts.
+ */
+function scheduleReset(isoTime) {
+    const resetTime = new Date(isoTime).getTime();
+    const now = Date.now();
+    if (resetTime <= now) return { error: 'Reset time must be in the future' };
+
+    // Store in config (persists across server restarts)
+    db.setConfig('scheduled_reset_at', isoTime);
+    
+    // Set the timer
+    if (scheduledResetTimer) clearTimeout(scheduledResetTimer);
+    const delay = resetTime - now;
+    scheduledResetTimer = setTimeout(executeScheduledReset, delay);
+
+    console.log(`⏰ Event reset scheduled for ${isoTime} (in ${Math.round(delay / 1000)}s)`);
+    notifyAdmin(`⏰ Event reset scheduled for ${new Date(isoTime).toLocaleString()}`);
+    broadcast('reset_scheduled', { resetAt: isoTime });
+
+    return { success: true, resetAt: isoTime, inSeconds: Math.round(delay / 1000) };
+}
+
+function cancelReset() {
+    if (scheduledResetTimer) {
+        clearTimeout(scheduledResetTimer);
+        scheduledResetTimer = null;
+    }
+    db.setConfig('scheduled_reset_at', '');
+    console.log('❌ Scheduled reset cancelled');
+    broadcast('reset_cancelled', {});
+    return { success: true, message: 'Scheduled reset cancelled' };
+}
+
+function executeScheduledReset() {
+    console.log('🧹 Executing scheduled event reset...');
+    
+    // Flush any accumulated sats first
+    flushAccumulatedSats();
+    
+    // Backup the database before reset
+    const backupPath = db.backupDatabase('pre-reset');
+    
+    // End any active reign cleanly
+    const currentReignId = db.getConfig('current_reign_id');
+    if (currentReignId) {
+        const reign = db.getReignById(parseInt(currentReignId));
+        if (reign && !reign.dethroned_at) {
+            const reignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
+            const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
+            const finalSats = Math.floor(reignSeconds * satRate);
+            const satsDelta = finalSats - reign.total_sats_earned;
+            if (satsDelta > 0) db.addSatsToPlayer(reign.king_id, satsDelta);
+            db.endReign(parseInt(currentReignId), reignSeconds, finalSats);
+        }
+    }
+    
+    // Reset all event data
+    db.resetEventData();
+    
+    // Clear the scheduled time
+    db.setConfig('scheduled_reset_at', '');
+    scheduledResetTimer = null;
+    gameStartTime = null;
+    
+    console.log(`🧹 Reset complete. Backup saved at: ${backupPath}`);
+    notifyAdmin(`🧹 Event data has been reset! Backup saved. All stats, sats, and games cleared.`);
+    broadcast('event_reset', { backupPath });
+}
+
+/**
+ * Get info about scheduled reset (for admin UI)
+ */
+function getScheduledReset() {
+    const resetAt = db.getConfig('scheduled_reset_at');
+    if (!resetAt) return null;
+    const resetTime = new Date(resetAt).getTime();
+    if (resetTime <= Date.now()) {
+        // Past due — clear it
+        db.setConfig('scheduled_reset_at', '');
+        return null;
+    }
+    return { resetAt, inSeconds: Math.round((resetTime - Date.now()) / 1000) };
+}
+
+/**
+ * Resume a scheduled reset timer on server startup (if one was set)
+ */
+function resumeScheduledReset() {
+    const resetAt = db.getConfig('scheduled_reset_at');
+    if (!resetAt) return;
+    const resetTime = new Date(resetAt).getTime();
+    const now = Date.now();
+    if (resetTime <= now) {
+        // It was supposed to fire while server was down — execute now
+        console.log('⏰ Executing overdue scheduled reset...');
+        executeScheduledReset();
+    } else {
+        const delay = resetTime - now;
+        scheduledResetTimer = setTimeout(executeScheduledReset, delay);
+        console.log(`⏰ Resuming scheduled reset for ${resetAt} (in ${Math.round(delay / 1000)}s)`);
+    }
+}
+
+// ============================================================
 // Helpers
 // ============================================================
 
@@ -789,6 +903,10 @@ module.exports = {
     setEventActive,
     adminRemoveFromQueue,
     adminAddToQueue,
+    // Scheduled Reset
+    scheduleReset,
+    cancelReset,
+    getScheduledReset,
     // Helpers
     broadcast,
     notifyAdmin,

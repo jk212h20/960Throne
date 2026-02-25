@@ -131,6 +131,7 @@ router.get('/admin', (req, res) => {
     const venueCode = db.getActiveVenueCode();
     const payouts = db.getAllPayouts();
     const recentGames = db.getRecentGames(20);
+    const scheduledReset = gameEngine.getScheduledReset();
     res.render('admin', {
         state,
         players,
@@ -139,6 +140,7 @@ router.get('/admin', (req, res) => {
         venueCode,
         payouts,
         recentGames,
+        scheduledReset,
     });
 });
 
