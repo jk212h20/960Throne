@@ -20,9 +20,19 @@
             <span class="text-3xl">♚</span>
             <span class="text-xl font-bold text-throne-gold">960 Throne</span>
         </div>
-        <div class="text-right">
-            <div class="text-sm text-gray-400">Time Control</div>
-            <div class="text-lg font-mono" id="time-control"><%= state.config.timeControl.base / 60 %>+<%= state.config.timeControl.increment %></div>
+        <div class="text-center">
+            <div class="text-sm text-gray-400">Game</div>
+            <div class="text-lg font-mono font-bold text-throne-gold">#<%= state.stats.totalGames + (state.game ? 1 : 0) %></div>
+        </div>
+        <div class="flex items-center gap-6">
+            <div class="text-right">
+                <div class="text-sm text-gray-400">⚡ Sats Earned</div>
+                <div class="text-lg font-mono font-bold text-throne-gold sats-glow" id="total-sats-earned"><%= state.stats.totalSatsDistributed.toLocaleString() %></div>
+            </div>
+            <div class="text-right">
+                <div class="text-sm text-gray-400">Time Control</div>
+                <div class="text-lg font-mono" id="time-control"><%= state.config.timeControl.base / 60 %>+<%= state.config.timeControl.increment %></div>
+            </div>
         </div>
     </div>
 
@@ -147,18 +157,6 @@
                 <div class="text-lg font-mono text-throne-gold"><%= state.baseUrl ? state.baseUrl.replace(/^https?:\/\//, '') : '960throne.com' %>/live</div>
             </div>
 
-            <div class="p-3 border-t border-gray-800 bg-throne-darker">
-                <div class="grid grid-cols-2 gap-2 text-center text-sm">
-                    <div>
-                        <div class="text-lg font-bold text-throne-gold"><%= state.stats.totalGames %></div>
-                        <div class="text-gray-500">Games</div>
-                    </div>
-                    <div>
-                        <div class="text-lg font-bold text-throne-gold"><%= state.stats.totalSatsDistributed.toLocaleString() %></div>
-                        <div class="text-gray-500">Sats Paid</div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -184,12 +182,16 @@
         let reignStart = <%- state.reign ? `new Date('${state.reign.crowned_at}${state.reign.crowned_at.endsWith('Z') ? '' : 'Z'}').getTime()` : 'null' %>;
         let gameStart = <%- state.game ? `new Date('${state.game.started_at}${state.game.started_at.endsWith('Z') ? '' : 'Z'}').getTime()` : 'null' %>;
         const satRate = <%- state.config.satRate %>;
+        const baseSatsFromDb = <%- state.stats.totalSatsDistributed %>;
+        const reignSatsAlreadyCounted = <%- state.reign ? state.liveSats : 0 %>;
+        const baseSats = baseSatsFromDb - reignSatsAlreadyCounted;
 
         // Live counters — sats accumulate continuously from crowning, not just during games
         function updateCounters() {
             const now = Date.now();
 
             // Reign time + sat counter (continuous from crowning)
+            let currentReignSats = 0;
             if (reignStart) {
                 const reignSec = Math.floor((now - reignStart) / 1000);
                 const el = document.getElementById('reign-time');
@@ -198,11 +200,13 @@
                 const s = reignSec % 60;
                 if (el) el.textContent = `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 
-                // Sats = total reign time * rate
-                const totalSats = reignSec * satRate;
+                currentReignSats = reignSec * satRate;
                 const satEl = document.getElementById('sat-counter');
-                if (satEl) satEl.textContent = totalSats.toLocaleString();
+                if (satEl) satEl.textContent = currentReignSats.toLocaleString();
             }
+
+            const totalEl = document.getElementById('total-sats-earned');
+            if (totalEl) totalEl.textContent = (baseSats + currentReignSats).toLocaleString();
 
             // Game elapsed timer
             if (gameStart) {
