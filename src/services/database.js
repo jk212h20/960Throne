@@ -231,6 +231,10 @@ function migrateSchema() {
                 db.run(`ALTER TABLE players ADD COLUMN auth_id TEXT`);
                 console.log('🔧 Migration: Added auth_id column to players');
             }
+            if (!columns.includes('email')) {
+                db.run(`ALTER TABLE players ADD COLUMN email TEXT`);
+                console.log('🔧 Migration: Added email column to players');
+            }
         }
     } catch (err) {
         console.log('Migration check (non-critical):', err.message);
@@ -312,6 +316,11 @@ function getPlayerByAuthId(authType, authId) {
 
 function setPlayerName(playerId, name) {
     db.run(`UPDATE players SET name = ? WHERE id = ?`, [name, playerId]);
+    save();
+}
+
+function setPlayerEmail(playerId, email) {
+    db.run(`UPDATE players SET email = ? WHERE id = ?`, [email || null, playerId]);
     save();
 }
 
@@ -892,6 +901,7 @@ module.exports = {
     createPlayerWithAuth,
     getPlayerByAuthId,
     setPlayerName,
+    setPlayerEmail,
     mergeAccounts,
     getPlayerById,
     getPlayerByName,

@@ -7,6 +7,18 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Railway Volume Mount Path Fix (Feb 25, 2026)
+- **Bug**: Players disappearing on redeploy — volume was mounted at `/app/dada` (typo!) instead of `/app/data`
+- DB writes to `./data/throne.db` → `/app/data/throne.db`, but volume was at wrong path so data went to ephemeral filesystem
+- **Fix**: `railway volume update -v 960throne-volume -m /app/data`
+- Volume: `960throne-volume`, 50GB, now correctly at `/app/data`
+
+### Accounting Audit Discrepancy Fix (Feb 25, 2026)
+- **Bug**: Accounting audit showed discrepancy (always a multiple of sat rate, e.g. 42 = 2×21) because it compared stale DB values (flushed every 10s) against real-time calculation
+- **Fix**: Accounting endpoint now calls `flushAccumulatedSats()` before running audit, ensuring DB is current
+- Exported `flushAccumulatedSats` from gameEngine module
+- Files: `src/services/gameEngine.js` (export), `src/routes/api.js` (flush before audit)
+
 ### Inline Venue Code Scan/Entry on Player Page (Feb 25, 2026)
 - Replaced separate `/join` page flow with inline section on player dashboard
 - Players see **📷 Scan Venue QR Code** button + manual code entry field directly — no extra page/click
@@ -99,8 +111,7 @@ To add new auth (e.g., Nostr): create `src/services/auth/nostr.js`, register in 
 
 ## Known Issues Still Open
 1. **Railway deploy is manual** — `railway up` needed after each push
-2. **No persistent volume** — DB resets on redeploy
-3. **Lightning payouts not tested** — Voltage LND credentials not configured
+2. **Lightning payouts not tested** — Voltage LND credentials not configured
 
 ## Architecture
 ```

@@ -256,7 +256,7 @@ router.get('/auth/status', (req, res) => {
         // Auth complete — set session cookie and return success
         res.cookie('session', status.sessionToken, { 
             httpOnly: true, 
-            maxAge: 7 * 24 * 60 * 60 * 1000, 
+            maxAge: 10 * 365 * 24 * 60 * 60 * 1000, // 10 years — effectively never expires
             path: '/' 
         });
 
@@ -298,6 +298,28 @@ router.post('/auth/set-name', requirePlayer, (req, res) => {
     res.json({ success: true, name: name.trim() });
 });
 
+// Set/update email (optional, for account recovery)
+router.post('/auth/set-email', requirePlayer, (req, res) => {
+    const { email } = req.body;
+    
+    if (email && email.trim()) {
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
+            return res.status(400).json({ error: 'Invalid email address' });
+        }
+        if (email.trim().length > 255) {
+            return res.status(400).json({ error: 'Email too long' });
+        }
+        db.setPlayerEmail(req.player.id, email.trim());
+        res.json({ success: true, email: email.trim() });
+    } else {
+        // Allow clearing email
+        db.setPlayerEmail(req.player.id, null);
+        res.json({ success: true, email: null });
+    }
+});
+
 // ============================================================
 // Admin API
 // ============================================================
@@ -308,7 +330,7 @@ router.post('/admin/login', (req, res) => {
     if (password !== adminPassword) {
         return res.status(401).json({ error: 'Invalid admin password' });
     }
-    res.cookie('admin_token', adminPassword, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, path: '/' });
+    res.cookie('admin_token', adminPassword, { httpOnly: true, maxAge: 10 * 365 * 24 * 60 * 60 * 1000, path: '/' });
     res.json({ success: true });
 });
 

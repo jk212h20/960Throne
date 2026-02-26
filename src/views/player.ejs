@@ -238,6 +238,19 @@
         </div>
         <% } %>
 
+        <!-- ====== EMAIL / PROFILE ====== -->
+        <div class="card mb-4">
+            <h3 class="text-lg font-bold mb-3">👤 Profile</h3>
+            <div class="mb-3">
+                <label class="text-xs text-gray-400 block mb-1">Email (optional — for account recovery)</label>
+                <div class="flex gap-2">
+                    <input type="email" id="email-input" class="input flex-1" placeholder="you@example.com" value="<%= player.email || '' %>">
+                    <button onclick="saveEmail()" id="save-email-btn" class="px-4 py-2 rounded-lg bg-throne-dark border border-gray-700 text-gray-300 hover:border-throne-gold hover:text-throne-gold transition-colors text-sm">Save</button>
+                </div>
+                <div id="email-result" class="hidden mt-2 text-xs"></div>
+            </div>
+        </div>
+
         <!-- Nav -->
         <div class="flex justify-center gap-6 text-sm text-gray-500 mb-4">
             <a href="/throne" class="hover:text-throne-gold transition-colors">👑 Throne</a>
@@ -398,6 +411,40 @@
                 }
                 if (btn) { btn.disabled = false; btn.textContent = '⚔️ Join'; }
             }
+        }
+
+        async function saveEmail() {
+            const input = document.getElementById('email-input');
+            const btn = document.getElementById('save-email-btn');
+            const resultEl = document.getElementById('email-result');
+            const email = input ? input.value.trim() : '';
+
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                const res = await fetch('/api/auth/set-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email || null })
+                });
+                const data = await res.json();
+                resultEl.classList.remove('hidden');
+                if (!res.ok) {
+                    resultEl.className = 'mt-2 text-xs text-red-400';
+                    resultEl.textContent = data.error;
+                } else {
+                    resultEl.className = 'mt-2 text-xs text-green-400';
+                    resultEl.textContent = email ? '✓ Email saved' : '✓ Email removed';
+                    setTimeout(() => resultEl.classList.add('hidden'), 3000);
+                }
+            } catch {
+                resultEl.classList.remove('hidden');
+                resultEl.className = 'mt-2 text-xs text-red-400';
+                resultEl.textContent = 'Connection error';
+            }
+            btn.disabled = false;
+            btn.textContent = 'Save';
         }
 
         async function handleClaim(e) {
