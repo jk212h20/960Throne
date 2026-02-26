@@ -10,6 +10,12 @@
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
         @keyframes pulseGold { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,215,0,0.4); } 50% { box-shadow: 0 0 20px 5px rgba(255,215,0,0.2); } }
         .pulse-gold { animation: pulseGold 2s infinite; }
+        /* Style html5-qrcode scanner to match dark theme */
+        #qr-reader { border: none !important; background: transparent !important; }
+        #qr-reader video { border-radius: 0.5rem; }
+        #qr-reader__scan_region { background: transparent !important; }
+        #qr-reader__dashboard { display: none !important; }
+        #qr-reader__header_message { display: none !important; }
     </style>
 </head>
 <body class="min-h-screen bg-throne-darker p-4 pb-24">
@@ -107,10 +113,9 @@
                 <button onclick="startScanner()" id="scan-btn" class="w-full py-3 px-4 rounded-lg bg-throne-dark border border-gray-700 text-gray-300 hover:border-throne-gold hover:text-throne-gold transition-colors flex items-center justify-center gap-2">
                     <span class="text-xl">📷</span> Scan Venue QR Code
                 </button>
-                <div id="scanner-container" class="hidden mt-3 rounded-lg overflow-hidden relative" style="max-height: 260px;">
-                    <video id="scanner-video" class="w-full rounded-lg" playsinline></video>
-                    <canvas id="scanner-canvas" class="hidden"></canvas>
-                    <button onclick="stopScanner()" class="absolute top-2 right-2 bg-black/70 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">✕</button>
+                <div id="scanner-container" class="hidden mt-3 relative">
+                    <div id="qr-reader" style="width: 100%;"></div>
+                    <button onclick="stopScanner()" class="absolute top-2 right-2 z-10 bg-black/70 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">✕</button>
                 </div>
             </div>
 
@@ -258,16 +263,16 @@
         </div>
     </div>
 
-    <!-- jsQR library for QR code scanning -->
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <!-- html5-qrcode library — proper camera selection + native barcode detection -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script>
         const socket = io();
-        const playerId = <%= player.id %>;
+        const playerId = <%- player.id %>;
 
         // Live sat counter for king — derives from crowned_at (single source of truth)
         <% if (state.king && state.king.id === player.id && state.reign) { %>
-        const reignStart = new Date('<%= state.reign.crowned_at %>').getTime();
-        const satRate = <%= state.config.satRate %>;
+        const reignStart = new Date('<%- state.reign.crowned_at %>').getTime();
+        const satRate = <%- state.config.satRate %>;
         function updateKingSats() {
             const reignSec = Math.floor((Date.now() - reignStart) / 1000);
             const totalSats = reignSec * satRate;
@@ -280,9 +285,9 @@
 
         // On-deck countdown
         <% if (queueEntry && queueEntry.status === 'on_deck') { %>
-        let timeLeft = <%= state.config.queueTimeout %>;
+        let timeLeft = <%- state.config.queueTimeout %>;
         <% if (queueEntry.on_deck_since) { %>
-        timeLeft -= Math.floor((Date.now() - new Date('<%= queueEntry.on_deck_since %>').getTime()) / 1000);
+        timeLeft -= Math.floor((Date.now() - new Date('<%- queueEntry.on_deck_since %>').getTime()) / 1000);
         <% } %>
         const timerEl = document.getElementById('on-deck-timer');
         setInterval(() => {
@@ -308,97 +313,107 @@
             location.reload();
         }
 
-        // ====== QR Scanner + Venue Code Join ======
-        let scannerStream = null;
-        let scannerInterval = null;
+        // ====== QR Scanner (html5-qrcode) ======
+        let html5QrCode = null;
 
-        function startScanner() {
+        async function startScanner() {
             const container = document.getElementById('scanner-container');
-            const video = document.getElementById('scanner-video');
             const scanBtn = document.getElementById('scan-btn');
 
             container.classList.remove('hidden');
             scanBtn.style.display = 'none';
 
-            // Request the main rear camera — ideal 1080p resolution nudges away from ultra-wide
-            const mainCameraConstraints = {
-                video: {
-                    facingMode: { exact: 'environment' },
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                }
-            };
-            // Fallback: simpler constraint if exact fails (some browsers/devices)
-            const fallbackConstraints = {
-                video: {
-                    facingMode: 'environment',
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                }
-            };
+            try {
+                html5QrCode = new Html5Qrcode('qr-reader');
 
-            function onStream(stream) {
-                scannerStream = stream;
-                video.srcObject = stream;
-                video.play();
-                // Enable continuous autofocus if supported
-                const track = stream.getVideoTracks()[0];
-                if (track && track.getCapabilities) {
-                    const caps = track.getCapabilities();
-                    if (caps.focusMode && caps.focusMode.includes('continuous')) {
-                        track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+                // Get available cameras and pick the best rear one
+                const cameras = await Html5Qrcode.getCameras();
+                let cameraId = null;
+
+                if (cameras && cameras.length > 0) {
+                    // Prefer a rear camera that's NOT ultra-wide
+                    // On iPhones: "Back Camera" is main, "Back Ultra Wide Camera" is the wide one
+                    const rearCameras = cameras.filter(c =>
+                        c.label.toLowerCase().includes('back') ||
+                        c.label.toLowerCase().includes('rear') ||
+                        c.label.toLowerCase().includes('environment')
+                    );
+
+                    // Filter out ultra-wide cameras
+                    const mainCameras = rearCameras.filter(c =>
+                        !c.label.toLowerCase().includes('ultra') &&
+                        !c.label.toLowerCase().includes('wide')
+                    );
+
+                    if (mainCameras.length > 0) {
+                        cameraId = mainCameras[0].id;
+                    } else if (rearCameras.length > 0) {
+                        cameraId = rearCameras[0].id;
                     }
+                    // If no rear camera found, let the library pick
                 }
-                scannerInterval = setInterval(scanFrame, 300);
-            }
 
-            navigator.mediaDevices.getUserMedia(mainCameraConstraints)
-                .then(onStream)
-                .catch(() => {
-                    // Retry with fallback constraints
-                    navigator.mediaDevices.getUserMedia(fallbackConstraints)
-                        .then(onStream)
-                        .catch(err => {
-                            console.error('Camera error:', err);
-                            container.innerHTML = '<div class="p-4 text-center text-red-400 text-sm">Camera not available — type the code below instead</div>';
-                        });
-                });
-        }
+                const config = {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0,
+                    focusMode: 'continuous',
+                    experimentalFeatures: {
+                        useBarCodeDetectorIfSupported: true // Use native BarcodeDetector API
+                    }
+                };
 
-        function scanFrame() {
-            const video = document.getElementById('scanner-video');
-            const canvas = document.getElementById('scanner-canvas');
-            if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+                const onScanSuccess = (decodedText) => {
+                    // Extract venue code from QR data
+                    let code = '';
+                    try {
+                        const url = new URL(decodedText);
+                        code = url.searchParams.get('code') || '';
+                    } catch {
+                        code = decodedText.trim();
+                    }
+                    if (code) {
+                        stopScanner();
+                        document.getElementById('venue-code-input').value = code.toUpperCase();
+                        joinWithCode();
+                    }
+                };
 
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                if (cameraId) {
+                    await html5QrCode.start(cameraId, config, onScanSuccess);
+                } else {
+                    // Fallback: use facingMode constraint
+                    await html5QrCode.start(
+                        { facingMode: 'environment' },
+                        config,
+                        onScanSuccess
+                    );
+                }
 
-            if (typeof jsQR === 'undefined') return;
-            const qr = jsQR(imageData.data, imageData.width, imageData.height);
-            if (qr && qr.data) {
-                // Extract venue code from QR URL (e.g., https://.../?code=ABC123)
-                let code = '';
+                // After starting, try to apply zoom to 1x (main camera) if supported
                 try {
-                    const url = new URL(qr.data);
-                    code = url.searchParams.get('code') || '';
-                } catch {
-                    // Maybe the QR is just the code itself
-                    code = qr.data.trim();
-                }
-                if (code) {
-                    stopScanner();
-                    document.getElementById('venue-code-input').value = code.toUpperCase();
-                    joinWithCode();
-                }
+                    const track = html5QrCode.getRunningTrackCameraCapabilities();
+                    if (track && track.zoomFeature && track.zoomFeature().isSupported()) {
+                        const zoomCap = track.zoomFeature();
+                        // Set zoom to minimum (1x = main camera, not digital zoom)
+                        await zoomCap.apply(zoomCap.min());
+                    }
+                } catch (e) { /* zoom not supported, that's fine */ }
+
+            } catch (err) {
+                console.error('Scanner error:', err);
+                container.innerHTML = '<div class="p-4 text-center text-red-400 text-sm">Camera not available — type the code below instead</div>';
             }
         }
 
-        function stopScanner() {
-            if (scannerInterval) { clearInterval(scannerInterval); scannerInterval = null; }
-            if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
+        async function stopScanner() {
+            if (html5QrCode) {
+                try {
+                    await html5QrCode.stop();
+                } catch (e) { /* already stopped */ }
+                html5QrCode.clear();
+                html5QrCode = null;
+            }
             const container = document.getElementById('scanner-container');
             const scanBtn = document.getElementById('scan-btn');
             if (container) container.classList.add('hidden');
