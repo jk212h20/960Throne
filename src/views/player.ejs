@@ -253,6 +253,10 @@
             <a href="/throne" class="hover:text-throne-gold transition-colors">👑 Throne</a>
             <a href="/leaderboard" class="hover:text-throne-gold transition-colors">🏆 Leaderboard</a>
         </div>
+
+        <div class="text-center mb-6">
+            <button onclick="logout()" class="text-xs text-gray-700 hover:text-gray-500 transition-colors">sign out</button>
+        </div>
     </div>
 
     <!-- html5-qrcode library — proper camera selection + native barcode detection -->
@@ -319,6 +323,11 @@
             if (!confirm('Leave the line?')) return;
             await fetch('/api/queue/leave', { method: 'POST' });
             location.reload();
+        }
+
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/';
         }
 
         // ====== QR Scanner (html5-qrcode) ======

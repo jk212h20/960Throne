@@ -49,7 +49,7 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 | `src/routes/pages.js` | Page rendering + auth flow routing |
 
 ## Known Issues Still Open
-1. **Railway deploy is manual** — `railway up` needed after each push
+1. **Railway deploy is manual** — `railway up --detach` needed after each push (auto-deploy from GitHub not configured)
 2. **Lightning payouts not tested** — Voltage LND credentials not configured
 
 ## Architecture
