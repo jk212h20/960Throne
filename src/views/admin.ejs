@@ -49,7 +49,7 @@
                 <% if (state.game) { %>
                 <div class="mb-3 p-3 bg-throne-darker rounded-lg">
                     <div class="text-sm text-gray-400">Active Game #<%= state.game.id %></div>
-                    <div><%= state.game.king_name %> vs <%= state.game.challenger_name %></div>
+                    <div>👑 <%= state.game.king_name %> <%= (state.game.king_color || 'white') === 'white' ? '⬜' : '⬛' %> vs <%= (state.game.king_color || 'white') === 'white' ? '⬛' : '⬜' %> ⚔️ <%= state.game.challenger_name %></div>
                     <div class="text-xs text-gray-500">Position #<%= state.game.chess960_position %></div>
                     <div class="text-sm text-yellow-400 mt-1">⏱️ Started <span id="admin-game-elapsed">0:00</span> ago</div>
                     <% if (state.game.king_reported || state.game.challenger_reported) { %>

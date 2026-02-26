@@ -78,10 +78,13 @@
                 <% if (state.game) { %>
                 <div class="text-center w-full">
                     <div class="text-lg font-mono text-gray-400 mb-2">Game #<%= state.stats.totalGames + 1 %></div>
+                    <% const kc2 = state.game.king_color || 'white'; %>
                     <div class="flex items-center justify-center gap-4 mb-4">
                         <div class="text-2xl">
                             <span class="text-throne-gold font-bold">👑 <%= state.game.king_name %></span>
+                            <span class="text-xs align-middle ml-1 <%= kc2 === 'white' ? 'text-white' : 'text-gray-400' %>"><%= kc2 === 'white' ? '⬜' : '⬛' %></span>
                             <span class="text-gray-500 mx-3">vs</span>
+                            <span class="text-xs align-middle mr-1 <%= kc2 === 'white' ? 'text-gray-400' : 'text-white' %>"><%= kc2 === 'white' ? '⬛' : '⬜' %></span>
                             <span class="text-white font-bold">⚔️ <%= state.game.challenger_name %></span>
                         </div>
                     </div>

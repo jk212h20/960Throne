@@ -159,10 +159,14 @@ function callNextChallenger(forcedPosition = null) {
     const position = chess960.positionToDisplay(posNumber);
     const reignId = parseInt(db.getConfig('current_reign_id') || '0');
 
-    // Create game record
+    // Create game record (king_color randomly assigned by DB layer)
     const gameId = db.createGame(kingId, next.player_id, posNumber, reignId);
     db.setConfig('current_game_id', String(gameId));
     gameStartTime = Date.now();
+
+    // Fetch the created game to get the assigned king_color
+    const createdGame = db.getGameById(gameId);
+    const kingColor = createdGame ? createdGame.king_color : 'white';
 
     // Remove challenger from queue
     db.removeFromQueue(next.id);
@@ -174,6 +178,7 @@ function callNextChallenger(forcedPosition = null) {
         challenger: { id: challenger.id, name: challenger.name },
         position,
         chess960Position: posNumber,
+        kingColor,
         startedAt: new Date().toISOString(),
         timeControl: {
             base: parseInt(db.getConfig('time_control_base') || '180'),
@@ -181,7 +186,7 @@ function callNextChallenger(forcedPosition = null) {
         }
     };
 
-    console.log(`♟️  Auto-started Game #${gameId}: ${king.name} vs ${challenger.name} — Position #${posNumber}`);
+    console.log(`♟️  Auto-started Game #${gameId}: ${king.name} (${kingColor}) vs ${challenger.name} (${kingColor === 'white' ? 'black' : 'white'}) — Position #${posNumber}`);
     broadcast('game_started', gameData);
 
     return next;

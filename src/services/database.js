@@ -236,6 +236,16 @@ function migrateSchema() {
                 console.log('🔧 Migration: Added email column to players');
             }
         }
+
+        // Games table migrations
+        const gamesInfo = db.exec(`PRAGMA table_info(games)`);
+        if (gamesInfo.length > 0) {
+            const gameCols = gamesInfo[0].values.map(row => row[1]);
+            if (!gameCols.includes('king_color')) {
+                db.run(`ALTER TABLE games ADD COLUMN king_color TEXT`);
+                console.log('🔧 Migration: Added king_color column to games');
+            }
+        }
     } catch (err) {
         console.log('Migration check (non-critical):', err.message);
     }
@@ -563,9 +573,11 @@ function isPlayerInQueue(playerId) {
 // Game operations
 // ============================================================
 
-function createGame(kingId, challengerId, chess960Position, reignId) {
-    db.run(`INSERT INTO games (king_id, challenger_id, chess960_position, reign_id) VALUES (?, ?, ?, ?)`,
-        [kingId, challengerId, chess960Position, reignId]);
+function createGame(kingId, challengerId, chess960Position, reignId, kingColor = null) {
+    // Randomly assign king to white or black if not specified
+    if (!kingColor) kingColor = Math.random() < 0.5 ? 'white' : 'black';
+    db.run(`INSERT INTO games (king_id, challenger_id, chess960_position, reign_id, king_color) VALUES (?, ?, ?, ?, ?)`,
+        [kingId, challengerId, chess960Position, reignId, kingColor]);
     const result = db.exec(`SELECT last_insert_rowid()`);
     const id = result[0].values[0][0];
     save();

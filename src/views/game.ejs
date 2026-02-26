@@ -34,8 +34,11 @@
                 <span class="<%= isChallenger ? 'text-throne-gold font-bold' : '' %>">⚔️ <%= state.game.challenger_name %></span>
             </div>
 
+            <% const kingColor = state.game.king_color || 'white'; %>
+            <% const myColor = isKing ? kingColor : (kingColor === 'white' ? 'black' : 'white'); %>
             <div class="text-sm text-gray-400">
                 You are the <span class="text-throne-gold font-bold"><%= isKing ? 'King 👑' : 'Challenger ⚔️' %></span>
+                — playing <span class="font-bold <%= myColor === 'white' ? 'text-white' : 'text-gray-400' %>"><%= myColor === 'white' ? '⬜ White' : '⬛ Black' %></span>
             </div>
             <div class="text-sm text-yellow-400 mt-2">⏱️ Started <span id="game-elapsed">0:00</span> ago</div>
         </div>
