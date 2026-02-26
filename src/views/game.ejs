@@ -19,12 +19,27 @@
         <!-- Game Header -->
         <div class="text-center mb-6">
             <div class="text-sm text-gray-400 mb-2">Position #<%= state.game.chess960_position %></div>
-            <div class="flex justify-center gap-1 mb-4">
-                <% const unicodePieces = {R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚'}; %>
-                <% state.game.position.pieces.forEach((p, i) => { %>
-                <div class="w-10 h-10 flex items-center justify-center rounded text-2xl <%= i % 2 === 0 ? 'bg-amber-100' : 'bg-amber-800' %> text-gray-900">
-                    <%= unicodePieces[p] || p %>
+            <%
+              const kingColor = state.game.king_color || 'white';
+              const isKingWhiteG = kingColor === 'white';
+              const wPiecesG = {R:'♖',N:'♘',B:'♗',Q:'♕',K:'♔'};
+              const bPiecesG = {R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚'};
+              const displayPiecesG = isKingWhiteG ? wPiecesG : bPiecesG;
+              const gamePieces = state.game.position.pieces;
+              const orderedPiecesG = isKingWhiteG ? gamePieces : [...gamePieces].reverse();
+              const fileLabelsG = isKingWhiteG ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
+            %>
+            <div class="text-xs text-gray-500 mb-2"><%= isKingWhiteG ? '⬜' : '⬛' %> King's pieces (challenger mirrors)</div>
+            <div class="flex justify-center gap-1 mb-1">
+                <% orderedPiecesG.forEach((p, i) => { %>
+                <div class="w-10 h-10 flex items-center justify-center rounded text-2xl <%= i % 2 === 0 ? 'bg-amber-800' : 'bg-amber-100' %> text-gray-900">
+                    <%= displayPiecesG[p] || p %>
                 </div>
+                <% }) %>
+            </div>
+            <div class="flex justify-center gap-1 mb-4">
+                <% fileLabelsG.forEach((f) => { %>
+                <div class="w-10 text-center text-xs text-gray-600"><%= f %></div>
                 <% }) %>
             </div>
 
@@ -34,7 +49,6 @@
                 <span class="<%= isChallenger ? 'text-throne-gold font-bold' : '' %>">⚔️ <%= state.game.challenger_name %></span>
             </div>
 
-            <% const kingColor = state.game.king_color || 'white'; %>
             <% const myColor = isKing ? kingColor : (kingColor === 'white' ? 'black' : 'white'); %>
             <div class="text-sm text-gray-400">
                 You are the <span class="text-throne-gold font-bold"><%= isKing ? 'King 👑' : 'Challenger ⚔️' %></span>

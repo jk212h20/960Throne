@@ -7,6 +7,14 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Random Color Assignment (Feb 26, 2026)
+- **King gets random color each game**: `king_color` column in `games` table, randomly assigned white or black (50/50) at game creation.
+- **Player view**: game.ejs shows "playing ⬜ White" or "⬛ Black" under their role.
+- **Spectator views**: throne.ejs, throne-live.ejs, admin.ejs show ⬜/⬛ next to player names in matchup.
+- **Socket broadcast**: `game_started` event includes `kingColor` field.
+- **DB migration**: `king_color TEXT` column auto-added to existing databases via `migrateSchema()`.
+- Files changed: `database.js`, `gameEngine.js`, `game.ejs`, `throne.ejs`, `throne-live.ejs`, `admin.ejs`
+
 ### Result Conflict Self-Resolution (Feb 26, 2026)
 - **Conflict detection & player notification**: When king and challenger report incompatible results, both players now see a clear warning showing what each side reported, with buttons re-enabled so they can correct and re-submit.
 - **Reports cleared on conflict**: `db.clearGameReports(gameId)` wipes both `king_reported` and `challenger_reported` so the game accepts fresh reports. Auto-confirm timer is also cancelled.

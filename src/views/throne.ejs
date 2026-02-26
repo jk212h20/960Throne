@@ -88,20 +88,30 @@
                             <span class="text-white font-bold">⚔️ <%= state.game.challenger_name %></span>
                         </div>
                     </div>
-                    <!-- Chess960 Board -->
+                    <!-- Chess960 Board — shows king's pieces so challenger can mirror -->
                     <div class="inline-block bg-throne-dark rounded-xl p-4 border border-gray-700">
                         <div class="text-sm text-gray-400 mb-2">Position #<%= state.game.chess960_position %></div>
+                        <%
+                          const pieces = state.game.position.pieces;
+                          const isKingWhite = kc === 'white';
+                          // White pieces for white king, black pieces for black king
+                          const wPieces = {R:'♖',N:'♘',B:'♗',Q:'♕',K:'♔'};
+                          const bPieces = {R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚'};
+                          const displayPieces = isKingWhite ? wPieces : bPieces;
+                          // If king is black, mirror the board (show from black's perspective)
+                          const orderedPieces = isKingWhite ? pieces : [...pieces].reverse();
+                          const fileLabels = isKingWhite ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
+                        %>
+                        <div class="text-xs text-gray-500 mb-2"><%= isKingWhite ? '⬜' : '⬛' %> <%= kc.charAt(0).toUpperCase() + kc.slice(1) %>'s pieces (challenger mirrors)</div>
                         <div class="flex gap-1" id="chess-board">
-                            <% const pieces = state.game.position.pieces; %>
-                            <% const unicodePieces = {R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚'}; %>
-                            <% pieces.forEach((p, i) => { %>
-                            <div class="w-16 h-16 flex items-center justify-center rounded <%= i % 2 === 0 ? 'bg-amber-100' : 'bg-amber-800' %>">
-                                <span class="chess-piece text-gray-900"><%= unicodePieces[p] || p %></span>
+                            <% orderedPieces.forEach((p, i) => { %>
+                            <div class="w-16 h-16 flex items-center justify-center rounded <%= i % 2 === 0 ? 'bg-amber-800' : 'bg-amber-100' %>">
+                                <span class="chess-piece <%= isKingWhite ? 'text-gray-900' : 'text-gray-900' %>"><%= displayPieces[p] || p %></span>
                             </div>
                             <% }) %>
                         </div>
                         <div class="flex gap-1 mt-1">
-                            <% ['a','b','c','d','e','f','g','h'].forEach((f, i) => { %>
+                            <% fileLabels.forEach((f, i) => { %>
                             <div class="w-16 text-center text-xs text-gray-500"><%= f %></div>
                             <% }) %>
                         </div>
