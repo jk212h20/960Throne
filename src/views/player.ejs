@@ -83,12 +83,12 @@
             </div>
         </div>
 
-        <!-- ====== NOT IN QUEUE — CTA TO JOIN ====== -->
+        <!-- ====== NOT IN QUEUE — INLINE JOIN WITH SCAN/CODE ====== -->
         <% } else if (!state.king || state.king.id !== player.id) { %>
-        <div class="card mb-4 text-center">
-            <div class="text-lg font-bold mb-2">Ready to play?</div>
+        <div class="card mb-4">
+            <div class="text-lg font-bold mb-2 text-center">Ready to play?</div>
             <% if (state.king) { %>
-            <div class="text-gray-400 mb-4">
+            <div class="text-gray-400 mb-4 text-center">
                 <span class="text-throne-gold font-bold"><%= state.king.name %></span> is on the throne.
                 <% if (state.queue.length === 0) { %>
                     No one in line — you could be next!
@@ -97,10 +97,32 @@
                 <% } %>
             </div>
             <% } else { %>
-            <div class="text-gray-400 mb-4">No King yet — be the first to claim the throne!</div>
+            <div class="text-gray-400 mb-4 text-center">No King yet — be the first to claim the throne!</div>
             <% } %>
-            <a href="/join" class="btn-gold inline-block text-lg px-8">📋 Get in Line</a>
-            <div class="text-xs text-gray-500 mt-3">You'll need the venue code (displayed at the event)</div>
+
+            <div class="text-sm text-gray-400 mb-3 text-center">📍 If you're at the venue, scan the QR or enter the code to join</div>
+
+            <!-- QR Scanner -->
+            <div id="scanner-section" class="mb-3">
+                <button onclick="startScanner()" id="scan-btn" class="w-full py-3 px-4 rounded-lg bg-throne-dark border border-gray-700 text-gray-300 hover:border-throne-gold hover:text-throne-gold transition-colors flex items-center justify-center gap-2">
+                    <span class="text-xl">📷</span> Scan Venue QR Code
+                </button>
+                <div id="scanner-container" class="hidden mt-3 rounded-lg overflow-hidden relative" style="max-height: 260px;">
+                    <video id="scanner-video" class="w-full rounded-lg" playsinline></video>
+                    <canvas id="scanner-canvas" class="hidden"></canvas>
+                    <button onclick="stopScanner()" class="absolute top-2 right-2 bg-black/70 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">✕</button>
+                </div>
+            </div>
+
+            <!-- Manual Code Entry -->
+            <div class="flex gap-2 mb-3">
+                <input type="text" id="venue-code-input" class="input flex-1 text-center text-lg font-mono tracking-widest"
+                    placeholder="VENUE CODE" maxlength="6" style="text-transform: uppercase;"
+                    onkeydown="if(event.key==='Enter')joinWithCode()">
+                <button onclick="joinWithCode()" id="join-btn" class="btn-gold px-5 whitespace-nowrap">⚔️ Join</button>
+            </div>
+
+            <div id="join-result" class="hidden mt-3 p-3 rounded-lg text-sm text-center"></div>
         </div>
         <% } %>
 
@@ -223,6 +245,8 @@
         </div>
     </div>
 
+    <!-- jsQR library for QR code scanning -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script>
         const socket = io();
         const playerId = <%= player.id %>;
@@ -269,6 +293,111 @@
             if (!confirm('Leave the line?')) return;
             await fetch('/api/queue/leave', { method: 'POST' });
             location.reload();
+        }
+
+        // ====== QR Scanner + Venue Code Join ======
+        let scannerStream = null;
+        let scannerInterval = null;
+
+        function startScanner() {
+            const container = document.getElementById('scanner-container');
+            const video = document.getElementById('scanner-video');
+            const scanBtn = document.getElementById('scan-btn');
+
+            container.classList.remove('hidden');
+            scanBtn.style.display = 'none';
+
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+                .then(stream => {
+                    scannerStream = stream;
+                    video.srcObject = stream;
+                    video.play();
+                    scannerInterval = setInterval(scanFrame, 300);
+                })
+                .catch(err => {
+                    console.error('Camera error:', err);
+                    container.innerHTML = '<div class="p-4 text-center text-red-400 text-sm">Camera not available — type the code below instead</div>';
+                });
+        }
+
+        function scanFrame() {
+            const video = document.getElementById('scanner-video');
+            const canvas = document.getElementById('scanner-canvas');
+            if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            if (typeof jsQR === 'undefined') return;
+            const qr = jsQR(imageData.data, imageData.width, imageData.height);
+            if (qr && qr.data) {
+                // Extract venue code from QR URL (e.g., https://.../?code=ABC123)
+                let code = '';
+                try {
+                    const url = new URL(qr.data);
+                    code = url.searchParams.get('code') || '';
+                } catch {
+                    // Maybe the QR is just the code itself
+                    code = qr.data.trim();
+                }
+                if (code) {
+                    stopScanner();
+                    document.getElementById('venue-code-input').value = code.toUpperCase();
+                    joinWithCode();
+                }
+            }
+        }
+
+        function stopScanner() {
+            if (scannerInterval) { clearInterval(scannerInterval); scannerInterval = null; }
+            if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
+            const container = document.getElementById('scanner-container');
+            const scanBtn = document.getElementById('scan-btn');
+            if (container) container.classList.add('hidden');
+            if (scanBtn) scanBtn.style.display = '';
+        }
+
+        async function joinWithCode() {
+            const input = document.getElementById('venue-code-input');
+            const code = input ? input.value.trim().toUpperCase() : '';
+            if (!code) { alert('Enter the venue code'); return; }
+
+            const btn = document.getElementById('join-btn');
+            const resultEl = document.getElementById('join-result');
+            if (btn) { btn.disabled = true; btn.textContent = 'Joining...'; }
+
+            try {
+                const res = await fetch('/api/queue/join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ venueCode: code })
+                });
+                const data = await res.json();
+                if (resultEl) resultEl.classList.remove('hidden');
+                if (!res.ok) {
+                    if (resultEl) {
+                        resultEl.className = 'mt-3 p-3 rounded-lg text-sm text-center bg-red-900/50 border border-red-700 text-red-300';
+                        resultEl.textContent = data.error;
+                    }
+                    if (btn) { btn.disabled = false; btn.textContent = '⚔️ Join'; }
+                } else {
+                    if (resultEl) {
+                        resultEl.className = 'mt-3 p-3 rounded-lg text-sm text-center bg-green-900/50 border border-green-700 text-green-300';
+                        resultEl.textContent = "You're #" + data.position + ' in line! ⚔️';
+                    }
+                    setTimeout(() => location.reload(), 1500);
+                }
+            } catch (err) {
+                if (resultEl) {
+                    resultEl.classList.remove('hidden');
+                    resultEl.className = 'mt-3 p-3 rounded-lg text-sm text-center bg-red-900/50 border border-red-700 text-red-300';
+                    resultEl.textContent = 'Connection error';
+                }
+                if (btn) { btn.disabled = false; btn.textContent = '⚔️ Join'; }
+            }
         }
 
         async function handleClaim(e) {

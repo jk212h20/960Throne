@@ -7,6 +7,11 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Admin Cookie Path Fix + Dev Port (Feb 25, 2026)
+- **Bug**: `admin_token` cookie was set without `Path=/`, so browsers defaulted to `/api/admin` (the login endpoint path). Cookie was never sent to `/admin` or `/throne` page routes — admin login appeared broken.
+- **Fix**: Added `path: '/'` to `res.cookie()` in `POST /api/admin/login` (`src/routes/api.js`)
+- **Dev port**: Changed local dev port from 3000 → **3960** to avoid conflicts with other projects (`.env` only, not committed)
+
 ### Scheduled Event Reset (Feb 25, 2026)
 - Admin can schedule a future time to reset all event data (stats, sats, games, reigns, queue)
 - Requires re-entering admin password (high security double-check)
