@@ -80,7 +80,7 @@
                 <span class="text-xs text-throne-gold/70">(active)</span>
             </div>
             <div class="text-right">
-                <div class="font-mono text-throne-gold"><%= Math.floor(state.reignSeconds / 60) %>m <%= Math.floor(state.reignSeconds % 60) %>s</div>
+                <div class="font-mono text-throne-gold"><%= Math.floor(state.reignSeconds / 3600) %>:<%= String(Math.floor((state.reignSeconds % 3600) / 60)).padStart(2, '0') %>:<%= String(state.reignSeconds % 60).padStart(2, '0') %></div>
                 <div class="text-xs text-gray-400"><%= state.reign.consecutive_wins %> wins · <%= state.liveSats.toLocaleString() %> sats</div>
             </div>
         </div>
@@ -97,7 +97,7 @@
                     <span class="font-bold"><%= r.king_name %></span>
                 </div>
                 <div class="text-right">
-                    <div class="font-mono text-throne-gold"><%= Math.floor(r.total_reign_seconds / 60) %>m <%= Math.floor(r.total_reign_seconds % 60) %>s</div>
+                    <div class="font-mono text-throne-gold"><%= Math.floor(r.total_reign_seconds / 3600) %>:<%= String(Math.floor((r.total_reign_seconds % 3600) / 60)).padStart(2, '0') %>:<%= String(Math.floor(r.total_reign_seconds % 60)).padStart(2, '0') %></div>
                     <div class="text-xs text-gray-400"><%= r.consecutive_wins %> wins · <%= r.total_sats_earned.toLocaleString() %> sats</div>
                 </div>
             </div>
