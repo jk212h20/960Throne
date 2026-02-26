@@ -320,16 +320,48 @@
             container.classList.remove('hidden');
             scanBtn.style.display = 'none';
 
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-                .then(stream => {
-                    scannerStream = stream;
-                    video.srcObject = stream;
-                    video.play();
-                    scannerInterval = setInterval(scanFrame, 300);
-                })
-                .catch(err => {
-                    console.error('Camera error:', err);
-                    container.innerHTML = '<div class="p-4 text-center text-red-400 text-sm">Camera not available — type the code below instead</div>';
+            // Request the main rear camera — ideal 1080p resolution nudges away from ultra-wide
+            const mainCameraConstraints = {
+                video: {
+                    facingMode: { exact: 'environment' },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                }
+            };
+            // Fallback: simpler constraint if exact fails (some browsers/devices)
+            const fallbackConstraints = {
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                }
+            };
+
+            function onStream(stream) {
+                scannerStream = stream;
+                video.srcObject = stream;
+                video.play();
+                // Enable continuous autofocus if supported
+                const track = stream.getVideoTracks()[0];
+                if (track && track.getCapabilities) {
+                    const caps = track.getCapabilities();
+                    if (caps.focusMode && caps.focusMode.includes('continuous')) {
+                        track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+                    }
+                }
+                scannerInterval = setInterval(scanFrame, 300);
+            }
+
+            navigator.mediaDevices.getUserMedia(mainCameraConstraints)
+                .then(onStream)
+                .catch(() => {
+                    // Retry with fallback constraints
+                    navigator.mediaDevices.getUserMedia(fallbackConstraints)
+                        .then(onStream)
+                        .catch(err => {
+                            console.error('Camera error:', err);
+                            container.innerHTML = '<div class="p-4 text-center text-red-400 text-sm">Camera not available — type the code below instead</div>';
+                        });
                 });
         }
 

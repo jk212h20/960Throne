@@ -7,6 +7,13 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Non-Expiring Sessions + Optional Email (Feb 25, 2026)
+- Session cookies extended from 7 days → 10 years (effectively never expire)
+- Admin cookies also extended to 10 years
+- Players can now add an optional email for account recovery (Profile section on player page)
+- New: `email` column on `players` table (migration), `POST /api/auth/set-email`, `setPlayerEmail()` in DB
+- Local `.env` ADMIN_PASSWORD synced to match Railway (`throne960`)
+
 ### Railway Volume Mount Path Fix (Feb 25, 2026)
 - **Bug**: Players disappearing on redeploy — volume was mounted at `/app/dada` (typo!) instead of `/app/data`
 - DB writes to `./data/throne.db` → `/app/data/throne.db`, but volume was at wrong path so data went to ephemeral filesystem
