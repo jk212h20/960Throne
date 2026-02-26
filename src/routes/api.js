@@ -308,7 +308,7 @@ router.post('/admin/login', (req, res) => {
     if (password !== adminPassword) {
         return res.status(401).json({ error: 'Invalid admin password' });
     }
-    res.cookie('admin_token', adminPassword, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie('admin_token', adminPassword, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, path: '/' });
     res.json({ success: true });
 });
 
