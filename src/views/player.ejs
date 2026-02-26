@@ -324,6 +324,41 @@
         // ====== QR Scanner (html5-qrcode) ======
         let html5QrCode = null;
 
+        async function applyOptimalZoom(videoElement) {
+            // Apply real camera zoom (not digital) via MediaStreamTrack constraints
+            // This works on Android Chrome and Safari iOS 17+
+            try {
+                if (!videoElement || !videoElement.srcObject) return;
+                const videoTrack = videoElement.srcObject.getVideoTracks()[0];
+                if (!videoTrack) return;
+
+                const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+                const settings = videoTrack.getSettings ? videoTrack.getSettings() : {};
+
+                console.log('[QR Camera] Track capabilities:', JSON.stringify(caps));
+                console.log('[QR Camera] Track settings:', JSON.stringify(settings));
+
+                if (caps.zoom) {
+                    // Target 2x zoom — this switches to main lens on most phones
+                    // On phones where min zoom is already 1.0, 2.0 gives a nice close-up
+                    const target = Math.min(2.0, caps.zoom.max);
+                    const zoomVal = Math.max(target, caps.zoom.min);
+                    console.log('[QR Camera] Applying zoom:', zoomVal, '(range:', caps.zoom.min, '-', caps.zoom.max, ')');
+                    await videoTrack.applyConstraints({ advanced: [{ zoom: zoomVal }] });
+                    console.log('[QR Camera] Zoom applied successfully');
+                } else {
+                    console.log('[QR Camera] Zoom not supported on this track');
+                }
+
+                // Also ensure continuous autofocus
+                if (caps.focusMode && caps.focusMode.includes('continuous')) {
+                    await videoTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+                }
+            } catch (e) {
+                console.warn('[QR Camera] Zoom/focus error:', e);
+            }
+        }
+
         async function startScanner() {
             const container = document.getElementById('scanner-container');
             const scanBtn = document.getElementById('scan-btn');
@@ -336,43 +371,47 @@
 
                 // Get available cameras and pick the best rear one
                 const cameras = await Html5Qrcode.getCameras();
+                console.log('[QR Camera] Available cameras:', JSON.stringify(cameras.map(c => ({id: c.id, label: c.label}))));
                 let cameraId = null;
 
                 if (cameras && cameras.length > 0) {
-                    // Prefer a rear camera that's NOT ultra-wide
-                    // On iPhones: "Back Camera" is main, "Back Ultra Wide Camera" is the wide one
-                    const rearCameras = cameras.filter(c =>
-                        c.label.toLowerCase().includes('back') ||
-                        c.label.toLowerCase().includes('rear') ||
-                        c.label.toLowerCase().includes('environment')
-                    );
+                    // Strategy: find rear cameras, then pick the MAIN one (not ultra-wide)
+                    // Android labels: "camera2 0, facing back" (main), "camera2 2, facing back" (wide)
+                    // iPhone labels: "Back Camera" (main), "Back Ultra Wide Camera" (wide)
+                    const rearCameras = cameras.filter(c => {
+                        const label = c.label.toLowerCase();
+                        return label.includes('back') || label.includes('rear') || label.includes('environment');
+                    });
 
-                    // Filter out ultra-wide cameras
-                    const mainCameras = rearCameras.filter(c =>
-                        !c.label.toLowerCase().includes('ultra') &&
-                        !c.label.toLowerCase().includes('wide')
-                    );
+                    // Filter out ultra-wide / wide-angle cameras
+                    const mainCameras = rearCameras.filter(c => {
+                        const label = c.label.toLowerCase();
+                        return !label.includes('ultra') && !label.includes('wide');
+                    });
 
+                    // On Android, camera labels often don't say "wide" — pick camera2 0 (usually main)
+                    // If we have multiple rear cameras and can't distinguish, pick the first non-wide
                     if (mainCameras.length > 0) {
                         cameraId = mainCameras[0].id;
+                        console.log('[QR Camera] Selected main camera:', mainCameras[0].label);
                     } else if (rearCameras.length > 0) {
+                        // If all rear cameras matched "wide", just use the first rear one
+                        // and rely on zoom to compensate
                         cameraId = rearCameras[0].id;
+                        console.log('[QR Camera] Selected rear camera (may be wide):', rearCameras[0].label);
                     }
-                    // If no rear camera found, let the library pick
                 }
 
                 const config = {
                     fps: 10,
                     qrbox: { width: 250, height: 250 },
                     aspectRatio: 1.0,
-                    focusMode: 'continuous',
                     experimentalFeatures: {
-                        useBarCodeDetectorIfSupported: true // Use native BarcodeDetector API
+                        useBarCodeDetectorIfSupported: true
                     }
                 };
 
                 const onScanSuccess = (decodedText) => {
-                    // Extract venue code from QR data
                     let code = '';
                     try {
                         const url = new URL(decodedText);
@@ -390,7 +429,6 @@
                 if (cameraId) {
                     await html5QrCode.start(cameraId, config, onScanSuccess);
                 } else {
-                    // Fallback: use facingMode constraint
                     await html5QrCode.start(
                         { facingMode: { exact: 'environment' } },
                         config,
@@ -398,30 +436,11 @@
                     );
                 }
 
-                // After starting, force zoom to 2x for better QR focus on phones
-                // Many phones default to ultra-wide (0.5x); zoom 2.0 hits the main lens
-                try {
-                    const track = html5QrCode.getRunningTrackCameraCapabilities();
-                    if (track && track.zoomFeature && track.zoomFeature().isSupported()) {
-                        const zoomCap = track.zoomFeature();
-                        // Aim for 2x zoom (main camera on most phones)
-                        const target = Math.min(2.0, zoomCap.max());
-                        await zoomCap.apply(Math.max(target, zoomCap.min()));
-                    }
-                } catch (e) { /* zoom not supported, that's fine */ }
-
-                // Also try via raw MediaStreamTrack constraints
-                try {
+                // Wait a moment for video element to be ready, then apply zoom
+                setTimeout(async () => {
                     const videoEl = document.querySelector('#qr-reader video');
-                    if (videoEl && videoEl.srcObject) {
-                        const videoTrack = videoEl.srcObject.getVideoTracks()[0];
-                        const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
-                        if (caps.zoom) {
-                            const target = Math.min(2.0, caps.zoom.max);
-                            await videoTrack.applyConstraints({ advanced: [{ zoom: Math.max(target, caps.zoom.min) }] });
-                        }
-                    }
-                } catch (e) { /* constraints not supported */ }
+                    await applyOptimalZoom(videoEl);
+                }, 500);
 
             } catch (err) {
                 console.error('Scanner error:', err);
