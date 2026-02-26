@@ -7,15 +7,15 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
-### Game Auto-Start, No-Show, Camera Fix (Feb 25, 2026)
+### Game Auto-Start, No-Show, Camera Fix, On-Deck Removal (Feb 25, 2026)
 - **QR Camera fix round 2**: Force 2x zoom after starting scanner to hit main camera lens (many phones default to ultra-wide). Also apply zoom via raw MediaStreamTrack constraints as fallback. Use `facingMode: { exact: 'environment' }` for stricter rear camera.
-- **Games auto-start**: When a challenger is called from queue, the game starts immediately — no admin "Start Game" button needed. `callNextChallenger()` now creates the game record automatically.
+- **On-deck step fully removed**: Players go straight from queue → active game. No 30-second "show up" timer. If they don't show, admin hits "No Show" to skip to next challenger.
+- **Games auto-start**: When a challenger is called from queue, the game starts immediately — no admin "Start Game" button needed. `callNextChallenger()` creates the game record automatically.
 - **No-show result**: New `no_show` result type — doesn't count as a real game, reuses same Chess960 position for next challenger. Available as 4th button on game.ejs and admin.ejs.
 - **Admin remove challenger**: `POST /api/admin/remove-challenger` — marks current game as no_show, same position reused.
 - **adminSetChallenger**: Now auto-starts a game immediately (ends any active game as no_show first).
 - **Elapsed timers**: All active game views (game.ejs, player.ejs, admin.ejs) show "⏱️ Started X:XX ago" with live ticking timer.
-- **Admin sees reports**: Admin game panel shows king_reported/challenger_reported values during active game.
-- **moveToFrontOfQueue**: New DB function used by adminSetChallenger to put player at front of queue.
+- **Stale on-deck cleanup**: On server init, any stale on-deck entries are reset to 'waiting' via `resetOnDeckToWaiting()`.
 
 ### Previous changes (Feb 25, 2026) — see git log for details
 - UTC timezone fix for timers, QR scanner rewrite (html5-qrcode), non-expiring sessions, optional email

@@ -68,7 +68,11 @@
                 </button>
 
                 <button onclick="report('no_show')" class="w-full p-3 rounded-lg text-sm font-bold bg-yellow-900 hover:bg-yellow-800 text-yellow-300 transition-all">
-                    🚫 No Show
+                    <% if (isChallenger) { %>
+                        ⏭️ Skip Me
+                    <% } else { %>
+                        🚫 No Show
+                    <% } %>
                 </button>
             </div>
 
