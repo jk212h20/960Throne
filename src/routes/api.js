@@ -450,6 +450,8 @@ router.get('/admin/scheduled-reset', requireAdmin, (req, res) => {
 });
 
 router.get('/admin/accounting', requireAdmin, (req, res) => {
+    // Flush accumulated sats to DB so audit compares fresh values (not up to 10s stale)
+    gameEngine.flushAccumulatedSats();
     const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
     const audit = db.getAccountingAudit(satRate);
     res.json(audit);

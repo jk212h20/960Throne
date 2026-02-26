@@ -910,6 +910,8 @@ module.exports = {
     scheduleReset,
     cancelReset,
     getScheduledReset,
+    // Sat accounting
+    flushAccumulatedSats,
     // Helpers
     broadcast,
     notifyAdmin,
