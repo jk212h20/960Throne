@@ -7,113 +7,21 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
-### UTC Timezone Bug Fix (Feb 25, 2026)
-- **Bug**: On-deck countdown showed 18030 instead of 30 seconds (5 hours off = EST UTC-5)
-- **Root cause**: SQLite `datetime('now')` produces `2026-02-26 03:57:00` (no `Z` suffix). JS `new Date()` parses without-Z as local time, not UTC. Client in EST sees the UTC timestamp as 5hrs in future → negative elapsed → timer inflated.
-- **Fix**: Append `Z` suffix to all timestamps parsed client-side in EJS templates (`on_deck_since`, `crowned_at`, `started_at`). Conditional to avoid double-Z if timestamp already has it.
-- **Scope**: `player.ejs`, `throne.ejs`, `throne-live.ejs`
-- Also fixed EJS escaping (`<%-` not `<%=`) in all `<script>` blocks across all views
+### Game Auto-Start, No-Show, Camera Fix (Feb 25, 2026)
+- **QR Camera fix round 2**: Force 2x zoom after starting scanner to hit main camera lens (many phones default to ultra-wide). Also apply zoom via raw MediaStreamTrack constraints as fallback. Use `facingMode: { exact: 'environment' }` for stricter rear camera.
+- **Games auto-start**: When a challenger is called from queue, the game starts immediately — no admin "Start Game" button needed. `callNextChallenger()` now creates the game record automatically.
+- **No-show result**: New `no_show` result type — doesn't count as a real game, reuses same Chess960 position for next challenger. Available as 4th button on game.ejs and admin.ejs.
+- **Admin remove challenger**: `POST /api/admin/remove-challenger` — marks current game as no_show, same position reused.
+- **adminSetChallenger**: Now auto-starts a game immediately (ends any active game as no_show first).
+- **Elapsed timers**: All active game views (game.ejs, player.ejs, admin.ejs) show "⏱️ Started X:XX ago" with live ticking timer.
+- **Admin sees reports**: Admin game panel shows king_reported/challenger_reported values during active game.
+- **moveToFrontOfQueue**: New DB function used by adminSetChallenger to put player at front of queue.
 
-### QR Scanner Complete Rewrite (Feb 25, 2026)
-- **Bug**: QR scanner opened wrong camera (ultra-wide on iPhones), couldn't scan QR codes
-- **Fix**: Replaced `jsQR` (manual frame-by-frame processing) with `html5-qrcode` library:
-  - Enumerates cameras, filters out ultra-wide by label ("Back Camera" vs "Back Ultra Wide Camera")
-  - Uses native `BarcodeDetector` API when available (Safari/Chrome — much faster/reliable)
-  - Proper continuous autofocus and zoom control (sets zoom to 1x minimum)
-  - Shows scan region overlay for better UX
-  - CDN: `https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js`
-- Also fixed EJS escaping in player.ejs `<script>` block (`<%-` instead of `<%=` for JS values)
-
-### Non-Expiring Sessions + Optional Email (Feb 25, 2026)
-- Session cookies extended from 7 days → 10 years (effectively never expire)
-- Admin cookies also extended to 10 years
-- Players can now add an optional email for account recovery (Profile section on player page)
-- New: `email` column on `players` table (migration), `POST /api/auth/set-email`, `setPlayerEmail()` in DB
-- Local `.env` ADMIN_PASSWORD synced to match Railway (`throne960`)
-
-### Railway Volume Mount Path Fix (Feb 25, 2026)
-- **Bug**: Players disappearing on redeploy — volume was mounted at `/app/dada` (typo!) instead of `/app/data`
-- DB writes to `./data/throne.db` → `/app/data/throne.db`, but volume was at wrong path so data went to ephemeral filesystem
-- **Fix**: `railway volume update -v 960throne-volume -m /app/data`
-- Volume: `960throne-volume`, 50GB, now correctly at `/app/data`
-
-### Accounting Audit Discrepancy Fix (Feb 25, 2026)
-- **Bug**: Accounting audit showed discrepancy (always a multiple of sat rate, e.g. 42 = 2×21) because it compared stale DB values (flushed every 10s) against real-time calculation
-- **Fix**: Accounting endpoint now calls `flushAccumulatedSats()` before running audit, ensuring DB is current
-- Exported `flushAccumulatedSats` from gameEngine module
-- Files: `src/services/gameEngine.js` (export), `src/routes/api.js` (flush before audit)
-
-### Inline Venue Code Scan/Entry on Player Page (Feb 25, 2026)
-- Replaced separate `/join` page flow with inline section on player dashboard
-- Players see **📷 Scan Venue QR Code** button + manual code entry field directly — no extra page/click
-- QR scanning uses `jsQR` library (CDN) with device camera; graceful fallback if camera unavailable
-- Enter key works on code input; auto-joins on successful QR scan
-- Files: `src/views/player.ejs` (inline join UI + scanner JS)
-
-### Admin Cookie Path Fix + Dev Port (Feb 25, 2026)
-- **Bug**: `admin_token` cookie was set without `Path=/`, so browsers defaulted to `/api/admin` (the login endpoint path). Cookie was never sent to `/admin` or `/throne` page routes — admin login appeared broken.
-- **Fix**: Added `path: '/'` to `res.cookie()` in `POST /api/admin/login` (`src/routes/api.js`)
-- **Dev port**: Changed local dev port from 3000 → **3960** to avoid conflicts with other projects (`.env` only, not committed)
-
-### Scheduled Event Reset (Feb 25, 2026)
-- Admin can schedule a future time to reset all event data (stats, sats, games, reigns, queue)
-- Requires re-entering admin password (high security double-check)
-- Live countdown timer on admin page shows time until reset
-- Auto-creates timestamped DB backup before reset (`data/throne_pre-reset_*.db`)
-- Keeps player accounts & config, only clears event data
-- Persists across server restarts (stored in `config.scheduled_reset_at`, timer resumes on boot)
-- Socket events notify all clients when reset fires/is scheduled/cancelled
-- Files: `database.js` (backupDatabase, resetEventData), `gameEngine.js` (scheduleReset, cancelReset, executeScheduledReset), `api.js` (3 endpoints), `admin.ejs` (UI)
-
-### Balance vs Total Sats Distinction (Feb 25, 2026)
-- Player header now shows "sat balance" (withdrawable) vs "total earned" (lifetime, unaffected by withdrawals)
-- `sat_balance` decreases on withdrawal; `total_sats_earned` never decreases
-- Throne displays show king's all-time stats (total sats, total reign time, # reigns) below current reign
-
-### Sat Persistence & Correctness Fix (Feb 25, 2026)
-- **Sats now accumulate continuously from the moment a king is crowned** (not just during games)
-- **Single source of truth**: `sats = floor((now - crowned_at) * sat_rate)` — a pure function of time
-- Server-side accumulator flushes to DB every 10s so sats survive page reloads/restarts
-- Client-side counters use the same formula (derive from `crowned_at` timestamp)
-- Reign finalization computes exact final sats from timestamps, no incremental drift
-- Leaderboard shows active reign with live sats/time
-- All sat crediting goes through `crownKing()` → no double-counting on dethronement
-
-### Throne Page Split — Admin-Protected + Public Live View (Feb 25, 2026)
-- `/throne` now requires admin password (reuses same `admin_token` cookie as `/admin`)
-- `/live` — new public web view with same throne info but **no QR code/venue code**
-- Public live view shows URL hint instead of QR ("Watch live at .../live")
-- New file: `src/views/throne-live.ejs`
-
-### Lightning Login (LNURL-auth) — Replaced PIN Login (Feb 25, 2026)
-- Built extensible auth system at `src/services/auth/` with strategy pattern
-- Implemented LNURL-auth (LUD-04) for "Login with Lightning" via QR code
-- New flow: scan QR with Lightning wallet → cryptographic auth → choose display name → play
-- Added `auth_type` and `auth_id` columns to `players` table (with migration for existing DBs)
-- **PIN system fully removed** — Lightning is the only auth method
-- Admin merge accounts feature added (for locked-out players who create new accounts)
-- New dependencies: `secp256k1`, `qrcode`
-- `BASE_URL` env var set on Railway for LNURL-auth callbacks
-
-### Auth Architecture (extensible for future methods)
-```
-src/services/auth/
-  ├── index.js      # Auth manager — challenge store, strategy routing
-  └── lightning.js   # LNURL-auth: bech32 encoding, secp256k1 sig verification
-```
-To add new auth (e.g., Nostr): create `src/services/auth/nostr.js`, register in `index.js` strategies map.
-
-### New/Modified Files
-| File | Change |
-|------|--------|
-| `src/services/auth/index.js` | NEW — Auth manager with in-memory challenge store |
-| `src/services/auth/lightning.js` | NEW — LNURL-auth strategy (bech32, secp256k1) |
-| `src/services/database.js` | Added `auth_type`, `auth_id` columns, migration, `createPlayerWithAuth`, `getPlayerByAuthId`, `setPlayerName` |
-| `src/routes/api.js` | Added `/api/auth/lightning`, `/api/auth/lightning/callback`, `/api/auth/status`, `/api/auth/set-name` |
-| `src/routes/pages.js` | Added `/set-name` route, name-check redirects on `/` and `/player` |
-| `src/views/index.ejs` | Replaced name+PIN form with Lightning QR code + polling |
-| `src/views/set-name.ejs` | NEW — Name selection page after Lightning auth |
-| `src/views/player.ejs` | Shows "⚡ Lightning login" instead of PIN for lightning users |
+### Previous changes (Feb 25, 2026) — see git log for details
+- UTC timezone fix for timers, QR scanner rewrite (html5-qrcode), non-expiring sessions, optional email
+- Railway volume mount fix, accounting audit flush-before-audit, inline venue code scan on player page
+- Admin cookie path fix, scheduled event reset, sat persistence/correctness, throne page split
+- Lightning login (LNURL-auth) replacing PIN system, auth architecture
 
 ## Player Flow (updated)
 1. QR at venue → `/?code=XXXXX` → Lightning login QR displayed

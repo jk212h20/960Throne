@@ -31,8 +31,15 @@ function init(socketIo) {
     // Start venue code rotation
     startVenueCodeRotation();
 
-    // Start the on-deck check loop
-    setInterval(checkOnDeckTimeout, 5000);
+    // Clear any stale on-deck entries from before auto-start was implemented
+    // (on-deck is no longer used — games auto-start from queue)
+    const staleOnDeck = db.getOnDeckPlayer();
+    if (staleOnDeck) {
+        console.log(`🧹 Clearing stale on-deck entry for ${staleOnDeck.player_name}`);
+        db.run ? null : null; // handled below
+        // Reset their status back to waiting
+        db.resetOnDeckToWaiting();
+    }
 
     // Start the sat accumulator — persists earned sats to DB every 10 seconds
     startSatAccumulator();
@@ -109,10 +116,9 @@ function joinQueue(playerId) {
         }
     }
 
-    // If no one is on deck and no active game, call next
-    const onDeck = db.getOnDeckPlayer();
+    // If no active game, auto-start with the next challenger
     const activeGame = db.getActiveGame();
-    if (!onDeck && (!activeGame || activeGame.result) && kingId) {
+    if ((!activeGame || activeGame.result) && kingId) {
         callNextChallenger();
     }
 

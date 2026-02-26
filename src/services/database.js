@@ -529,6 +529,11 @@ function sendToBackOfQueue(queueId) {
     save();
 }
 
+function resetOnDeckToWaiting() {
+    db.run(`UPDATE queue SET status = 'waiting', on_deck_since = NULL WHERE status = 'on_deck'`);
+    save();
+}
+
 function moveToFrontOfQueue(queueId) {
     // Set this entry's position to 0 (before everyone), then recompact
     db.run(`UPDATE queue SET position = 0 WHERE id = ?`, [queueId]);
@@ -933,6 +938,7 @@ module.exports = {
     removeFromQueue,
     sendToBackOfQueue,
     moveToFrontOfQueue,
+    resetOnDeckToWaiting,
     removePlayerFromQueue,
     isPlayerInQueue,
     

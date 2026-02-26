@@ -60,17 +60,8 @@
         </a>
         <% } %>
 
-        <!-- ====== ON DECK ====== -->
-        <% if (queueEntry && queueEntry.status === 'on_deck') { %>
-        <div class="card border-throne-gold mb-4 text-center pulse-gold">
-            <div class="text-3xl font-bold text-throne-gold mb-2">🔔 YOU'RE UP NEXT!</div>
-            <div class="text-lg text-gray-300">Head to the board now!</div>
-            <div class="text-5xl font-mono text-red-400 mt-3" id="on-deck-timer">30</div>
-            <div class="text-xs text-gray-500">seconds to show up</div>
-        </div>
-
         <!-- ====== IN QUEUE ====== -->
-        <% } else if (queueEntry) { %>
+        <% if (queueEntry) { %>
         <div class="card mb-4">
             <div class="flex items-center justify-between">
                 <div>
