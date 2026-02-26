@@ -37,6 +37,7 @@
             <div class="text-sm text-gray-400">
                 You are the <span class="text-throne-gold font-bold"><%= isKing ? 'King 👑' : 'Challenger ⚔️' %></span>
             </div>
+            <div class="text-sm text-yellow-400 mt-2">⏱️ Started <span id="game-elapsed">0:00</span> ago</div>
         </div>
 
         <!-- Report Result -->
@@ -63,7 +64,11 @@
                 </button>
 
                 <button onclick="report('draw')" class="w-full p-4 rounded-lg text-lg font-bold bg-gray-700 hover:bg-gray-600 text-white">
-                    🤝 Draw
+                    🤝 Draw (King Stays)
+                </button>
+
+                <button onclick="report('no_show')" class="w-full p-3 rounded-lg text-sm font-bold bg-yellow-900 hover:bg-yellow-800 text-yellow-300 transition-all">
+                    🚫 No Show
                 </button>
             </div>
 
@@ -129,6 +134,22 @@
                 buttons.style.pointerEvents = 'auto';
             }
         }
+
+        // Game elapsed timer
+        <% if (state.game && state.game.started_at) { %>
+        (function() {
+            const gameStart = new Date('<%- state.game.started_at %><%- state.game.started_at.endsWith("Z") ? "" : "Z" %>').getTime();
+            const el = document.getElementById('game-elapsed');
+            function tickGame() {
+                const sec = Math.floor((Date.now() - gameStart) / 1000);
+                const m = Math.floor(sec / 60);
+                const s = sec % 60;
+                if (el) el.textContent = m + ':' + String(s).padStart(2, '0');
+            }
+            tickGame();
+            setInterval(tickGame, 1000);
+        })();
+        <% } %>
 
         // Redirect when game ends
         socket.on('game_ended', () => {

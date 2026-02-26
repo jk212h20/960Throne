@@ -529,6 +529,16 @@ function sendToBackOfQueue(queueId) {
     save();
 }
 
+function moveToFrontOfQueue(queueId) {
+    // Set this entry's position to 0 (before everyone), then recompact
+    db.run(`UPDATE queue SET position = 0 WHERE id = ?`, [queueId]);
+    const queue = getQueue();
+    queue.forEach((entry, index) => {
+        db.run(`UPDATE queue SET position = ? WHERE id = ?`, [index + 1, entry.id]);
+    });
+    save();
+}
+
 function removePlayerFromQueue(playerId) {
     db.run(`DELETE FROM queue WHERE player_id = ? AND status IN ('waiting', 'on_deck')`, [playerId]);
     // Recompact
@@ -922,6 +932,7 @@ module.exports = {
     setOnDeck,
     removeFromQueue,
     sendToBackOfQueue,
+    moveToFrontOfQueue,
     removePlayerFromQueue,
     isPlayerInQueue,
     

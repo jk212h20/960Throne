@@ -7,10 +7,12 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
-### Throne Live Sat Counter Fix (Feb 25, 2026)
-- **Bug**: Sat counter on `/throne` and `/live` pages was static — required manual refresh
-- **Root cause**: EJS `<%= %>` tags HTML-escaped JavaScript values inside `<script>` blocks, turning quotes into `&#39;` etc., causing `SyntaxError: Unexpected token '&'` that broke the entire counter script
-- **Fix**: Changed to `<%- %>` (unescaped) for `reignStart`, `gameStart`, and `satRate` JS variables in both `throne.ejs` and `throne-live.ejs`
+### UTC Timezone Bug Fix (Feb 25, 2026)
+- **Bug**: On-deck countdown showed 18030 instead of 30 seconds (5 hours off = EST UTC-5)
+- **Root cause**: SQLite `datetime('now')` produces `2026-02-26 03:57:00` (no `Z` suffix). JS `new Date()` parses without-Z as local time, not UTC. Client in EST sees the UTC timestamp as 5hrs in future → negative elapsed → timer inflated.
+- **Fix**: Append `Z` suffix to all timestamps parsed client-side in EJS templates (`on_deck_since`, `crowned_at`, `started_at`). Conditional to avoid double-Z if timestamp already has it.
+- **Scope**: `player.ejs`, `throne.ejs`, `throne-live.ejs`
+- Also fixed EJS escaping (`<%-` not `<%=`) in all `<script>` blocks across all views
 
 ### QR Scanner Complete Rewrite (Feb 25, 2026)
 - **Bug**: QR scanner opened wrong camera (ultra-wide on iPhones), couldn't scan QR codes

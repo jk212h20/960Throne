@@ -51,18 +51,33 @@
                     <div class="text-sm text-gray-400">Active Game #<%= state.game.id %></div>
                     <div><%= state.game.king_name %> vs <%= state.game.challenger_name %></div>
                     <div class="text-xs text-gray-500">Position #<%= state.game.chess960_position %></div>
-                    <div class="flex gap-2 mt-2">
-                        <button onclick="overrideResult(<%= state.game.id %>, 'king_won')" class="text-xs bg-green-800 px-2 py-1 rounded">King Won</button>
-                        <button onclick="overrideResult(<%= state.game.id %>, 'challenger_won')" class="text-xs bg-red-800 px-2 py-1 rounded">Challenger Won</button>
-                        <button onclick="overrideResult(<%= state.game.id %>, 'draw')" class="text-xs bg-gray-700 px-2 py-1 rounded">Draw</button>
+                    <div class="text-sm text-yellow-400 mt-1">⏱️ Started <span id="admin-game-elapsed">0:00</span> ago</div>
+                    <% if (state.game.king_reported || state.game.challenger_reported) { %>
+                    <div class="text-xs text-gray-500 mt-1">
+                        <% if (state.game.king_reported) { %>King reported: <span class="text-white"><%= state.game.king_reported %></span> <% } %>
+                        <% if (state.game.challenger_reported) { %>Chal. reported: <span class="text-white"><%= state.game.challenger_reported %></span><% } %>
+                    </div>
+                    <% } %>
+                    <div class="grid grid-cols-2 gap-2 mt-2">
+                        <button onclick="overrideResult(<%= state.game.id %>, 'king_won')" class="text-xs bg-green-800 hover:bg-green-700 px-2 py-2 rounded">👑 King Won</button>
+                        <button onclick="overrideResult(<%= state.game.id %>, 'challenger_won')" class="text-xs bg-red-800 hover:bg-red-700 px-2 py-2 rounded">⚔️ Challenger Won</button>
+                        <button onclick="overrideResult(<%= state.game.id %>, 'draw')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-2 rounded">🤝 Draw (King Stays)</button>
+                        <button onclick="removeChallenger()" class="text-xs bg-yellow-800 hover:bg-yellow-700 px-2 py-2 rounded">🚫 No Show</button>
                     </div>
                 </div>
+                <% } else if (state.king) { %>
+                <div class="mb-3 p-3 bg-throne-darker rounded-lg text-center">
+                    <div class="text-sm text-gray-400">Waiting for next challenger...</div>
+                    <% if (state.queue.length > 0) { %>
+                    <div class="text-xs text-yellow-400 mt-1">Next game auto-starts when queue is processed</div>
+                    <% } else { %>
+                    <div class="text-xs text-gray-500 mt-1">Queue is empty — add someone to queue to start a game</div>
+                    <% } %>
+                </div>
                 <% } else { %>
-                <button onclick="startGame()" class="btn-gold w-full mb-3" <%= !state.king || !state.onDeck ? 'disabled' : '' %>>
-                    ⚔️ Start Game
-                </button>
-                <% if (!state.king) { %><p class="text-xs text-gray-500">Crown a king first</p><% } %>
-                <% if (!state.onDeck) { %><p class="text-xs text-gray-500">No challenger on deck</p><% } %>
+                <div class="mb-3 p-3 bg-throne-darker rounded-lg text-center">
+                    <div class="text-sm text-gray-500">No king — crown someone first</div>
+                </div>
                 <% } %>
 
                 <!-- Undo Last Game -->
@@ -319,6 +334,10 @@
             if (!id) return;
             if (await api('/api/admin/set-challenger', { playerId: parseInt(id) })) setTimeout(() => location.reload(), 500);
         }
+        async function removeChallenger() {
+            if (!confirm('Remove challenger (no-show)? Same position will be used for the next challenger.')) return;
+            if (await api('/api/admin/remove-challenger', {})) setTimeout(() => location.reload(), 500);
+        }
         async function resolveNotification(id) { if (await api('/api/admin/notifications/resolve', { id })) setTimeout(() => location.reload(), 500); }
 
         // Accounting Audit
@@ -375,6 +394,23 @@
         })();
         <% } %>
 
+        // Game elapsed timer
+        <% if (state.game && state.game.started_at) { %>
+        (function() {
+            const gameStart = new Date('<%- state.game.started_at %><%- state.game.started_at.endsWith("Z") ? "" : "Z" %>').getTime();
+            const el = document.getElementById('admin-game-elapsed');
+            function tickGame() {
+                const sec = Math.floor((Date.now() - gameStart) / 1000);
+                const m = Math.floor(sec / 60);
+                const s = sec % 60;
+                if (el) el.textContent = m + ':' + String(s).padStart(2, '0');
+            }
+            tickGame();
+            setInterval(tickGame, 1000);
+        })();
+        <% } %>
+
+        socket.on('game_started', () => setTimeout(() => location.reload(), 500));
         socket.on('game_ended', () => setTimeout(() => location.reload(), 1000));
         socket.on('new_king', () => setTimeout(() => location.reload(), 1000));
         socket.on('queue_updated', () => setTimeout(() => location.reload(), 1000));

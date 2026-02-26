@@ -125,25 +125,58 @@ function leaveQueue(playerId) {
     return { success: true };
 }
 
-function callNextChallenger() {
+/**
+ * Call next challenger and auto-start the game immediately.
+ * No admin action needed — optimistically assumes challenger is present.
+ * Admin can remove them if they don't show up (keeps same 960 position).
+ * 
+ * @param {number|null} forcedPosition - If provided, reuse this Chess960 position number
+ */
+function callNextChallenger(forcedPosition = null) {
+    const kingId = parseInt(db.getConfig('current_king_id') || '0');
+    if (!kingId) return null;
+
+    // Don't start a new game if one is already active
+    const activeGame = db.getActiveGame();
+    if (activeGame && !activeGame.result) return null;
+
     const next = db.getNextInQueue();
     if (!next) {
         broadcast('queue_empty', {});
         return null;
     }
 
-    db.setOnDeck(next.id);
-    const timeoutSeconds = parseInt(db.getConfig('queue_timeout_seconds') || '30');
+    // Auto-start the game immediately
+    const king = db.getPlayerById(kingId);
+    const challenger = db.getPlayerById(next.player_id);
+    const posNumber = forcedPosition || chess960.randomPositionNumber();
+    const position = chess960.positionToDisplay(posNumber);
+    const reignId = parseInt(db.getConfig('current_reign_id') || '0');
 
-    broadcast('on_deck', {
-        player: next,
-        timeoutSeconds,
-        queue: db.getQueue()
-    });
+    // Create game record
+    const gameId = db.createGame(kingId, next.player_id, posNumber, reignId);
+    db.setConfig('current_game_id', String(gameId));
+    gameStartTime = Date.now();
 
-    // Start timeout timer
-    if (onDeckTimer) clearTimeout(onDeckTimer);
-    onDeckTimer = setTimeout(() => handleOnDeckTimeout(next.id), timeoutSeconds * 1000);
+    // Remove challenger from queue
+    db.removeFromQueue(next.id);
+    broadcast('queue_updated', { queue: db.getQueue() });
+
+    const gameData = {
+        gameId,
+        king: { id: king.id, name: king.name },
+        challenger: { id: challenger.id, name: challenger.name },
+        position,
+        chess960Position: posNumber,
+        startedAt: new Date().toISOString(),
+        timeControl: {
+            base: parseInt(db.getConfig('time_control_base') || '180'),
+            increment: parseInt(db.getConfig('time_control_increment') || '2')
+        }
+    };
+
+    console.log(`♟️  Auto-started Game #${gameId}: ${king.name} vs ${challenger.name} — Position #${posNumber}`);
+    broadcast('game_started', gameData);
 
     return next;
 }
@@ -309,8 +342,13 @@ function reportResult(playerId, result) {
     }
 
     // Validate result value
-    if (!['king_won', 'challenger_won', 'draw'].includes(result)) {
-        return { error: 'Invalid result. Must be king_won, challenger_won, or draw' };
+    if (!['king_won', 'challenger_won', 'draw', 'no_show'].includes(result)) {
+        return { error: 'Invalid result. Must be king_won, challenger_won, draw, or no_show' };
+    }
+
+    // no_show is like king_won but doesn't count as a game played
+    if (result === 'no_show') {
+        return finalizeGameResult(gameId, 'no_show');
     }
 
     // Record the report
@@ -419,8 +457,11 @@ function finalizeGameResult(gameId, result) {
     db.finalizeGame(gameId, result, gameSats);
     db.setConfig('current_game_id', '');
 
+    // no_show: doesn't count as a game played, king streak continues, just clears the game
+    const isNoShow = result === 'no_show';
+
     // Update reign stats (games played, win streak — sats are handled by accumulator)
-    if (reignId && reign) {
+    if (reignId && reign && !isNoShow) {
         db.updateReign(reignId, {
             games_played: reign.games_played + 1,
             consecutive_wins: result === 'king_won' || result === 'draw'
@@ -429,46 +470,48 @@ function finalizeGameResult(gameId, result) {
         });
     }
 
-    // Update player stats
+    // Update player stats (skip for no_show — doesn't count as a real game)
     const king = db.getPlayerById(game.king_id);
     const challenger = db.getPlayerById(game.challenger_id);
 
-    if (result === 'king_won') {
-        db.updatePlayerStats(game.king_id, {
-            games_played: king.games_played + 1,
-            games_won: king.games_won + 1,
-        });
-        db.updatePlayerStats(game.challenger_id, {
-            games_played: challenger.games_played + 1,
-            games_lost: challenger.games_lost + 1,
-        });
-    } else if (result === 'challenger_won') {
-        db.updatePlayerStats(game.king_id, {
-            games_played: king.games_played + 1,
-            games_lost: king.games_lost + 1,
-        });
-        db.updatePlayerStats(game.challenger_id, {
-            games_played: challenger.games_played + 1,
-            games_won: challenger.games_won + 1,
-        });
-    } else if (result === 'draw') {
-        db.updatePlayerStats(game.king_id, {
-            games_played: king.games_played + 1,
-            games_drawn: king.games_drawn + 1,
-        });
-        db.updatePlayerStats(game.challenger_id, {
-            games_played: challenger.games_played + 1,
-            games_drawn: challenger.games_drawn + 1,
-        });
-    }
-
-    // Update longest win streak for king
-    if (reignId && (result === 'king_won' || result === 'draw')) {
-        const reign = db.getReignById(reignId);
-        if (reign && reign.consecutive_wins > king.longest_win_streak) {
+    if (!isNoShow) {
+        if (result === 'king_won') {
             db.updatePlayerStats(game.king_id, {
-                longest_win_streak: reign.consecutive_wins
+                games_played: king.games_played + 1,
+                games_won: king.games_won + 1,
             });
+            db.updatePlayerStats(game.challenger_id, {
+                games_played: challenger.games_played + 1,
+                games_lost: challenger.games_lost + 1,
+            });
+        } else if (result === 'challenger_won') {
+            db.updatePlayerStats(game.king_id, {
+                games_played: king.games_played + 1,
+                games_lost: king.games_lost + 1,
+            });
+            db.updatePlayerStats(game.challenger_id, {
+                games_played: challenger.games_played + 1,
+                games_won: challenger.games_won + 1,
+            });
+        } else if (result === 'draw') {
+            db.updatePlayerStats(game.king_id, {
+                games_played: king.games_played + 1,
+                games_drawn: king.games_drawn + 1,
+            });
+            db.updatePlayerStats(game.challenger_id, {
+                games_played: challenger.games_played + 1,
+                games_drawn: challenger.games_drawn + 1,
+            });
+        }
+
+        // Update longest win streak for king
+        if (reignId && (result === 'king_won' || result === 'draw')) {
+            const updatedReign = db.getReignById(reignId);
+            if (updatedReign && updatedReign.consecutive_wins > king.longest_win_streak) {
+                db.updatePlayerStats(game.king_id, {
+                    longest_win_streak: updatedReign.consecutive_wins
+                });
+            }
         }
     }
 
@@ -489,13 +532,21 @@ function finalizeGameResult(gameId, result) {
 
         // Crown the challenger as new king (this ends the old reign internally)
         crownKing(game.challenger_id);
+    } else if (result === 'no_show') {
+        // No-show — king stays, same position for next challenger
+        console.log(`🚫 ${game.challenger_name} no-show vs ${game.king_name}. Position #${game.chess960_position} reused.`);
+        broadcast('game_ended', gameResult);
+        gameStartTime = null;
+
+        // Call next challenger with the SAME position
+        callNextChallenger(game.chess960_position);
     } else {
         // King stays (won or draw)
         console.log(`👑 ${game.king_name} defends the throne! (${result}) Earned ${satsEarned} sats.`);
         broadcast('game_ended', gameResult);
         gameStartTime = null;
 
-        // Call next challenger
+        // Call next challenger (new random position)
         callNextChallenger();
     }
 
@@ -593,24 +644,23 @@ function adminUndoGame(gameId) {
 
 /**
  * Admin sets a specific player as the challenger, bypassing the queue.
- * Puts them on-deck immediately.
+ * If there's an active game, marks it as no_show first (keeps position).
+ * Then creates a new game with this player as challenger.
  */
 function adminSetChallenger(playerId) {
     const player = db.getPlayerById(playerId);
     if (!player) return { error: 'Player not found' };
 
     const kingId = db.getConfig('current_king_id');
-    if (kingId && parseInt(kingId) === playerId) {
+    if (!kingId) return { error: 'No king on the throne' };
+    if (parseInt(kingId) === playerId) {
         return { error: "Can't set the King as their own challenger" };
     }
 
-    // Cancel any existing on-deck timer
-    if (onDeckTimer) clearTimeout(onDeckTimer);
-
-    // Remove any current on-deck player (send them back to waiting)
-    const currentOnDeck = db.getOnDeckPlayer();
-    if (currentOnDeck) {
-        db.sendToBackOfQueue(currentOnDeck.id);
+    // If there's an active game, finalize it as no_show first
+    const activeGame = db.getActiveGame();
+    if (activeGame && !activeGame.result) {
+        finalizeGameResult(activeGame.id, 'no_show');
     }
 
     // If the player is already in queue, remove them first
@@ -618,19 +668,35 @@ function adminSetChallenger(playerId) {
         db.removePlayerFromQueue(playerId);
     }
 
-    // Add them to queue and immediately set as on-deck
+    // Add them to front of queue, then callNextChallenger will pick them up
     const queueId = db.addToQueue(playerId);
-    db.setOnDeck(queueId);
+    // Move them to position 1 so they're next
+    db.moveToFrontOfQueue(queueId);
 
-    broadcast('on_deck', {
-        player: { ...db.getQueueEntry(playerId), player_name: player.name },
-        timeoutSeconds: 9999, // No timeout for admin-set challenger
-        queue: db.getQueue()
-    });
-    broadcast('queue_updated', { queue: db.getQueue() });
+    // Now call next challenger — this will auto-start the game
+    callNextChallenger();
 
-    console.log(`🔧 Admin set ${player.name} as challenger`);
-    return { success: true, message: `${player.name} set as next challenger` };
+    console.log(`🔧 Admin set ${player.name} as challenger (game auto-started)`);
+    return { success: true, message: `${player.name} set as challenger — game started` };
+}
+
+/**
+ * Admin removes the current challenger from an active game.
+ * The game is recorded as no_show (doesn't count as a real game).
+ * The same Chess960 position is reused for the next challenger.
+ */
+function adminRemoveChallenger() {
+    const gameId = parseInt(db.getConfig('current_game_id') || '0');
+    if (!gameId) return { error: 'No active game' };
+
+    const game = db.getActiveGame();
+    if (!game) return { error: 'Game not found' };
+    if (game.result) return { error: 'Game already finalized' };
+
+    console.log(`🔧 Admin removing challenger ${game.challenger_name} from Game #${gameId}`);
+    
+    // Finalize as no_show — this keeps the position and calls next challenger
+    return finalizeGameResult(gameId, 'no_show');
 }
 
 // ============================================================
@@ -900,6 +966,7 @@ module.exports = {
     adminOverrideResult,
     adminUndoGame,
     adminSetChallenger,
+    adminRemoveChallenger,
     // State
     getThoneState,
     // Admin

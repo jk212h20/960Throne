@@ -55,6 +55,7 @@
                 <%= state.game.king_name %> <span class="text-gray-500">vs</span> <%= state.game.challenger_name %>
             </div>
             <div class="text-sm text-gray-500 mt-1">Position #<%= state.game.chess960_position %></div>
+            <div class="text-sm text-yellow-400 mt-1">⏱️ Started <span id="player-game-elapsed">0:00</span> ago</div>
             <div class="btn-gold inline-block mt-3 text-sm">Report Result →</div>
         </a>
         <% } %>
@@ -296,6 +297,22 @@
         }, 1000);
         <% } %>
 
+        // Game elapsed timer on player dashboard
+        <% if (state.game && state.game.started_at && (state.game.king_id === player.id || state.game.challenger_id === player.id)) { %>
+        (function() {
+            const gameStart = new Date('<%- state.game.started_at %><%- state.game.started_at.endsWith("Z") ? "" : "Z" %>').getTime();
+            const el = document.getElementById('player-game-elapsed');
+            function tickGame() {
+                const sec = Math.floor((Date.now() - gameStart) / 1000);
+                const m = Math.floor(sec / 60);
+                const s = sec % 60;
+                if (el) el.textContent = m + ':' + String(s).padStart(2, '0');
+            }
+            tickGame();
+            setInterval(tickGame, 1000);
+        })();
+        <% } %>
+
         // Socket events — reload on any state change
         socket.on('game_started', (data) => {
             if (data.king.id === playerId || data.challenger.id === playerId) {
@@ -384,21 +401,36 @@
                 } else {
                     // Fallback: use facingMode constraint
                     await html5QrCode.start(
-                        { facingMode: 'environment' },
+                        { facingMode: { exact: 'environment' } },
                         config,
                         onScanSuccess
                     );
                 }
 
-                // After starting, try to apply zoom to 1x (main camera) if supported
+                // After starting, force zoom to 2x for better QR focus on phones
+                // Many phones default to ultra-wide (0.5x); zoom 2.0 hits the main lens
                 try {
                     const track = html5QrCode.getRunningTrackCameraCapabilities();
                     if (track && track.zoomFeature && track.zoomFeature().isSupported()) {
                         const zoomCap = track.zoomFeature();
-                        // Set zoom to minimum (1x = main camera, not digital zoom)
-                        await zoomCap.apply(zoomCap.min());
+                        // Aim for 2x zoom (main camera on most phones)
+                        const target = Math.min(2.0, zoomCap.max());
+                        await zoomCap.apply(Math.max(target, zoomCap.min()));
                     }
                 } catch (e) { /* zoom not supported, that's fine */ }
+
+                // Also try via raw MediaStreamTrack constraints
+                try {
+                    const videoEl = document.querySelector('#qr-reader video');
+                    if (videoEl && videoEl.srcObject) {
+                        const videoTrack = videoEl.srcObject.getVideoTracks()[0];
+                        const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+                        if (caps.zoom) {
+                            const target = Math.min(2.0, caps.zoom.max);
+                            await videoTrack.applyConstraints({ advanced: [{ zoom: Math.max(target, caps.zoom.min) }] });
+                        }
+                    }
+                } catch (e) { /* constraints not supported */ }
 
             } catch (err) {
                 console.error('Scanner error:', err);
