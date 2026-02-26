@@ -7,6 +7,13 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Piece Display Corrections (Feb 26, 2026)
+- **White square on right**: Board squares now alternate dark→light (left to right) so rightmost square (h1) is always light — matching chess convention.
+- **King's color pieces**: Display uses white pieces (♔♕♖♗♘) when king is white, black pieces (♚♛♜♝♞) when king is black. Challenger sees what to mirror.
+- **Board mirroring**: When king plays black, piece order is reversed (viewed from black's perspective: h-file on left, a-file on right).
+- **Label**: Shows "⬜ White's pieces (challenger mirrors)" or "⬛ Black's pieces (challenger mirrors)".
+- Files changed: `throne.ejs`, `throne-live.ejs`, `game.ejs`
+
 ### Random Color Assignment (Feb 26, 2026)
 - **King gets random color each game**: `king_color` column in `games` table, randomly assigned white or black (50/50) at game creation.
 - **Player view**: game.ejs shows "playing ⬜ White" or "⬛ Black" under their role.
