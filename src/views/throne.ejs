@@ -9,6 +9,10 @@
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; overflow: hidden; }
         .chess-piece { font-size: 2.5rem; line-height: 1; }
+        .chess-piece-white { color: #fff; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 3px rgba(0,0,0,0.5); }
+        .chess-piece-black { color: #1a1a1a; }
+        .color-box-white { display: inline-block; background: #fff; color: #1a1a1a; padding: 2px 10px; border-radius: 4px; border: 2px solid #fff; }
+        .color-box-black { display: inline-block; background: #1a1a1a; color: #fff; padding: 2px 10px; border-radius: 4px; border: 2px solid #555; }
         @keyframes satsGlow { 0%,100% { text-shadow: 0 0 10px #FFD700; } 50% { text-shadow: 0 0 30px #FFD700, 0 0 60px #FFD700; } }
         .sats-glow { animation: satsGlow 2s ease-in-out infinite; }
     </style>
@@ -80,12 +84,10 @@
                     <div class="text-lg font-mono text-gray-400 mb-2">Game #<%= state.stats.totalGames + 1 %></div>
                     <% const kc = state.game.king_color || 'white'; %>
                     <div class="flex items-center justify-center gap-4 mb-4">
-                        <div class="text-2xl">
-                            <span class="text-throne-gold font-bold">👑 <%= state.game.king_name %></span>
-                            <span class="text-xs align-middle ml-1 <%= kc === 'white' ? 'text-white' : 'text-gray-400' %>"><%= kc === 'white' ? '⬜' : '⬛' %></span>
-                            <span class="text-gray-500 mx-3">vs</span>
-                            <span class="text-xs align-middle mr-1 <%= kc === 'white' ? 'text-gray-400' : 'text-white' %>"><%= kc === 'white' ? '⬛' : '⬜' %></span>
-                            <span class="text-white font-bold">⚔️ <%= state.game.challenger_name %></span>
+                        <div class="text-2xl flex items-center gap-3">
+                            <span class="<%= kc === 'white' ? 'color-box-white' : 'color-box-black' %> text-xl font-bold">👑 <%= state.game.king_name %></span>
+                            <span class="text-gray-500">vs</span>
+                            <span class="<%= kc === 'white' ? 'color-box-black' : 'color-box-white' %> text-xl font-bold">⚔️ <%= state.game.challenger_name %></span>
                         </div>
                     </div>
                     <!-- Chess960 Board — shows king's pieces so challenger can mirror -->
@@ -94,19 +96,18 @@
                         <%
                           const pieces = state.game.position.pieces;
                           const isKingWhite = kc === 'white';
-                          // White pieces for white king, black pieces for black king
-                          const wPieces = {R:'♖',N:'♘',B:'♗',Q:'♕',K:'♔'};
-                          const bPieces = {R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚'};
-                          const displayPieces = isKingWhite ? wPieces : bPieces;
+                          // Always use filled pieces (♚♛♜♝♞) — style color via CSS
+                          const filledPieces = {R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚'};
                           // If king is black, mirror the board (show from black's perspective)
                           const orderedPieces = isKingWhite ? pieces : [...pieces].reverse();
                           const fileLabels = isKingWhite ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
+                          const pieceColorClass = isKingWhite ? 'chess-piece-white' : 'chess-piece-black';
                         %>
-                        <div class="text-xs text-gray-500 mb-2"><%= isKingWhite ? '⬜' : '⬛' %> <%= kc.charAt(0).toUpperCase() + kc.slice(1) %>'s pieces (challenger mirrors)</div>
+                        <div class="text-xs text-gray-500 mb-2"><%= kc.charAt(0).toUpperCase() + kc.slice(1) %>'s pieces — challenger mirrors</div>
                         <div class="flex gap-1" id="chess-board">
                             <% orderedPieces.forEach((p, i) => { %>
-                            <div class="w-16 h-16 flex items-center justify-center rounded <%= i % 2 === 0 ? 'bg-amber-800' : 'bg-amber-100' %>">
-                                <span class="chess-piece <%= isKingWhite ? 'text-gray-900' : 'text-gray-900' %>"><%= displayPieces[p] || p %></span>
+                            <div class="w-16 h-16 flex items-center justify-center rounded <%= i % 2 === 0 ? 'bg-amber-700' : 'bg-amber-100' %>">
+                                <span class="chess-piece <%= pieceColorClass %>"><%= filledPieces[p] || p %></span>
                             </div>
                             <% }) %>
                         </div>
