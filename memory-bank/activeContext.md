@@ -7,6 +7,14 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### QR Scanner Camera Fix (Feb 25, 2026)
+- **Bug**: QR scanner opened the ultra-wide camera on iPhones, couldn't focus on QR codes
+- **Fix**: Updated `getUserMedia` constraints in `player.ejs`:
+  - `facingMode: { exact: 'environment' }` (strict rear camera)
+  - `width/height: { ideal: 1920/1080 }` nudges browser toward main camera (not ultra-wide)
+  - Enables continuous autofocus when supported
+  - Graceful fallback if `exact` constraint fails on some devices
+
 ### Non-Expiring Sessions + Optional Email (Feb 25, 2026)
 - Session cookies extended from 7 days → 10 years (effectively never expire)
 - Admin cookies also extended to 10 years
