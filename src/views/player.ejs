@@ -271,7 +271,7 @@
 
         // Live sat counter for king — derives from crowned_at (single source of truth)
         <% if (state.king && state.king.id === player.id && state.reign) { %>
-        const reignStart = new Date('<%- state.reign.crowned_at %>').getTime();
+        const reignStart = new Date('<%- state.reign.crowned_at %><%- state.reign.crowned_at.endsWith("Z") ? "" : "Z" %>').getTime();
         const satRate = <%- state.config.satRate %>;
         function updateKingSats() {
             const reignSec = Math.floor((Date.now() - reignStart) / 1000);
@@ -287,7 +287,7 @@
         <% if (queueEntry && queueEntry.status === 'on_deck') { %>
         let timeLeft = <%- state.config.queueTimeout %>;
         <% if (queueEntry.on_deck_since) { %>
-        timeLeft -= Math.floor((Date.now() - new Date('<%- queueEntry.on_deck_since %>').getTime()) / 1000);
+        timeLeft -= Math.floor((Date.now() - new Date('<%- queueEntry.on_deck_since %>Z').getTime()) / 1000);
         <% } %>
         const timerEl = document.getElementById('on-deck-timer');
         setInterval(() => {

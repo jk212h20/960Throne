@@ -187,8 +187,8 @@
 
     <script>
         const socket = io();
-        let reignStart = <%- state.reign ? `new Date('${state.reign.crowned_at}').getTime()` : 'null' %>;
-        let gameStart = <%- state.game ? `new Date('${state.game.started_at}').getTime()` : 'null' %>;
+        let reignStart = <%- state.reign ? `new Date('${state.reign.crowned_at}${state.reign.crowned_at.endsWith('Z') ? '' : 'Z'}').getTime()` : 'null' %>;
+        let gameStart = <%- state.game ? `new Date('${state.game.started_at}${state.game.started_at.endsWith('Z') ? '' : 'Z'}').getTime()` : 'null' %>;
         const satRate = <%- state.config.satRate %>;
 
         // Live counters — sats accumulate continuously from crowning, not just during games

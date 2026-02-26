@@ -12,13 +12,15 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 - **Root cause**: EJS `<%= %>` tags HTML-escaped JavaScript values inside `<script>` blocks, turning quotes into `&#39;` etc., causing `SyntaxError: Unexpected token '&'` that broke the entire counter script
 - **Fix**: Changed to `<%- %>` (unescaped) for `reignStart`, `gameStart`, and `satRate` JS variables in both `throne.ejs` and `throne-live.ejs`
 
-### QR Scanner Camera Fix (Feb 25, 2026)
-- **Bug**: QR scanner opened the ultra-wide camera on iPhones, couldn't focus on QR codes
-- **Fix**: Updated `getUserMedia` constraints in `player.ejs`:
-  - `facingMode: { exact: 'environment' }` (strict rear camera)
-  - `width/height: { ideal: 1920/1080 }` nudges browser toward main camera (not ultra-wide)
-  - Enables continuous autofocus when supported
-  - Graceful fallback if `exact` constraint fails on some devices
+### QR Scanner Complete Rewrite (Feb 25, 2026)
+- **Bug**: QR scanner opened wrong camera (ultra-wide on iPhones), couldn't scan QR codes
+- **Fix**: Replaced `jsQR` (manual frame-by-frame processing) with `html5-qrcode` library:
+  - Enumerates cameras, filters out ultra-wide by label ("Back Camera" vs "Back Ultra Wide Camera")
+  - Uses native `BarcodeDetector` API when available (Safari/Chrome — much faster/reliable)
+  - Proper continuous autofocus and zoom control (sets zoom to 1x minimum)
+  - Shows scan region overlay for better UX
+  - CDN: `https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js`
+- Also fixed EJS escaping in player.ejs `<script>` block (`<%-` instead of `<%=` for JS values)
 
 ### Non-Expiring Sessions + Optional Email (Feb 25, 2026)
 - Session cookies extended from 7 days → 10 years (effectively never expire)
