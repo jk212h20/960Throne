@@ -49,7 +49,12 @@
                 <% if (state.game) { %>
                 <div class="mb-3 p-3 bg-throne-darker rounded-lg">
                     <div class="text-sm text-gray-400">Active Game #<%= state.game.id %></div>
-                    <div>👑 <%= state.game.king_name %> <%= (state.game.king_color || 'white') === 'white' ? '⬜' : '⬛' %> vs <%= (state.game.king_color || 'white') === 'white' ? '⬛' : '⬜' %> ⚔️ <%= state.game.challenger_name %></div>
+                    <% const adminKc = state.game.king_color || 'white'; %>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span style="display:inline-block;background:<%= adminKc === 'white' ? '#fff' : '#1a1a1a' %>;color:<%= adminKc === 'white' ? '#1a1a1a' : '#fff' %>;padding:1px 6px;border-radius:3px;border:1px solid <%= adminKc === 'white' ? '#fff' : '#555' %>;">👑 <%= state.game.king_name %></span>
+                        <span class="text-gray-500">vs</span>
+                        <span style="display:inline-block;background:<%= adminKc === 'white' ? '#1a1a1a' : '#fff' %>;color:<%= adminKc === 'white' ? '#fff' : '#1a1a1a' %>;padding:1px 6px;border-radius:3px;border:1px solid <%= adminKc === 'white' ? '#555' : '#fff' %>;">⚔️ <%= state.game.challenger_name %></span>
+                    </div>
                     <div class="text-xs text-gray-500">Position #<%= state.game.chess960_position %></div>
                     <div class="text-sm text-yellow-400 mt-1">⏱️ Started <span id="admin-game-elapsed">0:00</span> ago</div>
                     <% if (state.game.king_reported || state.game.challenger_reported) { %>
