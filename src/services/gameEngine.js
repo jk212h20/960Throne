@@ -387,13 +387,33 @@ function reportResult(playerId, result) {
             shouldFinalize = true;
             finalResult = updatedGame.king_reported;
         } else {
-            // Conflict! Notify admin
+            // Conflict! Clear both reports so players can re-submit, cancel any auto-confirm timer
+            if (winnerConfirmTimer) clearTimeout(winnerConfirmTimer);
+            winnerConfirmTimer = null;
+
+            const kingReported = updatedGame.king_reported;
+            const challengerReported = updatedGame.challenger_reported;
+
+            db.clearGameReports(gameId);
             db.createNotification('result_conflict',
-                `Game #${gameId}: King reported "${updatedGame.king_reported}" but Challenger reported "${updatedGame.challenger_reported}"`,
+                `Game #${gameId}: King reported "${kingReported}" but Challenger reported "${challengerReported}"`,
                 gameId);
-            broadcast('result_conflict', { gameId, game: updatedGame });
-            notifyAdmin(`⚠️ Result conflict in Game #${gameId}! King: ${updatedGame.king_reported}, Challenger: ${updatedGame.challenger_reported}`);
-            return { success: true, status: 'conflict', message: 'Results conflict. Admin has been notified.' };
+
+            const conflictData = {
+                gameId,
+                kingReported,
+                challengerReported,
+                kingName: updatedGame.king_name,
+                challengerName: updatedGame.challenger_name,
+            };
+            broadcast('result_conflict', conflictData);
+            notifyAdmin(`⚠️ Result conflict in Game #${gameId}! King: ${kingReported}, Challenger: ${challengerReported}`);
+            return {
+                success: true,
+                status: 'conflict',
+                message: 'Results don\'t match. Please verify and re-submit.',
+                ...conflictData,
+            };
         }
     } else if (isDrawReport) {
         // Only one side reported draw — wait for the other

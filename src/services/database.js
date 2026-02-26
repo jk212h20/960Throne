@@ -607,6 +607,11 @@ function reportGameResult(gameId, reporterId, result) {
     return getGameById(gameId);
 }
 
+function clearGameReports(gameId) {
+    db.run(`UPDATE games SET king_reported = NULL, challenger_reported = NULL WHERE id = ?`, [gameId]);
+    save();
+}
+
 function finalizeGame(gameId, result, satsEarned) {
     db.run(`UPDATE games SET result = ?, sats_earned = ?, ended_at = datetime('now') WHERE id = ?`,
         [result, satsEarned, gameId]);
@@ -947,6 +952,7 @@ module.exports = {
     getGameById,
     getActiveGame,
     reportGameResult,
+    clearGameReports,
     finalizeGame,
     getRecentGames,
     getPlayerGames,

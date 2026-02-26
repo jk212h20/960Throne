@@ -7,6 +7,13 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Result Conflict Self-Resolution (Feb 26, 2026)
+- **Conflict detection & player notification**: When king and challenger report incompatible results, both players now see a clear warning showing what each side reported, with buttons re-enabled so they can correct and re-submit.
+- **Reports cleared on conflict**: `db.clearGameReports(gameId)` wipes both `king_reported` and `challenger_reported` so the game accepts fresh reports. Auto-confirm timer is also cancelled.
+- **Socket broadcast**: `result_conflict` event now includes `kingReported`, `challengerReported`, `kingName`, `challengerName` — reaching the first reporter (who was on "pending") via Socket.io, while the second reporter gets it from the API response.
+- **UX messaging**: "Was that a mistake? Please verify and re-submit the correct result." — asks players to verify rather than discuss.
+- Files changed: `database.js` (added `clearGameReports`), `gameEngine.js` (conflict handling in `reportResult`), `game.ejs` (conflict UI + socket listener)
+
 ### Game Auto-Start, No-Show, Camera Fix, On-Deck Removal (Feb 25, 2026)
 - **QR Camera fix round 2**: Force 2x zoom after starting scanner to hit main camera lens (many phones default to ultra-wide). Also apply zoom via raw MediaStreamTrack constraints as fallback. Use `facingMode: { exact: 'environment' }` for stricter rear camera.
 - **On-deck step fully removed**: Players go straight from queue → active game. No 30-second "show up" timer. If they don't show, admin hits "No Show" to skip to next challenger.

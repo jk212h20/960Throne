@@ -122,6 +122,8 @@
                     status.textContent = data.error;
                     buttons.style.opacity = '1';
                     buttons.style.pointerEvents = 'auto';
+                } else if (data.status === 'conflict') {
+                    showConflict(data);
                 } else if (data.status === 'pending') {
                     status.className = 'mt-4 p-3 rounded-lg text-center bg-blue-900/50 border border-blue-700 text-blue-300';
                     status.textContent = data.message;
@@ -154,6 +156,37 @@
             setInterval(tickGame, 1000);
         })();
         <% } %>
+
+        // Show conflict warning and re-enable buttons
+        function showConflict(data) {
+            const buttons = document.getElementById('report-buttons');
+            const status = document.getElementById('report-status');
+
+            const resultLabels = {
+                king_won: 'King Won',
+                challenger_won: 'Challenger Won',
+                draw: 'Draw'
+            };
+
+            const kingSaid = resultLabels[data.kingReported] || data.kingReported;
+            const chalSaid = resultLabels[data.challengerReported] || data.challengerReported;
+
+            status.classList.remove('hidden');
+            status.className = 'mt-4 p-4 rounded-lg text-center bg-orange-900/60 border-2 border-orange-500 text-orange-200';
+            status.innerHTML = '<div class="text-lg font-bold mb-2">⚠️ Results Don\'t Match</div>' +
+                '<div class="text-sm mb-1">👑 ' + data.kingName + ' said: <strong>' + kingSaid + '</strong></div>' +
+                '<div class="text-sm mb-3">⚔️ ' + data.challengerName + ' said: <strong>' + chalSaid + '</strong></div>' +
+                '<div class="text-xs text-orange-300">Was that a mistake? Please verify and re-submit the correct result.</div>';
+
+            // Re-enable buttons so players can correct
+            buttons.style.opacity = '1';
+            buttons.style.pointerEvents = 'auto';
+        }
+
+        // Listen for conflict broadcast (reaches the first reporter who's still on pending)
+        socket.on('result_conflict', (data) => {
+            showConflict(data);
+        });
 
         // Redirect when game ends
         socket.on('game_ended', () => {
