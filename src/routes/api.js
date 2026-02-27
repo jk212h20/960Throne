@@ -485,6 +485,42 @@ router.get('/admin/accounting', requireAdmin, (req, res) => {
     res.json(audit);
 });
 
+// Venue Code QR Image
+router.get('/admin/venue-qr', requireAdmin, async (req, res) => {
+    const code = db.getActiveVenueCode();
+    if (!code) return res.status(404).json({ error: 'No active venue code' });
+    
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3960';
+    const joinUrl = `${baseUrl}/join?code=${code.code}`;
+    
+    const format = req.query.format || 'json';
+    
+    if (format === 'png') {
+        // Return raw PNG image
+        const pngBuffer = await QRCode.toBuffer(joinUrl, {
+            width: 600,
+            margin: 2,
+            color: { dark: '#000000', light: '#ffffff' },
+        });
+        res.set('Content-Type', 'image/png');
+        return res.send(pngBuffer);
+    }
+    
+    // Return data URL + metadata
+    const qrDataUrl = await QRCode.toDataURL(joinUrl, {
+        width: 600,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+    });
+    
+    res.json({ 
+        code: code.code,
+        url: joinUrl,
+        qr: qrDataUrl,
+        expiresAt: code.expires_at
+    });
+});
+
 router.get('/admin/lightning-status', requireAdmin, async (req, res) => {
     const status = await lightning.isConfigured();
     if (status.configured) {

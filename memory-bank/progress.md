@@ -25,7 +25,7 @@
 
 ### High Priority
 - [ ] End-to-end test of full game flow (crown king → start game → report → new king)
-- [ ] Configure Voltage LND credentials and test Lightning payouts
+- [x] Configure Voltage LND credentials and test Lightning payouts (node "predictions", 620k sats)
 - [ ] Add Railway persistent volume (mount `/app/data` for SQLite persistence across deploys)
 - [x] Set `BASE_URL` env var on Railway to `https://960throne-production.up.railway.app`
 - [ ] Connect Railway to GitHub for auto-deploy (currently manual `railway up`)

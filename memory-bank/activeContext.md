@@ -1,6 +1,6 @@
 # 960 Throne — Active Context
 
-## Current State (Feb 25, 2026)
+## Current State (Feb 27, 2026)
 MVP is **deployed to Railway** and live at https://960throne-production.up.railway.app
 
 **GitHub repo**: https://github.com/jk212h20/960Throne (public)
@@ -63,9 +63,36 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 | `src/routes/api.js` | All REST API endpoints (auth, game, admin) |
 | `src/routes/pages.js` | Page rendering + auth flow routing |
 
+## Next Steps (TODO for next session)
+
+### 1. Event Timeline Page (`/timeline`) — HIGH PRIORITY
+Build a scrollable chronological page showing the entire event history:
+- Each game as a timeline entry: king vs challenger, result (win/loss/draw), Chess960 position
+- Color-coded reigns (each king gets a distinct color band)
+- King transition markers (crown icon when a new king is crowned)
+- Win = green, Loss = red, Draw = gray markers
+- Glanceable summary stats at top (total games, total kings, longest reign, etc.)
+- Should work for both mobile and desktop viewing
+- Route: `GET /timeline`, public page (no auth required)
+- Needs: DB query for all games + reigns ordered by time, new EJS template
+
+### 2. Admin Panel UI Improvements — MEDIUM PRIORITY  
+- **Venue Code QR display**: API endpoint already added (`GET /api/admin/venue-qr`), need to show QR image in admin panel venue code section + "Print QR" button for full-screen printable view
+- **Lightning status panel**: Show LND node connection status, alias, channel balance in admin
+- **Payout history section**: Show recent payouts with status (completed/failed) in admin
+
+### 3. Mobile Responsiveness Polish — MEDIUM PRIORITY
+- Review all views on narrow viewports (especially game.ejs, leaderboard.ejs)
+- Ensure buttons are tap-friendly (min 44px touch targets)
+- Check text readability on small screens
+
+### 4. Error Handling & Resilience — LOW PRIORITY
+- Rate limiting on API endpoints
+- Server crash mid-game recovery
+- Duplicate tab detection for same player
+
 ## Known Issues Still Open
 1. **Railway deploy is manual** — `railway up --detach` needed after each push (auto-deploy from GitHub not configured)
-2. **Lightning payouts not tested** — Voltage LND credentials not configured
 
 ## Architecture
 ```
@@ -75,5 +102,5 @@ Venue Screen → /throne (auto-updates)
 Admin Phone → /admin (game control)
                     ↕
 Auth: LNURL-auth (Lightning wallet signs challenge)
-Payouts: Voltage LND (not yet configured)
+Payouts: Voltage LND node "predictions" (configured, 620k sats channel balance)
 ```
