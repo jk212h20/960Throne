@@ -358,16 +358,18 @@ function mergeAccounts(targetPlayerId, sourcePlayerId) {
         SELECT 
             COUNT(*) as games_played,
             SUM(CASE WHEN (king_id = ? AND result = 'king_won') OR (challenger_id = ? AND result = 'challenger_won') THEN 1 ELSE 0 END) as games_won,
+            SUM(CASE WHEN (king_id = ? AND result = 'challenger_won') OR (challenger_id = ? AND result = 'king_won') THEN 1 ELSE 0 END) as games_lost,
+            SUM(CASE WHEN result = 'draw' THEN 1 ELSE 0 END) as games_drawn,
             SUM(CASE WHEN king_id = ? THEN 1 ELSE 0 END) as times_as_king,
             COALESCE(SUM(CASE WHEN king_id = ? THEN sats_earned ELSE 0 END), 0) as total_sats_earned
         FROM games 
-        WHERE (king_id = ? OR challenger_id = ?) AND result IS NOT NULL
-    `, [targetPlayerId, targetPlayerId, targetPlayerId, targetPlayerId, targetPlayerId, targetPlayerId]);
+        WHERE (king_id = ? OR challenger_id = ?) AND result IS NOT NULL AND result != 'no_show'
+    `, [targetPlayerId, targetPlayerId, targetPlayerId, targetPlayerId, targetPlayerId, targetPlayerId, targetPlayerId, targetPlayerId]);
 
     if (stats.length > 0 && stats[0].values.length > 0) {
         const s = stats[0].values[0];
-        db.run(`UPDATE players SET games_played = ?, games_won = ?, times_as_king = ?, total_sats_earned = ? WHERE id = ?`,
-            [s[0], s[1], s[2], s[3], targetPlayerId]);
+        db.run(`UPDATE players SET games_played = ?, games_won = ?, games_lost = ?, games_drawn = ?, times_as_king = ?, total_sats_earned = ? WHERE id = ?`,
+            [s[0], s[1], s[2], s[3], s[4], s[5], targetPlayerId]);
     }
 
     // Delete source player
@@ -832,6 +834,42 @@ function getAllPayouts() {
 // Stats
 // ============================================================
 
+function getTimelineData() {
+    // Get all finalized games in chronological order with reign info
+    const gamesResult = db.exec(`
+        SELECT g.id, g.king_id, g.challenger_id, g.chess960_position, g.king_color,
+               g.started_at, g.ended_at, g.result, g.sats_earned, g.reign_id,
+               k.name as king_name, c.name as challenger_name
+        FROM games g
+        JOIN players k ON g.king_id = k.id
+        JOIN players c ON g.challenger_id = c.id
+        WHERE g.result IS NOT NULL AND g.result != 'no_show'
+        ORDER BY g.started_at ASC
+    `);
+    const games = gamesResult.length > 0 ? rowsToObjects(gamesResult[0]) : [];
+
+    // Get all reigns in chronological order
+    const reignsResult = db.exec(`
+        SELECT r.id, r.king_id, r.crowned_at, r.dethroned_at,
+               r.total_reign_seconds, r.total_sats_earned, r.consecutive_wins, r.games_played,
+               p.name as king_name
+        FROM reigns r
+        JOIN players p ON r.king_id = p.id
+        ORDER BY r.crowned_at ASC
+    `);
+    const reigns = reignsResult.length > 0 ? rowsToObjects(reignsResult[0]) : [];
+
+    // Summary stats
+    const totalGames = games.length;
+    const totalKings = reigns.length;
+    const longestReign = reigns.reduce((max, r) => 
+        (r.total_reign_seconds || 0) > (max?.total_reign_seconds || 0) ? r : max, null);
+    const mostWinsInReign = reigns.reduce((max, r) =>
+        (r.consecutive_wins || 0) > (max?.consecutive_wins || 0) ? r : max, null);
+
+    return { games, reigns, totalGames, totalKings, longestReign, mostWinsInReign };
+}
+
 function getEventStats() {
     const totalGames = db.exec(`SELECT COUNT(*) FROM games WHERE result IS NOT NULL`);
     const totalPlayers = db.exec(`SELECT COUNT(*) FROM players WHERE games_played > 0`);
@@ -996,4 +1034,5 @@ module.exports = {
     // Stats
     getEventStats,
     getAccountingAudit,
+    getTimelineData,
 };

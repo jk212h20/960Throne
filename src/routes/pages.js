@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../services/database');
 const gameEngine = require('../services/gameEngine');
+const chess960 = require('../services/chess960');
 
 // Middleware to attach player to all page renders
 function attachPlayer(req, res, next) {
@@ -108,6 +109,28 @@ router.get('/join', (req, res) => {
         return res.redirect('/?join=true&code=' + (code || ''));
     }
     res.render('join', { player: req.player, venueCode: code || '' });
+});
+
+// Event Timeline (public)
+router.get('/timeline', (req, res) => {
+    const timeline = db.getTimelineData();
+    const state = gameEngine.getThoneState();
+
+    // Pre-compute Chess960 piece arrays for all unique positions used in games
+    const positionPieces = {};
+    timeline.games.forEach(g => {
+        if (!positionPieces[g.chess960_position]) {
+            positionPieces[g.chess960_position] = chess960.positionFromNumber(g.chess960_position);
+        }
+    });
+
+    res.render('timeline', {
+        timeline,
+        positionPieces,
+        currentKing: state.king,
+        liveSats: state.liveSats,
+        player: req.player,
+    });
 });
 
 // Leaderboard

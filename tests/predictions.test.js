@@ -338,24 +338,37 @@ async function runTests() {
     // ============================================================
     console.log('\n🐛 Potential Bugs / Edge Cases\n');
 
-    test('P26', 'mergeAccounts does NOT recalculate games_lost or games_drawn', () => {
-        // Read the mergeAccounts function's SQL — it only SELECTs games_played, games_won, times_as_king, total_sats_earned
-        // We verify by creating two players with known stats, merging, and checking
+    test('P26', 'mergeAccounts NOW recalculates games_lost and games_drawn (bug fixed)', () => {
+        // Previously: mergeAccounts only recalculated games_played, games_won, times_as_king, total_sats_earned
+        // Fix: Now also recalculates games_lost and games_drawn from game records
+        // We verify by creating players with game records and merging them
         const target = db.createPlayer('MergeTarget', '');
         const source = db.createPlayer('MergeSource', '');
+        const opponent = db.createPlayer('MergeOpponent', '');
 
-        // Give source some losses
-        db.updatePlayerStats(source, { games_played: 5, games_lost: 3, games_drawn: 1 });
-        db.updatePlayerStats(target, { games_played: 2, games_lost: 1, games_drawn: 0 });
+        // Create actual game records so the recalculation has data
+        const reignId = db.createReign(opponent);
+        // Source lost a game as challenger (king_won means challenger lost)
+        const g1 = db.createGame(opponent, source, 100, reignId);
+        db.finalizeGame(g1, 'king_won', 0);
+        // Source drew a game as king
+        const g2 = db.createGame(source, opponent, 200, reignId);
+        db.finalizeGame(g2, 'draw', 0);
+        // Target lost a game as king (challenger_won means king lost)
+        const g3 = db.createGame(target, opponent, 300, reignId);
+        db.finalizeGame(g3, 'challenger_won', 0);
 
         db.mergeAccounts(target, source);
 
         const merged = db.getPlayerById(target);
-        // games_played and games_won are recalculated from game records (which is 0 since we didn't create game records)
-        // But games_lost and games_drawn are NOT touched by merge — they keep the target's original values
-        assert.strictEqual(merged.games_lost, 1, `games_lost should remain at target's original value (1), got ${merged.games_lost}`);
-        assert.strictEqual(merged.games_drawn, 0, `games_drawn should remain at target's original value (0), got ${merged.games_drawn}`);
-        // This confirms the bug: source's 3 losses and 1 draw are lost in the merge
+        // After merge: target now owns all 3 games
+        // g1: target (was source) lost as challenger → games_lost +1
+        // g2: target (was source) drew as king → games_drawn +1
+        // g3: target lost as king → games_lost +1
+        // Total: games_played=3, games_lost=2, games_drawn=1
+        assert.strictEqual(merged.games_played, 3, `games_played should be 3, got ${merged.games_played}`);
+        assert.strictEqual(merged.games_lost, 2, `games_lost should be 2 (recalculated), got ${merged.games_lost}`);
+        assert.strictEqual(merged.games_drawn, 1, `games_drawn should be 1 (recalculated), got ${merged.games_drawn}`);
     });
 
     test('P27', 'buildFEN uses same arrangement for both sides (Chess960 standard)', () => {

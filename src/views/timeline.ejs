@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Timeline — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+        
+        /* Timeline vertical line */
+        .timeline-line {
+            position: absolute;
+            left: 24px;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(to bottom, #FFD700 0%, #4a0e8f 50%, #FFD700 100%);
+            border-radius: 2px;
+        }
+        @media (min-width: 640px) {
+            .timeline-line { left: 31px; }
+        }
+
+        /* Timeline node dot */
+        .timeline-node {
+            position: absolute;
+            left: 16px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 3px solid #0f0f1a;
+            z-index: 2;
+        }
+        @media (min-width: 640px) {
+            .timeline-node { left: 22px; width: 22px; height: 22px; }
+        }
+        .timeline-node.crown { background: #FFD700; box-shadow: 0 0 12px rgba(255, 215, 0, 0.5); }
+        .timeline-node.king-won { background: #2ecc71; }
+        .timeline-node.challenger-won { background: #e63946; }
+        .timeline-node.draw { background: #6b7280; }
+
+        /* Reign color bands */
+        .reign-band {
+            position: absolute;
+            left: 0;
+            right: 0;
+            opacity: 0.06;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+
+        /* Piece display mini board */
+        .mini-pieces {
+            display: inline-flex;
+            gap: 1px;
+            font-size: 14px;
+            line-height: 1;
+        }
+        .mini-pieces .sq {
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+        }
+        @media (min-width: 640px) {
+            .mini-pieces .sq { width: 22px; height: 22px; font-size: 16px; }
+        }
+        .sq-light { background: #f0d9b5; }
+        .sq-dark { background: #b58863; }
+
+        /* Summary stat cards */
+        .stat-card {
+            background: #1a1a2e;
+            border: 1px solid #2a2a3e;
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+        }
+        .stat-card .stat-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #FFD700;
+        }
+        .stat-card .stat-label {
+            font-size: 0.7rem;
+            color: #9ca3af;
+            margin-top: 2px;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-throne-darker p-4">
+    <div class="max-w-2xl mx-auto">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-4">
+            <h1 class="text-2xl font-bold">📜 Event Timeline</h1>
+            <a href="/leaderboard" class="text-gray-500 hover:text-throne-gold text-sm">🏆 Leaderboard</a>
+        </div>
+
+        <% if (timeline.totalGames === 0) { %>
+        <!-- Empty state -->
+        <div class="card text-center py-12">
+            <div class="text-4xl mb-4">🏰</div>
+            <h2 class="text-xl font-bold text-gray-400 mb-2">No Games Yet</h2>
+            <p class="text-gray-500">The throne awaits its first king. Games will appear here as they're played.</p>
+        </div>
+        <% } else { %>
+
+        <!-- Summary Stats -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <div class="stat-card">
+                <div class="stat-value"><%= timeline.totalGames %></div>
+                <div class="stat-label">Games Played</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value"><%= timeline.totalKings %></div>
+                <div class="stat-label">Kings Crowned</div>
+            </div>
+            <div class="stat-card">
+                <% if (timeline.longestReign) { %>
+                <div class="stat-value"><%= formatDuration(timeline.longestReign.total_reign_seconds) %></div>
+                <div class="stat-label"><%= timeline.longestReign.king_name %>'s Reign</div>
+                <% } else { %>
+                <div class="stat-value">—</div>
+                <div class="stat-label">Longest Reign</div>
+                <% } %>
+            </div>
+            <div class="stat-card">
+                <% if (timeline.mostWinsInReign) { %>
+                <div class="stat-value"><%= timeline.mostWinsInReign.consecutive_wins %></div>
+                <div class="stat-label"><%= timeline.mostWinsInReign.king_name %>'s Streak</div>
+                <% } else { %>
+                <div class="stat-value">—</div>
+                <div class="stat-label">Best Win Streak</div>
+                <% } %>
+            </div>
+        </div>
+
+        <!-- Reign Summary Bar -->
+        <div class="mb-6">
+            <h2 class="text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Reign History</h2>
+            <div class="flex rounded-lg overflow-hidden h-8 border border-gray-800">
+                <%
+                    // Color palette for reigns — cycle through for each unique king
+                    const reignColors = ['#FFD700', '#e63946', '#2ecc71', '#3b82f6', '#f97316', '#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b', '#6366f1'];
+                    const kingColorMap = {};
+                    let colorIdx = 0;
+                    const totalSeconds = timeline.reigns.reduce((sum, r) => sum + (r.total_reign_seconds || 1), 0);
+                    
+                    timeline.reigns.forEach(r => {
+                        if (!kingColorMap[r.king_id]) {
+                            kingColorMap[r.king_id] = reignColors[colorIdx % reignColors.length];
+                            colorIdx++;
+                        }
+                    });
+                %>
+                <% timeline.reigns.forEach((r, i) => { %>
+                    <% const pct = Math.max(((r.total_reign_seconds || 1) / totalSeconds) * 100, 2); %>
+                    <div style="width: <%= pct %>%; background: <%= kingColorMap[r.king_id] %>; opacity: 0.7;"
+                         class="flex items-center justify-center text-xs font-bold text-black truncate px-1"
+                         title="<%= r.king_name %>: <%= formatDuration(r.total_reign_seconds) %> (<%= r.consecutive_wins %> wins)">
+                        <% if (pct > 8) { %><%= r.king_name %><% } %>
+                    </div>
+                <% }) %>
+            </div>
+            <div class="flex flex-wrap gap-3 mt-2">
+                <% Object.entries(kingColorMap).forEach(([kingId, color]) => { %>
+                    <% const kingReigns = timeline.reigns.filter(r => r.king_id == kingId); %>
+                    <div class="flex items-center gap-1 text-xs text-gray-400">
+                        <div style="background: <%= color %>; width: 10px; height: 10px; border-radius: 3px; opacity: 0.7;"></div>
+                        <span><%= kingReigns[0].king_name %></span>
+                        <span class="text-gray-600">(<%= kingReigns.length %>×)</span>
+                    </div>
+                <% }) %>
+            </div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="relative" style="padding-left: 52px;">
+            <div class="timeline-line"></div>
+
+            <%
+                // Build timeline entries: interleave crownings and games
+                const entries = [];
+                
+                // Add crowning events
+                timeline.reigns.forEach((r, i) => {
+                    entries.push({
+                        type: 'crowning',
+                        time: r.crowned_at,
+                        reign: r,
+                        reignIndex: i,
+                        color: kingColorMap[r.king_id],
+                    });
+                });
+                
+                // Add game events
+                timeline.games.forEach(g => {
+                    entries.push({
+                        type: 'game',
+                        time: g.started_at,
+                        game: g,
+                        color: kingColorMap[g.king_id],
+                    });
+                });
+                
+                // Sort chronologically
+                entries.sort((a, b) => new Date(a.time) - new Date(b.time));
+
+                // Unicode piece map
+                const pieceMap = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘' };
+                const pieceMapBlack = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞' };
+            %>
+
+            <% entries.forEach((entry, idx) => { %>
+                <% if (entry.type === 'crowning') { %>
+                <!-- Crowning Event -->
+                <div class="relative mb-4">
+                    <div class="timeline-node crown" style="top: 8px;"></div>
+                    <div class="rounded-xl p-3 sm:p-4 border" style="border-color: <%= entry.color %>40; background: <%= entry.color %>10;">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-lg">👑</span>
+                            <span class="font-bold text-throne-gold text-base sm:text-lg"><%= entry.reign.king_name %></span>
+                            <span class="text-xs text-gray-400">crowned</span>
+                        </div>
+                        <div class="text-xs text-gray-500">
+                            <% if (entry.reign.dethroned_at) { %>
+                                Reign: <%= formatDuration(entry.reign.total_reign_seconds) %> · <%= entry.reign.consecutive_wins %> win<%= entry.reign.consecutive_wins !== 1 ? 's' : '' %> · <%= (entry.reign.total_sats_earned || 0).toLocaleString() %> sats
+                            <% } else { %>
+                                <span class="text-throne-gold font-bold">👑 Currently reigning</span>
+                                <% if (entry.reign.consecutive_wins > 0) { %>
+                                 · <%= entry.reign.consecutive_wins %> win<%= entry.reign.consecutive_wins !== 1 ? 's' : '' %>
+                                <% } %>
+                            <% } %>
+                        </div>
+                        <div class="text-xs text-gray-600 mt-1"><%= formatTime(entry.time) %></div>
+                    </div>
+                </div>
+
+                <% } else if (entry.type === 'game') { %>
+                <!-- Game Event -->
+                <%
+                    const g = entry.game;
+                    const isKingWin = g.result === 'king_won';
+                    const isChallengerWin = g.result === 'challenger_won';
+                    const isDraw = g.result === 'draw';
+                    const nodeClass = isKingWin ? 'king-won' : isChallengerWin ? 'challenger-won' : 'draw';
+                    const resultEmoji = isKingWin ? '🛡️' : isChallengerWin ? '⚔️' : '🤝';
+                    const resultText = isKingWin ? 'King defends' : isChallengerWin ? 'King dethroned!' : 'Draw';
+                    const resultColor = isKingWin ? 'text-green-400' : isChallengerWin ? 'text-red-400' : 'text-gray-400';
+                %>
+                <div class="relative mb-3">
+                    <div class="timeline-node <%= nodeClass %>" style="top: 10px;"></div>
+                    <div class="card !p-3 sm:!p-4 !border-gray-800">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex-1 min-w-0">
+                                <!-- Players -->
+                                <div class="flex items-center gap-1 text-sm sm:text-base flex-wrap">
+                                    <span class="font-bold <%= isKingWin || isDraw ? 'text-white' : 'text-gray-400' %> truncate"><%= g.king_name %></span>
+                                    <span class="text-gray-600 text-xs">vs</span>
+                                    <span class="font-bold <%= isChallengerWin ? 'text-white' : 'text-gray-400' %> truncate"><%= g.challenger_name %></span>
+                                </div>
+                                <!-- Result -->
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-sm"><%= resultEmoji %></span>
+                                    <span class="text-xs font-bold <%= resultColor %>"><%= resultText %></span>
+                                    <% if (g.sats_earned > 0) { %>
+                                    <span class="text-xs text-throne-gold font-mono"><%= g.sats_earned.toLocaleString() %> sats</span>
+                                    <% } %>
+                                </div>
+                            </div>
+                            <!-- Position mini-board -->
+                            <div class="flex-shrink-0 text-right">
+                                <%
+                                    // Render mini Chess960 position
+                                    const posNum = g.chess960_position;
+                                    // We compute pieces server-side and pass, or compute inline
+                                    // Since chess960.positionFromNumber isn't available in EJS, we pass pieces as data
+                                    const pieces = positionPieces[posNum];
+                                    const isWhiteKing = g.king_color === 'white';
+                                %>
+                                <div class="text-xs text-gray-500 mb-1">#<%= posNum %></div>
+                                <% if (pieces) { %>
+                                <div class="mini-pieces">
+                                    <% pieces.forEach((p, i) => { %>
+                                        <div class="sq <%= i % 2 === 0 ? 'sq-dark' : 'sq-light' %>">
+                                            <%= isWhiteKing ? (pieceMap[p] || p) : (pieceMapBlack[p] || p) %>
+                                        </div>
+                                    <% }) %>
+                                </div>
+                                <% } %>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-600 mt-1"><%= formatTime(g.started_at) %></div>
+                    </div>
+                </div>
+                <% } %>
+            <% }) %>
+
+            <% if (currentKing) { %>
+            <!-- Current State Indicator -->
+            <div class="relative mb-4">
+                <div class="timeline-node crown" style="top: 8px;"></div>
+                <div class="rounded-xl p-3 sm:p-4 border border-throne-gold/30 bg-throne-gold/5">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg animate-pulse-slow">👑</span>
+                        <span class="font-bold text-throne-gold"><%= currentKing.name %></span>
+                        <span class="text-xs text-gray-400">rules the throne</span>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">
+                        ⚡ Earning 21 sats/sec · <%= liveSats.toLocaleString() %> sats accumulated
+                    </div>
+                </div>
+            </div>
+            <% } %>
+        </div>
+
+        <% } %>
+
+        <!-- Footer Nav -->
+        <div class="flex justify-center gap-6 mt-8 mb-4 text-sm text-gray-500">
+            <a href="/live" class="hover:text-throne-gold transition-colors">👑 Throne</a>
+            <a href="/leaderboard" class="hover:text-throne-gold transition-colors">🏆 Leaderboard</a>
+            <a href="/queue" class="hover:text-throne-gold transition-colors">📋 Queue</a>
+        </div>
+    </div>
+
+    <%
+        // Helper functions (available in EJS scope)
+        function formatDuration(seconds) {
+            if (!seconds || seconds <= 0) return '0s';
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+            if (m > 0) return m + ':' + String(s).padStart(2, '0');
+            return s + 's';
+        }
+
+        function formatTime(isoStr) {
+            if (!isoStr) return '';
+            const d = new Date(isoStr);
+            const hours = d.getUTCHours();
+            const mins = d.getUTCMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            const h12 = hours % 12 || 12;
+            return h12 + ':' + String(mins).padStart(2, '0') + ' ' + ampm + ' UTC';
+        }
+    %>
+</body>
+</html>

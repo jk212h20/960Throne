@@ -7,45 +7,43 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Event Timeline Page + Admin QR (Feb 27, 2026)
+- **Timeline page (`/timeline`)**: Full chronological event history page — scrollable vertical timeline showing every game and king crowning. Features:
+  - Summary stats at top (total games, total kings, longest reign, best win streak)
+  - Color-coded reign history bar — visual proportional bar showing each king's reign duration with unique colors per player
+  - Timeline entries: crown nodes (gold) for crownings, green/red/gray dots for game results
+  - Mini Chess960 position display per game (using unicode pieces on alternating squares)
+  - Shows king color (white/black pieces) per game
+  - Current king indicator at bottom if someone is reigning
+  - Public page, no auth required
+  - New files: `src/views/timeline.ejs`, `db.getTimelineData()` in database.js
+  - Route added in `src/routes/pages.js`
+- **Admin Venue QR display**: Admin panel now shows the venue QR code image (from `/api/admin/venue-qr` endpoint) directly in the Venue Code section with a "Print QR" button that opens a clean printable full-page view
+- **Timeline navigation links**: Added 📜 Timeline links to leaderboard footer nav and admin header nav
+- **chess960 import**: Added `require('../services/chess960')` to pages.js for position piece rendering
+
 ### Piece Display Corrections (Feb 26, 2026)
 - **White square on right**: Board squares now alternate dark→light (left to right) so rightmost square (h1) is always light — matching chess convention.
-- **King's color pieces**: Display uses white pieces (♔♕♖♗♘) when king is white, black pieces (♚♛♜♝♞) when king is black. Challenger sees what to mirror.
-- **Board mirroring**: When king plays black, piece order is reversed (viewed from black's perspective: h-file on left, a-file on right).
-- **Label**: Shows "⬜ White's pieces (challenger mirrors)" or "⬛ Black's pieces (challenger mirrors)".
+- **King's color pieces**: Display uses white pieces (♔♕♖♗♘) when king is white, black pieces (♚♛♜♝♞) when king is black.
+- **Board mirroring**: When king plays black, piece order is reversed (viewed from black's perspective).
 - Files changed: `throne.ejs`, `throne-live.ejs`, `game.ejs`
 
 ### Random Color Assignment (Feb 26, 2026)
 - **King gets random color each game**: `king_color` column in `games` table, randomly assigned white or black (50/50) at game creation.
-- **Player view**: game.ejs shows "playing ⬜ White" or "⬛ Black" under their role.
-- **Spectator views**: throne.ejs, throne-live.ejs, admin.ejs show ⬜/⬛ next to player names in matchup.
-- **Socket broadcast**: `game_started` event includes `kingColor` field.
-- **DB migration**: `king_color TEXT` column auto-added to existing databases via `migrateSchema()`.
 - Files changed: `database.js`, `gameEngine.js`, `game.ejs`, `throne.ejs`, `throne-live.ejs`, `admin.ejs`
 
 ### Result Conflict Self-Resolution (Feb 26, 2026)
-- **Conflict detection & player notification**: When king and challenger report incompatible results, both players now see a clear warning showing what each side reported, with buttons re-enabled so they can correct and re-submit.
-- **Reports cleared on conflict**: `db.clearGameReports(gameId)` wipes both `king_reported` and `challenger_reported` so the game accepts fresh reports. Auto-confirm timer is also cancelled.
-- **Socket broadcast**: `result_conflict` event now includes `kingReported`, `challengerReported`, `kingName`, `challengerName` — reaching the first reporter (who was on "pending") via Socket.io, while the second reporter gets it from the API response.
-- **UX messaging**: "Was that a mistake? Please verify and re-submit the correct result." — asks players to verify rather than discuss.
-- Files changed: `database.js` (added `clearGameReports`), `gameEngine.js` (conflict handling in `reportResult`), `game.ejs` (conflict UI + socket listener)
+- **Conflict detection & player notification**: When king and challenger report incompatible results, both see a warning with buttons re-enabled to re-submit.
+- Files changed: `database.js`, `gameEngine.js`, `game.ejs`
 
-### Game Auto-Start, No-Show, Camera Fix, On-Deck Removal (Feb 25, 2026)
-- **QR Camera fix round 2**: Force 2x zoom after starting scanner to hit main camera lens (many phones default to ultra-wide). Also apply zoom via raw MediaStreamTrack constraints as fallback. Use `facingMode: { exact: 'environment' }` for stricter rear camera.
-- **On-deck step fully removed**: Players go straight from queue → active game. No 30-second "show up" timer. If they don't show, admin hits "No Show" to skip to next challenger.
-- **Games auto-start**: When a challenger is called from queue, the game starts immediately — no admin "Start Game" button needed. `callNextChallenger()` creates the game record automatically.
-- **No-show result**: New `no_show` result type — doesn't count as a real game, reuses same Chess960 position for next challenger. Available as 4th button on game.ejs and admin.ejs.
-- **Admin remove challenger**: `POST /api/admin/remove-challenger` — marks current game as no_show, same position reused.
-- **adminSetChallenger**: Now auto-starts a game immediately (ends any active game as no_show first).
-- **Elapsed timers**: All active game views (game.ejs, player.ejs, admin.ejs) show "⏱️ Started X:XX ago" with live ticking timer.
-- **Stale on-deck cleanup**: On server init, any stale on-deck entries are reset to 'waiting' via `resetOnDeckToWaiting()`.
+### Previous changes — see git log for details
+- Game auto-start, no-show handling, camera fix, on-deck removal
+- UTC timezone fix, QR scanner, non-expiring sessions, optional email
+- Railway volume mount, accounting audit, inline venue code scan
+- Admin cookie path fix, scheduled event reset, sat persistence
+- Lightning login (LNURL-auth) replacing PIN system
 
-### Previous changes (Feb 25, 2026) — see git log for details
-- UTC timezone fix for timers, QR scanner rewrite (html5-qrcode), non-expiring sessions, optional email
-- Railway volume mount fix, accounting audit flush-before-audit, inline venue code scan on player page
-- Admin cookie path fix, scheduled event reset, sat persistence/correctness, throne page split
-- Lightning login (LNURL-auth) replacing PIN system, auth architecture
-
-## Player Flow (updated)
+## Player Flow
 1. QR at venue → `/?code=XXXXX` → Lightning login QR displayed
 2. Player scans with Lightning wallet (Phoenix, Zeus, Alby, etc.)
 3. Wallet signs challenge → callback verified → session created
@@ -60,39 +58,33 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 | `src/services/auth/lightning.js` | LNURL-auth implementation |
 | `src/services/database.js` | SQLite schema, all DB queries |
 | `src/services/gameEngine.js` | Game state machine, sat tracking |
+| `src/services/chess960.js` | Chess960 position generation |
 | `src/routes/api.js` | All REST API endpoints (auth, game, admin) |
 | `src/routes/pages.js` | Page rendering + auth flow routing |
+| `src/views/timeline.ejs` | Event timeline page |
 
 ## Next Steps (TODO for next session)
 
-### 1. Event Timeline Page (`/timeline`) — HIGH PRIORITY
-Build a scrollable chronological page showing the entire event history:
-- Each game as a timeline entry: king vs challenger, result (win/loss/draw), Chess960 position
-- Color-coded reigns (each king gets a distinct color band)
-- King transition markers (crown icon when a new king is crowned)
-- Win = green, Loss = red, Draw = gray markers
-- Glanceable summary stats at top (total games, total kings, longest reign, etc.)
-- Should work for both mobile and desktop viewing
-- Route: `GET /timeline`, public page (no auth required)
-- Needs: DB query for all games + reigns ordered by time, new EJS template
-
-### 2. Admin Panel UI Improvements — MEDIUM PRIORITY  
-- **Venue Code QR display**: API endpoint already added (`GET /api/admin/venue-qr`), need to show QR image in admin panel venue code section + "Print QR" button for full-screen printable view
-- **Lightning status panel**: Show LND node connection status, alias, channel balance in admin
-- **Payout history section**: Show recent payouts with status (completed/failed) in admin
-
-### 3. Mobile Responsiveness Polish — MEDIUM PRIORITY
+### 1. Mobile Responsiveness Polish — MEDIUM PRIORITY
 - Review all views on narrow viewports (especially game.ejs, leaderboard.ejs)
 - Ensure buttons are tap-friendly (min 44px touch targets)
 - Check text readability on small screens
 
-### 4. Error Handling & Resilience — LOW PRIORITY
+### 2. Lightning Status Panel in Admin — MEDIUM PRIORITY
+- Show LND node connection status, alias, channel balance in admin panel
+- Useful for monitoring payout capacity during events
+
+### 3. Error Handling & Resilience — LOW PRIORITY
 - Rate limiting on API endpoints
 - Server crash mid-game recovery
 - Duplicate tab detection for same player
 
+### 4. Payout History in Admin — LOW PRIORITY
+- Show recent payouts with status (completed/failed) in admin panel
+
 ## Known Issues Still Open
 1. **Railway deploy is manual** — `railway up --detach` needed after each push (auto-deploy from GitHub not configured)
+2. **`getThoneState` typo** — Function name has typo (missing 'r'), used consistently everywhere so not a bug, just cosmetic
 
 ## Architecture
 ```

@@ -14,6 +14,7 @@
             <h1 class="text-2xl font-bold">🔧 Admin Panel</h1>
             <div class="flex gap-3">
                 <a href="/throne" class="text-sm text-gray-400 hover:text-throne-gold">👑 Throne</a>
+                <a href="/timeline" class="text-sm text-gray-400 hover:text-throne-gold">📜 Timeline</a>
                 <a href="/leaderboard" class="text-sm text-gray-400 hover:text-throne-gold">🏆 Board</a>
             </div>
         </div>
@@ -128,9 +129,17 @@
                     <div class="text-xs text-gray-500 mt-2">
                         Expires: <%= venueCode.expires_at ? new Date(venueCode.expires_at).toLocaleTimeString() : 'never' %>
                     </div>
-                    <div class="text-xs text-gray-500 mt-1">
-                        QR URL: <code class="text-gray-400"><%= process.env.BASE_URL || 'http://localhost:3000' %>/join?code=<%= venueCode.code %></code>
+                    <!-- Venue QR Code -->
+                    <div class="mt-3 mb-2">
+                        <img id="venue-qr-img" src="/api/admin/venue-qr" alt="Venue QR Code" 
+                             class="mx-auto rounded-lg" style="width: 180px; height: 180px; background: #fff; padding: 8px;">
                     </div>
+                    <div class="text-xs text-gray-500 mt-1">
+                        <code class="text-gray-400"><%= process.env.BASE_URL || 'http://localhost:3000' %>/?code=<%= venueCode.code %></code>
+                    </div>
+                    <button onclick="printVenueQR()" class="mt-2 text-xs bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded inline-flex items-center gap-1">
+                        🖨️ Print QR
+                    </button>
                 </div>
                 <% } %>
                 <button onclick="rotateCode()" class="btn-outline w-full text-sm">🔄 Generate New Code</button>
@@ -344,6 +353,37 @@
             if (await api('/api/admin/remove-challenger', {})) setTimeout(() => location.reload(), 500);
         }
         async function resolveNotification(id) { if (await api('/api/admin/notifications/resolve', { id })) setTimeout(() => location.reload(), 500); }
+
+        // Print Venue QR — opens fullscreen printable view
+        function printVenueQR() {
+            const qrImg = document.getElementById('venue-qr-img');
+            if (!qrImg) return;
+            const win = window.open('', '_blank');
+            win.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>960 Throne — Venue QR</title>
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: #fff; font-family: system-ui, sans-serif; }
+                    img { width: 400px; height: 400px; }
+                    h1 { font-size: 3rem; margin-bottom: 20px; }
+                    h2 { font-size: 1.5rem; color: #666; margin-top: 20px; }
+                    p { font-size: 1.2rem; color: #999; margin-top: 10px; }
+                    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+                </style>
+                </head>
+                <body>
+                    <h1>♟️ 960 Throne</h1>
+                    <img src="${qrImg.src}" alt="QR Code">
+                    <h2>Scan to Play!</h2>
+                    <p>King of the Hill Chess960</p>
+                </body>
+                </html>
+            `);
+            win.document.close();
+            setTimeout(() => win.print(), 500);
+        }
 
         // Accounting Audit
         async function loadAccounting() {

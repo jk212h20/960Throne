@@ -20,6 +20,8 @@
 - [x] Lightning integration code (Voltage LND via REST API)
 - [x] Tailwind CSS build with custom throne theme
 - [x] Notification system for admin (draw disputes, queue timeouts)
+- [x] Event timeline page (`/timeline`) — chronological game/reign history with mini Chess960 positions
+- [x] Admin venue QR code display with printable view
 
 ## What's Left to Build 🔨
 
