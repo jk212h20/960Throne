@@ -5,6 +5,7 @@
 
 const db = require('./database');
 const chess960 = require('./chess960');
+const telegram = require('./telegram');
 const { v4: uuidv4 } = require('uuid');
 
 let io = null; // Socket.io instance, set by index.js
@@ -189,6 +190,17 @@ function callNextChallenger(forcedPosition = null) {
     console.log(`♟️  Auto-started Game #${gameId}: ${king.name} (${kingColor}) vs ${challenger.name} (${kingColor === 'white' ? 'black' : 'white'}) — Position #${posNumber}`);
     broadcast('game_started', gameData);
 
+    // Telegram notifications — notify both players their game started
+    const challengerColor = kingColor === 'white' ? 'black' : 'white';
+    telegram.notifyGameStarted(kingId, challenger.name, posNumber, kingColor);
+    telegram.notifyGameStarted(next.player_id, king.name, posNumber, challengerColor);
+
+    // Notify the next person in queue that they're on deck
+    const updatedQueue = db.getQueue();
+    if (updatedQueue.length > 0) {
+        telegram.notifyOnDeck(updatedQueue[0].player_id);
+    }
+
     return next;
 }
 
@@ -281,6 +293,9 @@ function crownKing(playerId) {
         reignId,
         crownedAt: new Date().toISOString()
     });
+
+    // Telegram: notify the new king
+    telegram.notifyBecameKing(playerId);
 
     // Remove new king from queue if they're in it
     db.removePlayerFromQueue(playerId);

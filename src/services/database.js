@@ -235,6 +235,10 @@ function migrateSchema() {
                 db.run(`ALTER TABLE players ADD COLUMN email TEXT`);
                 console.log('🔧 Migration: Added email column to players');
             }
+            if (!columns.includes('telegram_chat_id')) {
+                db.run(`ALTER TABLE players ADD COLUMN telegram_chat_id TEXT`);
+                console.log('🔧 Migration: Added telegram_chat_id column to players');
+            }
         }
 
         // Games table migrations
@@ -332,6 +336,17 @@ function setPlayerName(playerId, name) {
 function setPlayerEmail(playerId, email) {
     db.run(`UPDATE players SET email = ? WHERE id = ?`, [email || null, playerId]);
     save();
+}
+
+function setPlayerTelegramChatId(playerId, chatId) {
+    db.run(`UPDATE players SET telegram_chat_id = ? WHERE id = ?`, [chatId || null, playerId]);
+    save();
+}
+
+function getPlayerByTelegramChatId(chatId) {
+    const result = db.exec(`SELECT * FROM players WHERE telegram_chat_id = ?`, [chatId]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return rowToObject(result[0]);
 }
 
 // Merge two player accounts: absorb source into target, delete source
@@ -972,6 +987,8 @@ module.exports = {
     getPlayerByAuthId,
     setPlayerName,
     setPlayerEmail,
+    setPlayerTelegramChatId,
+    getPlayerByTelegramChatId,
     mergeAccounts,
     getPlayerById,
     getPlayerByName,

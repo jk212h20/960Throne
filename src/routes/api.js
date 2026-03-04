@@ -8,6 +8,7 @@ const db = require('../services/database');
 const gameEngine = require('../services/gameEngine');
 const lightning = require('../services/lightning');
 const auth = require('../services/auth');
+const telegram = require('../services/telegram');
 const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 
@@ -318,6 +319,40 @@ router.post('/auth/set-email', requirePlayer, (req, res) => {
         db.setPlayerEmail(req.player.id, null);
         res.json({ success: true, email: null });
     }
+});
+
+// ============================================================
+// Telegram — Player notification linking
+// ============================================================
+
+// Generate a link code for the player to connect their Telegram
+router.post('/telegram/link', requirePlayer, (req, res) => {
+    if (!telegram.isConfigured()) {
+        return res.status(503).json({ error: 'Telegram bot not configured' });
+    }
+    const { code, deepLink } = telegram.generateLinkCode(req.player.id);
+    const botUsername = telegram.getBotUsername();
+    res.json({ 
+        code, 
+        deepLink: botUsername ? `https://t.me/${botUsername}?start=${code}` : deepLink,
+        botUsername 
+    });
+});
+
+// Check if the player's Telegram is linked
+router.get('/telegram/status', requirePlayer, (req, res) => {
+    const linked = !!req.player.telegram_chat_id;
+    res.json({ 
+        linked, 
+        configured: telegram.isConfigured(),
+        botUsername: telegram.getBotUsername()
+    });
+});
+
+// Unlink Telegram
+router.post('/telegram/unlink', requirePlayer, (req, res) => {
+    telegram.unlinkPlayer(req.player.id);
+    res.json({ success: true });
 });
 
 // ============================================================

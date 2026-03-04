@@ -7,6 +7,20 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Telegram Player Notifications (Mar 4, 2026)
+- **Telegram bot for player notifications**: Players can link their Telegram account to receive push notifications for:
+  - 🔔 On-deck (you're next in the queue)
+  - ⚔️ Game started (opponent name, position number, your color)
+  - 👑 Became king
+- **New file**: `src/services/telegram.js` — Bot polling, link code management, send helpers
+- **DB changes**: `telegram_chat_id` column on players, `telegram_link_codes` table
+- **API endpoints**: `POST /api/telegram/link`, `GET /api/telegram/status`, `POST /api/telegram/unlink`
+- **Player UI**: New "🔔 Telegram Notifications" card on player.ejs with link/unlink flow
+- **Link flow**: Player clicks "Connect Telegram" → deep link to bot → `/start CODE` → bot verifies code → linked
+- **Bot**: `@CoraTelegramBot` (token in `.env` as `TELEGRAM_BOT_TOKEN`)
+- **Env var**: `TELEGRAM_BOT_TOKEN` (required), existing `TELEGRAM_CHAT_ID` still used for admin alerts
+- Status: **working locally, not yet verified by user on live**
+
 ### Event Timeline Page + Admin QR (Feb 27, 2026)
 - **Timeline page (`/timeline`)**: Full chronological event history page — scrollable vertical timeline showing every game and king crowning. Features:
   - Summary stats at top (total games, total kings, longest reign, best win streak)
@@ -61,6 +75,7 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 | `src/services/chess960.js` | Chess960 position generation |
 | `src/routes/api.js` | All REST API endpoints (auth, game, admin) |
 | `src/routes/pages.js` | Page rendering + auth flow routing |
+| `src/services/telegram.js` | Telegram bot polling + player notifications |
 | `src/views/timeline.ejs` | Event timeline page |
 
 ## Next Steps (TODO for next session)
@@ -83,8 +98,15 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 - Show recent payouts with status (completed/failed) in admin panel
 
 ## Known Issues Still Open
-1. **Railway deploy is manual** — `railway up --detach` needed after each push (auto-deploy from GitHub not configured)
-2. **`getThoneState` typo** — Function name has typo (missing 'r'), used consistently everywhere so not a bug, just cosmetic
+1. **`getThoneState` typo** — Function name has typo (missing 'r'), used consistently everywhere so not a bug, just cosmetic
+
+## Railway Infrastructure
+- **Auto-deploy**: GitHub repo trigger on `jk212h20/960Throne` → `master` branch
+- **Volume**: `960throne-volume` mounted at `/app/data` (1.6GB/50GB used)
+- **DATABASE_PATH**: `/app/data/throne.db` (persists across deploys)
+- **Project ID**: `640d9f08-a87f-4658-8fa0-21df70003fbf`
+- **Service ID**: `2ebaaa5c-c93a-4b35-80a3-0cdcb4dbe711`
+- **Environment ID**: `c89ea800-e875-453b-8f75-8c72d0d08c40`
 
 ## Architecture
 ```

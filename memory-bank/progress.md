@@ -26,11 +26,13 @@
 ## What's Left to Build 🔨
 
 ### High Priority
+- [x] Fix mergeAccounts bug: now recalculates games_lost and games_drawn from game records (was silently losing source player's losses/draws)
+- [x] Prediction test suite: 27 automated tests covering chess960, database, and game engine (tests/predictions.test.js)
 - [ ] End-to-end test of full game flow (crown king → start game → report → new king)
 - [x] Configure Voltage LND credentials and test Lightning payouts (node "predictions", 620k sats)
-- [ ] Add Railway persistent volume (mount `/app/data` for SQLite persistence across deploys)
+- [x] Add Railway persistent volume (mount `/app/data` for SQLite persistence across deploys)
 - [x] Set `BASE_URL` env var on Railway to `https://960throne-production.up.railway.app`
-- [ ] Connect Railway to GitHub for auto-deploy (currently manual `railway up`)
+- [x] Connect Railway to GitHub for auto-deploy (repo trigger: `jk212h20/960Throne` → `master`)
 
 ### Medium Priority
 - [ ] QR code generation for venue code URLs

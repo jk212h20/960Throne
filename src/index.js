@@ -13,6 +13,7 @@ const compression = require('compression');
 
 const db = require('./services/database');
 const gameEngine = require('./services/gameEngine');
+const telegram = require('./services/telegram');
 
 const PORT = process.env.PORT || 3000;
 
@@ -28,6 +29,9 @@ async function start() {
     const io = new Server(server, {
         cors: { origin: '*' }
     });
+
+    // Initialize Telegram bot (polling for link codes)
+    telegram.init(db);
 
     // Initialize game engine with Socket.io
     gameEngine.init(io);

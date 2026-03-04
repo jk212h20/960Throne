@@ -235,6 +235,37 @@
         </div>
         <% } %>
 
+        <!-- ====== TELEGRAM NOTIFICATIONS ====== -->
+        <div class="card mb-4">
+            <h3 class="text-lg font-bold mb-3">🔔 Telegram Notifications</h3>
+            <div id="telegram-section">
+                <% if (player.telegram_chat_id) { %>
+                <!-- Linked -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-green-400 text-sm font-bold">✅ Connected</div>
+                        <div class="text-xs text-gray-500 mt-1">You'll get notified when it's your turn</div>
+                    </div>
+                    <button onclick="unlinkTelegram()" class="text-sm text-red-400 hover:text-red-300 border border-red-800 px-3 py-2 rounded-lg">Unlink</button>
+                </div>
+                <% } else { %>
+                <!-- Not linked -->
+                <p class="text-sm text-gray-400 mb-3">Get a Telegram message when you're up next, your game starts, or you become King.</p>
+                <button onclick="linkTelegram()" id="tg-link-btn" class="btn-gold w-full">📱 Connect Telegram</button>
+                <div id="tg-link-steps" class="hidden mt-3">
+                    <div class="bg-throne-darker rounded-lg p-4 text-center">
+                        <div class="text-sm text-gray-300 mb-3">Tap the button below to open the bot in Telegram:</div>
+                        <a id="tg-deep-link" href="#" target="_blank" class="inline-block bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-lg transition-colors">
+                            Open in Telegram →
+                        </a>
+                        <div class="text-xs text-gray-500 mt-3">The bot will confirm once you're linked.</div>
+                        <div id="tg-link-polling" class="text-xs text-gray-600 mt-2">Waiting for confirmation...</div>
+                    </div>
+                </div>
+                <% } %>
+            </div>
+        </div>
+
         <!-- ====== EMAIL / PROFILE ====== -->
         <div class="card mb-4">
             <h3 class="text-lg font-bold mb-3">👤 Profile</h3>
@@ -543,6 +574,57 @@
             }
             btn.disabled = false;
             btn.textContent = 'Save';
+        }
+
+        // ====== Telegram Linking ======
+        let tgPollInterval = null;
+
+        async function linkTelegram() {
+            const btn = document.getElementById('tg-link-btn');
+            const steps = document.getElementById('tg-link-steps');
+            if (btn) btn.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/telegram/link', { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(data.error || 'Failed to generate link');
+                    if (btn) btn.style.display = '';
+                    return;
+                }
+
+                // Show the deep link button
+                const deepLinkEl = document.getElementById('tg-deep-link');
+                if (deepLinkEl) deepLinkEl.href = data.deepLink;
+                if (steps) steps.classList.remove('hidden');
+
+                // Poll for link completion
+                tgPollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await fetch('/api/telegram/status');
+                        const statusData = await statusRes.json();
+                        if (statusData.linked) {
+                            clearInterval(tgPollInterval);
+                            const pollingEl = document.getElementById('tg-link-polling');
+                            if (pollingEl) {
+                                pollingEl.textContent = '✅ Linked! Reloading...';
+                                pollingEl.className = 'text-xs text-green-400 mt-2';
+                            }
+                            setTimeout(() => location.reload(), 1000);
+                        }
+                    } catch { /* ignore polling errors */ }
+                }, 2000);
+
+            } catch {
+                alert('Connection error');
+                if (btn) btn.style.display = '';
+            }
+        }
+
+        async function unlinkTelegram() {
+            if (!confirm('Unlink Telegram? You won\'t get notifications anymore.')) return;
+            await fetch('/api/telegram/unlink', { method: 'POST' });
+            location.reload();
         }
 
         async function handleClaim(e) {
