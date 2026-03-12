@@ -163,7 +163,7 @@ async function callNextChallenger(forcedPosition = null) {
         try {
             const btc = await chess960.fetchBitcoinPosition();
             posNumber = btc.positionNumber;
-            console.log(`₿ Position #${posNumber} from block ${btc.blockHeight} (hash: ${btc.blockHash.slice(0, 12)}...)`);
+            console.log(`₿ Position #${posNumber} from block ${btc.blockHeight} (game ${btc.gameInBlock} in block, base #${btc.basePosition})`);
         } catch (err) {
             posNumber = chess960.randomPositionNumber();
             console.warn(`₿ Bitcoin position fetch failed, using random #${posNumber}:`, err.message);

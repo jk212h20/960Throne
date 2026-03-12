@@ -136,36 +136,58 @@ function stringToPositionNumber(str) {
  * Fetch the latest Bitcoin block from mempool.space and derive a Chess960 position
  * Returns { blockHeight, blockHash, positionNumber, backRank, pieces }
  */
-let _btcCache = { data: null, fetchedAt: 0 };
-const BTC_CACHE_TTL = 30000; // 30 seconds
+let _blockCache = { blockHash: null, blockHeight: null, fetchedAt: 0 };
+const BLOCK_CACHE_TTL = 30000; // 30 seconds — cache the block lookup, not the position
+let _lastBlockHash = null;
+let _gameCountInBlock = 0;
 
+/**
+ * Fetch the latest Bitcoin block (cached for 30s to avoid hammering mempool.space),
+ * then derive a unique Chess960 position using game-count offset within the same block.
+ * Each call increments the offset so consecutive games in the same block get different positions.
+ */
 async function fetchBitcoinPosition() {
-    // Return cached if fresh
-    if (_btcCache.data && (Date.now() - _btcCache.fetchedAt) < BTC_CACHE_TTL) {
-        return _btcCache.data;
+    let blockHash, blockHeight;
+
+    // Cache the block lookup (not the derived position)
+    if (_blockCache.blockHash && (Date.now() - _blockCache.fetchedAt) < BLOCK_CACHE_TTL) {
+        blockHash = _blockCache.blockHash;
+        blockHeight = _blockCache.blockHeight;
+    } else {
+        const hashRes = await fetch('https://mempool.space/api/blocks/tip/hash');
+        if (!hashRes.ok) throw new Error('Failed to fetch block hash from mempool.space');
+        blockHash = await hashRes.text();
+
+        const blockRes = await fetch(`https://mempool.space/api/block/${blockHash}`);
+        if (!blockRes.ok) throw new Error('Failed to fetch block details from mempool.space');
+        const blockData = await blockRes.json();
+        blockHeight = blockData.height;
+
+        _blockCache = { blockHash, blockHeight, fetchedAt: Date.now() };
     }
 
-    const hashRes = await fetch('https://mempool.space/api/blocks/tip/hash');
-    if (!hashRes.ok) throw new Error('Failed to fetch block hash from mempool.space');
-    const blockHash = await hashRes.text();
+    // Track game count per block — reset when block changes
+    if (blockHash !== _lastBlockHash) {
+        _lastBlockHash = blockHash;
+        _gameCountInBlock = 0;
+    }
 
-    const blockRes = await fetch(`https://mempool.space/api/block/${blockHash}`);
-    if (!blockRes.ok) throw new Error('Failed to fetch block details from mempool.space');
-    const blockData = await blockRes.json();
+    // Offset position by game count so consecutive games in the same block get different positions
+    const basePosition = stringToPositionNumber(blockHash);
+    const positionNumber = (basePosition + _gameCountInBlock) % 960;
+    _gameCountInBlock++;
 
-    const positionNumber = stringToPositionNumber(blockHash);
     const pieces = positionFromNumber(positionNumber);
 
-    const result = {
-        blockHeight: blockData.height,
+    return {
+        blockHeight,
         blockHash,
         positionNumber,
+        basePosition,
+        gameInBlock: _gameCountInBlock,
         pieces,
         backRank: pieces.join(''),
     };
-
-    _btcCache = { data: result, fetchedAt: Date.now() };
-    return result;
 }
 
 module.exports = {
