@@ -24,10 +24,10 @@
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h1 class="text-2xl font-bold">Hey, <%= player.name %> 👋</h1>
-                <div class="text-xs text-gray-500 mt-1">⚡ Lightning login</div>
+                <div class="text-xs text-gray-500 mt-1 flex items-center gap-1"><%- include('partials/icon', { name: 'lightning', size: 14, cls: 'text-throne-gold' }) %> Lightning login</div>
             </div>
             <div class="text-right">
-                <div class="text-2xl font-mono text-throne-gold font-bold">⚡ <%= player.sat_balance.toLocaleString() %></div>
+                <div class="text-2xl font-mono text-throne-gold font-bold flex items-center gap-1 justify-end"><%- include('partials/icon', { name: 'lightning', size: 22, cls: 'text-throne-gold' }) %> <%= player.sat_balance.toLocaleString() %></div>
                 <div class="text-xs text-gray-400">sat balance</div>
                 <% if (player.total_sats_earned > player.sat_balance) { %>
                 <div class="text-xs text-gray-600"><%= player.total_sats_earned.toLocaleString() %> total earned</div>
@@ -38,7 +38,7 @@
         <!-- ====== KING BANNER ====== -->
         <% if (state.king && state.king.id === player.id) { %>
         <div class="card border-throne-gold mb-4 text-center pulse-gold">
-            <div class="text-4xl mb-2">👑</div>
+            <div class="mb-2"><%- include('partials/icon', { name: 'crown', size: 48, cls: 'text-throne-gold' }) %></div>
             <div class="text-xl font-bold text-throne-gold">You are the King!</div>
             <div class="text-sm text-gray-400 mt-1">Earning <span class="text-throne-gold font-bold"><%= state.config.satRate %></span> sats/sec right now</div>
             <div class="text-4xl font-mono text-throne-gold mt-3" id="live-sats"><%= state.liveSats.toLocaleString() %></div>
@@ -50,12 +50,12 @@
         <!-- ====== ACTIVE GAME BANNER ====== -->
         <% if (state.game && (state.game.king_id === player.id || state.game.challenger_id === player.id)) { %>
         <a href="/game" class="block card border-throne-gold mb-4 text-center pulse-gold">
-            <div class="text-2xl font-bold text-throne-gold">⚔️ Game in Progress!</div>
+            <div class="text-2xl font-bold text-throne-gold flex items-center justify-center gap-2"><%- include('partials/icon', { name: 'crossed-swords', size: 28, cls: 'text-throne-gold' }) %> Game in Progress!</div>
             <div class="text-gray-300 mt-2">
                 <%= state.game.king_name %> <span class="text-gray-500">vs</span> <%= state.game.challenger_name %>
             </div>
             <div class="text-sm text-gray-500 mt-1">Position #<%= state.game.chess960_position %></div>
-            <div class="text-sm text-yellow-400 mt-1">⏱️ Started <span id="player-game-elapsed">0:00</span> ago</div>
+            <div class="text-sm text-yellow-400 mt-1 flex items-center justify-center gap-1"><%- include('partials/icon', { name: 'stopwatch', size: 16, cls: 'text-yellow-400' }) %> Started <span id="player-game-elapsed">0:00</span> ago</div>
             <div class="btn-gold inline-block mt-3 text-sm">Report Result →</div>
         </a>
         <% } %>
@@ -116,7 +116,7 @@
                 <input type="text" id="venue-code-input" class="input flex-1 text-center text-lg font-mono tracking-widest"
                     placeholder="VENUE CODE" maxlength="6" style="text-transform: uppercase;"
                     onkeydown="if(event.key==='Enter')joinWithCode()">
-                <button onclick="joinWithCode()" id="join-btn" class="btn-gold px-5 whitespace-nowrap">⚔️ Join</button>
+                <button onclick="joinWithCode()" id="join-btn" class="btn-gold px-5 whitespace-nowrap flex items-center gap-1"><%- include('partials/icon', { name: 'crossed-swords', size: 18, cls: '' }) %> Join</button>
             </div>
 
             <div id="join-result" class="hidden mt-3 p-3 rounded-lg text-sm text-center"></div>
@@ -126,10 +126,10 @@
         <!-- ====== THE LINE (full queue) ====== -->
         <% if (state.queue.length > 0) { %>
         <div class="card mb-4">
-            <h3 class="text-lg font-bold mb-3">📋 The Line</h3>
+            <h3 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'queue', size: 20, cls: '' }) %> The Line</h3>
             <% if (state.king) { %>
             <div class="flex items-center gap-3 p-2 mb-2 bg-throne-gold/10 border border-throne-gold/30 rounded-lg">
-                <span class="text-xl">👑</span>
+                <%- include('partials/icon', { name: 'crown', size: 22, cls: 'text-throne-gold' }) %>
                 <span class="font-bold text-throne-gold"><%= state.king.name %></span>
                 <span class="text-xs text-gray-500 ml-auto">defending</span>
             </div>
@@ -138,7 +138,7 @@
                 <% state.queue.forEach((entry, i) => { %>
                 <div class="flex items-center gap-3 p-2 rounded-lg <%= entry.player_id === player.id ? 'bg-throne-gold/10 border border-throne-gold/30' : 'bg-throne-darker' %> <%= entry.status === 'on_deck' ? 'border border-throne-gold' : '' %>">
                     <span class="text-sm font-mono w-6 text-center <%= entry.status === 'on_deck' ? 'text-throne-gold' : 'text-gray-600' %>">
-                        <%= entry.status === 'on_deck' ? '🔔' : entry.position %>
+                        <% if (entry.status === 'on_deck') { %><%- include('partials/icon', { name: 'bell', size: 16, cls: 'text-throne-gold' }) %><% } else { %><%= entry.position %><% } %>
                     </span>
                     <span class="<%= entry.player_id === player.id ? 'text-throne-gold font-bold' : '' %>">
                         <%= entry.player_name %><%= entry.player_id === player.id ? ' (you)' : '' %>
@@ -155,12 +155,12 @@
         <!-- ====== CLAIM SATS ====== -->
         <% if (player.sat_balance > 0) { %>
         <div class="card mb-4">
-            <h3 class="text-lg font-bold mb-3">⚡ Cash Out</h3>
+            <h3 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'lightning', size: 20, cls: 'text-throne-gold' }) %> Cash Out</h3>
             <p class="text-sm text-gray-400 mb-3">Send your <span class="text-throne-gold font-bold"><%= player.sat_balance.toLocaleString() %> sats</span> to your Lightning wallet</p>
             <form id="claim-form" onsubmit="return handleClaim(event)">
                 <input type="text" id="ln-address" class="input mb-2" placeholder="Lightning address (e.g. you@walletofsatoshi.com)">
                 <input type="number" id="claim-amount" class="input mb-3" placeholder="Amount (leave blank for all)" max="<%= player.sat_balance %>">
-                <button type="submit" class="btn-gold w-full">⚡ Send <%= player.sat_balance.toLocaleString() %> sats</button>
+                <button type="submit" class="btn-gold w-full flex items-center justify-center gap-2"><%- include('partials/icon', { name: 'lightning', size: 20, cls: '' }) %> Send <%= player.sat_balance.toLocaleString() %> sats</button>
             </form>
             <div id="claim-result" class="hidden mt-3 p-3 rounded-lg text-sm"></div>
         </div>
@@ -169,7 +169,7 @@
         <!-- ====== STATS ====== -->
         <% if (player.games_played > 0) { %>
         <div class="card mb-4">
-            <h3 class="text-lg font-bold mb-3">📊 Your Stats</h3>
+            <h3 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'chart', size: 20, cls: '' }) %> Your Stats</h3>
             <div class="grid grid-cols-3 gap-2 text-center">
                 <div class="bg-throne-darker rounded-lg p-3">
                     <div class="text-2xl font-bold"><%= player.games_played %></div>
@@ -181,7 +181,7 @@
                 </div>
                 <div class="bg-throne-darker rounded-lg p-3">
                     <div class="text-2xl font-bold text-throne-gold"><%= player.times_as_king %></div>
-                    <div class="text-xs text-gray-400">👑 Reigns</div>
+                    <div class="text-xs text-gray-400 flex items-center justify-center gap-1"><%- include('partials/icon', { name: 'crown', size: 12, cls: 'text-throne-gold' }) %> Reigns</div>
                 </div>
                 <div class="bg-throne-darker rounded-lg p-3">
                     <div class="text-2xl font-bold text-throne-gold"><%= player.total_sats_earned.toLocaleString() %></div>
@@ -209,9 +209,9 @@
                     <div>
                         <span class="text-sm">
                             <% if (g.king_id === player.id) { %>
-                                👑 vs <%= g.challenger_name %>
+                                <%- include('partials/icon', { name: 'crown', size: 16, cls: 'text-throne-gold' }) %> vs <%= g.challenger_name %>
                             <% } else { %>
-                                ⚔️ vs <%= g.king_name %> (King)
+                                <%- include('partials/icon', { name: 'crossed-swords', size: 16, cls: '' }) %> vs <%= g.king_name %> (King)
                             <% } %>
                         </span>
                         <span class="text-xs text-gray-500 ml-2">#<%= g.chess960_position %></span>
@@ -237,13 +237,13 @@
 
         <!-- ====== TELEGRAM NOTIFICATIONS ====== -->
         <div class="card mb-4">
-            <h3 class="text-lg font-bold mb-3">🔔 Telegram Notifications</h3>
+            <h3 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'bell', size: 20, cls: '' }) %> Telegram Notifications</h3>
             <div id="telegram-section">
                 <% if (player.telegram_chat_id) { %>
                 <!-- Linked -->
                 <div class="flex items-center justify-between">
                     <div>
-                        <div class="text-green-400 text-sm font-bold">✅ Connected</div>
+                        <div class="text-green-400 text-sm font-bold flex items-center gap-1"><%- include('partials/icon', { name: 'checkmark', size: 16, cls: 'text-green-400' }) %> Connected</div>
                         <div class="text-xs text-gray-500 mt-1">You'll get notified when it's your turn</div>
                     </div>
                     <button onclick="unlinkTelegram()" class="text-sm text-red-400 hover:text-red-300 border border-red-800 px-3 py-2 rounded-lg">Unlink</button>
@@ -251,7 +251,7 @@
                 <% } else { %>
                 <!-- Not linked -->
                 <p class="text-sm text-gray-400 mb-3">Get a Telegram message when you're up next, your game starts, or you become King.</p>
-                <button onclick="linkTelegram()" id="tg-link-btn" class="btn-gold w-full">📱 Connect Telegram</button>
+                <button onclick="linkTelegram()" id="tg-link-btn" class="btn-gold w-full flex items-center justify-center gap-2"><%- include('partials/icon', { name: 'phone', size: 20, cls: '' }) %> Connect Telegram</button>
                 <div id="tg-link-steps" class="hidden mt-3">
                     <div class="bg-throne-darker rounded-lg p-4 text-center">
                         <div class="text-sm text-gray-300 mb-3">Tap the button below to open the bot in Telegram:</div>
@@ -268,7 +268,7 @@
 
         <!-- ====== EMAIL / PROFILE ====== -->
         <div class="card mb-4">
-            <h3 class="text-lg font-bold mb-3">👤 Profile</h3>
+            <h3 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'user', size: 20, cls: '' }) %> Profile</h3>
             <div class="mb-3">
                 <label class="text-xs text-gray-400 block mb-1">Email (optional — for account recovery)</label>
                 <div class="flex gap-2">
@@ -281,8 +281,8 @@
 
         <!-- Nav -->
         <div class="flex justify-center gap-6 text-sm text-gray-500 mb-4">
-            <a href="/throne" class="hover:text-throne-gold transition-colors">👑 Throne</a>
-            <a href="/leaderboard" class="hover:text-throne-gold transition-colors">🏆 Leaderboard</a>
+            <a href="/throne" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %> Throne</a>
+            <a href="/leaderboard" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'trophy', size: 16, cls: '' }) %> Leaderboard</a>
         </div>
 
         <div class="text-center mb-6">

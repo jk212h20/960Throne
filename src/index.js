@@ -61,6 +61,23 @@ async function start() {
     app.set('view engine', 'ejs');
     app.set('views', path.join(__dirname, 'views'));
 
+    // Icon helper — reads SVG files from public/icons/ and injects them inline
+    const fs = require('fs');
+    const iconCache = {};
+    const iconsDir = path.join(__dirname, '..', 'public', 'icons');
+    app.locals.icon = function(name, size, cls) {
+        size = size || 20;
+        cls = cls || '';
+        if (!iconCache[name]) {
+            try {
+                iconCache[name] = fs.readFileSync(path.join(iconsDir, name + '.svg'), 'utf8');
+            } catch (e) {
+                return `<!-- icon "${name}" not found -->`;
+            }
+        }
+        return iconCache[name].replace('<svg ', `<svg width="${size}" height="${size}" class="icon ${cls}" `);
+    };
+
     // Routes
     const apiRoutes = require('./routes/api');
     const pageRoutes = require('./routes/pages');

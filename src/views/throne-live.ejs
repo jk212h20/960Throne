@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>👑 960 Throne — Live</title>
+    <title>960 Throne — Live</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/socket.io/socket.io.js"></script>
     <style>
@@ -26,7 +26,7 @@
         </div>
         <div class="flex items-center gap-6">
             <div class="text-right">
-                <div class="text-sm text-gray-400">⚡ Sats Earned</div>
+                <div class="text-sm text-gray-400 flex items-center gap-1"><%- include('partials/icon', { name: 'lightning', size: 14, cls: 'text-gray-400' }) %> Sats Earned</div>
                 <div class="text-lg font-mono font-bold text-throne-gold sats-glow" id="total-sats-earned"><%= state.stats.totalSatsDistributed.toLocaleString() %></div>
             </div>
             <div class="text-right">
@@ -43,7 +43,7 @@
             <div class="text-center mb-4" id="king-section">
                 <% if (state.king) { %>
                 <div class="inline-block">
-                    <div class="text-6xl mb-2 crown-drop">👑</div>
+                    <div class="mb-2 crown-drop"><%- include('partials/icon', { name: 'crown', size: 72, cls: 'text-throne-gold' }) %></div>
                     <div class="text-5xl font-bold text-throne-gold mb-3" id="king-name"><%= state.king.name %></div>
                     <div class="flex items-center justify-center gap-8 text-xl">
                         <div>
@@ -85,9 +85,9 @@
                     <% const kc2 = state.game.king_color || 'white'; %>
                     <div class="flex items-center justify-center gap-4 mb-4">
                         <div class="text-2xl flex items-center gap-3">
-                            <span class="<%= kc2 === 'white' ? 'color-box-white' : 'color-box-black' %> text-xl font-bold">👑 <%= state.game.king_name %></span>
+                            <span class="<%= kc2 === 'white' ? 'color-box-white' : 'color-box-black' %> text-xl font-bold flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 20, cls: '' }) %> <%= state.game.king_name %></span>
                             <span class="text-gray-500">vs</span>
-                            <span class="<%= kc2 === 'white' ? 'color-box-black' : 'color-box-white' %> text-xl font-bold">⚔️ <%= state.game.challenger_name %></span>
+                            <span class="<%= kc2 === 'white' ? 'color-box-black' : 'color-box-white' %> text-xl font-bold flex items-center gap-1"><%- include('partials/icon', { name: 'crossed-swords', size: 20, cls: '' }) %> <%= state.game.challenger_name %></span>
                         </div>
                     </div>
                     <!-- Chess960 Board — shows king's pieces so challenger can mirror -->
@@ -121,7 +121,7 @@
                 </div>
                 <% } else if (state.king) { %>
                 <div class="text-center text-gray-500">
-                    <div class="text-4xl mb-3">⏳</div>
+                    <div class="mb-3"><%- include('partials/icon', { name: 'hourglass', size: 48, cls: 'text-gray-500' }) %></div>
                     <div class="text-xl">Waiting for challenger...</div>
                 </div>
                 <% } %>
@@ -131,12 +131,12 @@
         <!-- Right: Queue (30%) -->
         <div class="flex-[3] bg-throne-dark border-l border-gray-800 flex flex-col">
             <div class="p-4 border-b border-gray-800">
-                <h2 class="text-lg font-bold text-gray-300">📋 Challengers</h2>
+                <h2 class="text-lg font-bold text-gray-300 flex items-center gap-2"><%- include('partials/icon', { name: 'queue', size: 20, cls: '' }) %> Challengers</h2>
             </div>
             <div class="flex-1 overflow-y-auto p-4" id="queue-list">
                 <% if (state.queue.length === 0) { %>
                 <div class="text-center text-gray-600 mt-8">
-                    <div class="text-3xl mb-2">🏰</div>
+                    <div class="mb-2"><%- include('partials/icon', { name: 'castle', size: 36, cls: 'text-gray-600' }) %></div>
                     <div>No challengers in line</div>
                 </div>
                 <% } else { %>
@@ -145,7 +145,7 @@
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
                             <span class="text-2xl font-bold <%= entry.status === 'on_deck' ? 'text-throne-gold' : 'text-gray-600' %>">
-                                <%= entry.status === 'on_deck' ? '🔔' : '#' + entry.position %>
+                                <% if (entry.status === 'on_deck') { %><%- include('partials/icon', { name: 'bell', size: 24, cls: 'text-throne-gold' }) %><% } else { %>#<%= entry.position %><% } %>
                             </span>
                             <span class="<%= i === 0 ? 'text-2xl font-bold text-throne-gold' : 'text-lg' %>">
                                 <%= entry.player_name %>
@@ -175,11 +175,11 @@
         <% state.recentGames.forEach(g => { %>
         <span class="shrink-0 text-gray-400">
             <% if (g.result === 'king_won') { %>
-                👑 <%= g.king_name %> def. <%= g.challenger_name %>
+                <%- include('partials/icon', { name: 'crown', size: 14, cls: 'text-throne-gold' }) %> <%= g.king_name %> def. <%= g.challenger_name %>
             <% } else if (g.result === 'challenger_won') { %>
-                ⚔️ <%= g.challenger_name %> dethroned <%= g.king_name %>!
+                <%- include('partials/icon', { name: 'crossed-swords', size: 14, cls: 'text-red-400' }) %> <%= g.challenger_name %> dethroned <%= g.king_name %>!
             <% } else { %>
-                🤝 <%= g.king_name %> drew vs <%= g.challenger_name %>
+                <%- include('partials/icon', { name: 'handshake', size: 14, cls: '' }) %> <%= g.king_name %> drew vs <%= g.challenger_name %>
             <% } %>
             <span class="text-throne-gold ml-1"><%= g.sats_earned %> sats</span>
         </span>

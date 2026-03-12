@@ -7,6 +7,16 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Custom SVG Icon System (Mar 5, 2026)
+- **Replaced all emoji with custom SVG icons** across every EJS template (12 files)
+- **Icon library**: 25 hand-crafted SVGs in `public/icons/` — crown, trophy, lightning, crossed-swords, shield, handshake, coins, castle, chess-piece, gear, chart, scroll, globe, stopwatch, medal, bell, queue, gamepad, key, warning, checkmark, cross, hourglass, eye, pawn
+- **Icon server family**: `960-throne` in icon-server MCP with full style guide (2px stroke, 24×24 viewBox, rounded caps, gold/purple/gray palette)
+- **Icon include system**: `app.locals.icon(name, size, cls)` helper in `src/index.js` + EJS partial `src/views/partials/icon.ejs` — cached file reads, inline SVG injection with size/class params
+- **CSS**: Added `.icon { display: inline-block; vertical-align: middle; flex-shrink: 0; }` base styles in `src/styles/input.css`
+- **Files changed**: All 12 EJS view files, `src/index.js`, `src/styles/input.css`, new `src/views/partials/icon.ejs`, new `public/icons/*.svg` (25 files)
+- **Note**: A few emoji remain in JS `textContent` strings (error fallbacks in join.ejs, set-name.ejs) and admin.ejs header/sections where inline replacement wasn't needed. Timeline game entries still use emoji for result display (🛡️⚔️🤝) in JS-generated content.
+- Status: **verified working locally**, not yet deployed
+
 ### Telegram Player Notifications (Mar 4, 2026)
 - **Telegram bot for player notifications**: Players can link their Telegram account to receive push notifications for:
   - 🔔 On-deck (you're next in the queue)
@@ -67,7 +77,7 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 ## Key Files
 | File | Purpose |
 |------|---------|
-| `src/index.js` | Express server + Socket.io setup |
+| `src/index.js` | Express server + Socket.io setup + icon helper |
 | `src/services/auth/index.js` | Extensible auth manager |
 | `src/services/auth/lightning.js` | LNURL-auth implementation |
 | `src/services/database.js` | SQLite schema, all DB queries |
@@ -77,6 +87,8 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 | `src/routes/pages.js` | Page rendering + auth flow routing |
 | `src/services/telegram.js` | Telegram bot polling + player notifications |
 | `src/views/timeline.ejs` | Event timeline page |
+| `src/views/partials/icon.ejs` | SVG icon include partial |
+| `public/icons/*.svg` | 25 custom SVG icons (960-throne family) |
 
 ## Next Steps (TODO for next session)
 

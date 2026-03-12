@@ -11,20 +11,20 @@
 <body class="min-h-screen bg-throne-darker p-4">
     <div class="max-w-lg mx-auto">
         <div class="flex items-center justify-between mb-6">
-            <h1 class="text-2xl font-bold">📋 Queue</h1>
+            <h1 class="text-2xl font-bold flex items-center gap-2"><%- include('partials/icon', { name: 'queue', size: 24, cls: '' }) %> Queue</h1>
             <a href="<%= player ? '/player' : '/' %>" class="text-gray-500 hover:text-throne-gold text-sm">← Back</a>
         </div>
 
         <% if (state.king) { %>
         <div class="card mb-4 text-center">
             <div class="text-sm text-gray-400">Current King</div>
-            <div class="text-2xl font-bold text-throne-gold">👑 <%= state.king.name %></div>
+            <div class="text-2xl font-bold text-throne-gold flex items-center gap-2"><%- include('partials/icon', { name: 'crown', size: 24, cls: 'text-throne-gold' }) %> <%= state.king.name %></div>
         </div>
         <% } %>
 
         <% if (state.queue.length === 0) { %>
         <div class="card text-center text-gray-500">
-            <div class="text-3xl mb-2">🏰</div>
+            <div class="mb-2"><%- include('partials/icon', { name: 'castle', size: 36, cls: 'text-gray-600' }) %></div>
             <div>No challengers in line</div>
         </div>
         <% } else { %>
@@ -34,7 +34,7 @@
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-4">
                         <span class="text-3xl font-bold <%= entry.status === 'on_deck' ? 'text-throne-gold' : 'text-gray-600' %>">
-                            <%= entry.status === 'on_deck' ? '🔔' : '#' + entry.position %>
+                            <% if (entry.status === 'on_deck') { %><%- include('partials/icon', { name: 'bell', size: 20, cls: 'text-throne-gold' }) %><% } else { %>#<%= entry.position %><% } %>
                         </span>
                         <span class="<%= i === 0 ? 'text-xl font-bold text-throne-gold' : 'text-lg' %>">
                             <%= entry.player_name %>
@@ -50,8 +50,8 @@
         <% } %>
 
         <div class="flex justify-center gap-6 mt-6 text-sm text-gray-500">
-            <a href="/throne" class="hover:text-throne-gold transition-colors">👑 Throne</a>
-            <a href="/leaderboard" class="hover:text-throne-gold transition-colors">🏆 Leaderboard</a>
+            <a href="/throne" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %> Throne</a>
+            <a href="/leaderboard" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'trophy', size: 16, cls: '' }) %> Leaderboard</a>
         </div>
     </div>
 

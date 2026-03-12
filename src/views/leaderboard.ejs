@@ -10,7 +10,7 @@
 <body class="min-h-screen bg-throne-darker p-4">
     <div class="max-w-2xl mx-auto">
         <div class="flex items-center justify-between mb-6">
-            <h1 class="text-2xl font-bold">🏆 Leaderboard</h1>
+            <h1 class="text-2xl font-bold flex items-center gap-2"><%- include('partials/icon', { name: 'trophy', size: 24, cls: 'text-throne-gold' }) %> Leaderboard</h1>
             <a href="<%= player ? '/player' : '/' %>" class="text-gray-500 hover:text-throne-gold text-sm">← Back</a>
         </div>
 
@@ -35,7 +35,7 @@
         </div>
 
         <!-- Top Earners -->
-        <h2 class="text-lg font-bold mb-3 text-throne-gold">💰 Top Earners</h2>
+        <h2 class="text-lg font-bold mb-3 text-throne-gold flex items-center gap-2"><%- include('partials/icon', { name: 'coins', size: 20, cls: 'text-throne-gold' }) %> Top Earners</h2>
         <% if (leaderboard.length === 0) { %>
         <div class="card text-center text-gray-500 mb-6">No games played yet</div>
         <% } else { %>
@@ -55,7 +55,7 @@
                 <tbody>
                     <% leaderboard.forEach((p, i) => { %>
                     <tr class="border-b border-gray-800 <%= i < 3 ? 'text-throne-gold' : '' %>">
-                        <td class="py-2 px-2 font-bold"><%= i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1 %></td>
+                        <td class="py-2 px-2 font-bold"><% if (i === 0) { %><%- include('partials/icon', { name: 'crown', size: 18, cls: 'text-throne-gold' }) %><% } else if (i === 1) { %><%- include('partials/icon', { name: 'medal', size: 18, cls: 'text-gray-300' }) %><% } else if (i === 2) { %><%- include('partials/icon', { name: 'medal', size: 18, cls: 'text-amber-600' }) %><% } else { %><%= i + 1 %><% } %></td>
                         <td class="py-2 font-bold"><%= p.name %></td>
                         <td class="py-2 px-2 text-right font-mono"><%= p.total_sats_earned.toLocaleString() %></td>
                         <td class="py-2 px-2 text-right text-green-400"><%= p.games_won %></td>
@@ -70,12 +70,12 @@
         <% } %>
 
         <!-- Longest Reigns -->
-        <h2 class="text-lg font-bold mb-3 text-throne-gold">⏱️ Longest Reigns</h2>
+        <h2 class="text-lg font-bold mb-3 text-throne-gold flex items-center gap-2"><%- include('partials/icon', { name: 'stopwatch', size: 20, cls: 'text-throne-gold' }) %> Longest Reigns</h2>
 
         <% if (state.reign && !state.reign.dethroned_at) { %>
         <div class="card flex items-center justify-between mb-2 border border-throne-gold/50 bg-throne-gold/10">
             <div class="flex items-center gap-3">
-                <span class="text-lg font-bold text-throne-gold">👑</span>
+                <%- include('partials/icon', { name: 'crown', size: 20, cls: 'text-throne-gold' }) %>
                 <span class="font-bold text-throne-gold"><%= state.king ? state.king.name : 'Unknown' %></span>
                 <span class="text-xs text-throne-gold/70">(active)</span>
             </div>
@@ -106,9 +106,9 @@
         <% } %>
 
         <div class="flex justify-center gap-6 mt-6 text-sm text-gray-500">
-            <a href="/live" class="hover:text-throne-gold transition-colors">👑 Throne</a>
-            <a href="/timeline" class="hover:text-throne-gold transition-colors">📜 Timeline</a>
-            <a href="/queue" class="hover:text-throne-gold transition-colors">📋 Queue</a>
+            <a href="/live" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %> Throne</a>
+            <a href="/timeline" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'scroll', size: 16, cls: '' }) %> Timeline</a>
+            <a href="/queue" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'queue', size: 16, cls: '' }) %> Queue</a>
         </div>
     </div>
 </body>

@@ -9,6 +9,7 @@ const gameEngine = require('../services/gameEngine');
 const lightning = require('../services/lightning');
 const auth = require('../services/auth');
 const telegram = require('../services/telegram');
+const chess960 = require('../services/chess960');
 const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 
@@ -520,7 +521,25 @@ router.get('/admin/accounting', requireAdmin, (req, res) => {
     res.json(audit);
 });
 
-// Venue Code QR Image
+// Public Venue QR Image (no auth — used by throne display page)
+router.get('/venue-qr.png', async (req, res) => {
+    const code = db.getActiveVenueCode();
+    if (!code) return res.status(404).send('No active venue code');
+    
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3960';
+    const joinUrl = `${baseUrl}/join?code=${code.code}`;
+    
+    const pngBuffer = await QRCode.toBuffer(joinUrl, {
+        width: 600,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+    });
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'no-cache');
+    res.send(pngBuffer);
+});
+
+// Venue Code QR Image (admin, with JSON option)
 router.get('/admin/venue-qr', requireAdmin, async (req, res) => {
     const code = db.getActiveVenueCode();
     if (!code) return res.status(404).json({ error: 'No active venue code' });
@@ -555,6 +574,24 @@ router.get('/admin/venue-qr', requireAdmin, async (req, res) => {
         expiresAt: code.expires_at
     });
 });
+
+// ============================================================
+// Bitcoin Chess960 Position
+// ============================================================
+
+router.get('/bitcoin-position', async (req, res) => {
+    try {
+        const btcPos = await chess960.fetchBitcoinPosition();
+        res.json(btcPos);
+    } catch (err) {
+        console.error('Bitcoin position fetch error:', err.message);
+        res.status(502).json({ error: 'Failed to fetch Bitcoin block data' });
+    }
+});
+
+// ============================================================
+// Admin — Lightning
+// ============================================================
 
 router.get('/admin/lightning-status', requireAdmin, async (req, res) => {
     const status = await lightning.isConfigured();

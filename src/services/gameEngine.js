@@ -139,7 +139,7 @@ function leaveQueue(playerId) {
  * 
  * @param {number|null} forcedPosition - If provided, reuse this Chess960 position number
  */
-function callNextChallenger(forcedPosition = null) {
+async function callNextChallenger(forcedPosition = null) {
     const kingId = parseInt(db.getConfig('current_king_id') || '0');
     if (!kingId) return null;
 
@@ -156,7 +156,19 @@ function callNextChallenger(forcedPosition = null) {
     // Auto-start the game immediately
     const king = db.getPlayerById(kingId);
     const challenger = db.getPlayerById(next.player_id);
-    const posNumber = forcedPosition || chess960.randomPositionNumber();
+    
+    // Use Bitcoin blockhash-derived position, fallback to random
+    let posNumber = forcedPosition;
+    if (!posNumber) {
+        try {
+            const btc = await chess960.fetchBitcoinPosition();
+            posNumber = btc.positionNumber;
+            console.log(`₿ Position #${posNumber} from block ${btc.blockHeight} (hash: ${btc.blockHash.slice(0, 12)}...)`);
+        } catch (err) {
+            posNumber = chess960.randomPositionNumber();
+            console.warn(`₿ Bitcoin position fetch failed, using random #${posNumber}:`, err.message);
+        }
+    }
     const position = chess960.positionToDisplay(posNumber);
     const reignId = parseInt(db.getConfig('current_reign_id') || '0');
 

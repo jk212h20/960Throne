@@ -120,6 +120,54 @@ function pieceToUnicode(piece, isWhite = true) {
     return map[piece] || piece;
 }
 
+/**
+ * Convert any string (e.g. a Bitcoin block hash) to a Chess960 position number (0-959)
+ * Uses character codes: num = (num * 256 + charCode) % 960
+ */
+function stringToPositionNumber(str) {
+    let num = 0;
+    for (let i = 0; i < str.length; i++) {
+        num = (num * 256 + str.charCodeAt(i)) % 960;
+    }
+    return num;
+}
+
+/**
+ * Fetch the latest Bitcoin block from mempool.space and derive a Chess960 position
+ * Returns { blockHeight, blockHash, positionNumber, backRank, pieces }
+ */
+let _btcCache = { data: null, fetchedAt: 0 };
+const BTC_CACHE_TTL = 30000; // 30 seconds
+
+async function fetchBitcoinPosition() {
+    // Return cached if fresh
+    if (_btcCache.data && (Date.now() - _btcCache.fetchedAt) < BTC_CACHE_TTL) {
+        return _btcCache.data;
+    }
+
+    const hashRes = await fetch('https://mempool.space/api/blocks/tip/hash');
+    if (!hashRes.ok) throw new Error('Failed to fetch block hash from mempool.space');
+    const blockHash = await hashRes.text();
+
+    const blockRes = await fetch(`https://mempool.space/api/block/${blockHash}`);
+    if (!blockRes.ok) throw new Error('Failed to fetch block details from mempool.space');
+    const blockData = await blockRes.json();
+
+    const positionNumber = stringToPositionNumber(blockHash);
+    const pieces = positionFromNumber(positionNumber);
+
+    const result = {
+        blockHeight: blockData.height,
+        blockHash,
+        positionNumber,
+        pieces,
+        backRank: pieces.join(''),
+    };
+
+    _btcCache = { data: result, fetchedAt: Date.now() };
+    return result;
+}
+
 module.exports = {
     positionFromNumber,
     randomPositionNumber,
@@ -127,5 +175,7 @@ module.exports = {
     positionToDisplay,
     buildFEN,
     pieceToUnicode,
+    stringToPositionNumber,
+    fetchBitcoinPosition,
     PIECES,
 };

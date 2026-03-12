@@ -13,16 +13,16 @@
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold">🔧 Admin Panel</h1>
             <div class="flex gap-3">
-                <a href="/throne" class="text-sm text-gray-400 hover:text-throne-gold">👑 Throne</a>
+                <a href="/throne" class="text-sm text-gray-400 hover:text-throne-gold flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 14, cls: '' }) %> Throne</a>
                 <a href="/timeline" class="text-sm text-gray-400 hover:text-throne-gold">📜 Timeline</a>
-                <a href="/leaderboard" class="text-sm text-gray-400 hover:text-throne-gold">🏆 Board</a>
+                <a href="/leaderboard" class="text-sm text-gray-400 hover:text-throne-gold flex items-center gap-1"><%- include('partials/icon', { name: 'trophy', size: 14, cls: '' }) %> Board</a>
             </div>
         </div>
 
         <!-- Notifications -->
         <% if (notifications.length > 0) { %>
         <div class="card border-red-700 mb-4">
-            <h2 class="text-lg font-bold mb-3 text-red-400">⚠️ Notifications (<%= notifications.length %>)</h2>
+            <h2 class="text-lg font-bold mb-3 text-red-400 flex items-center gap-2"><%- include('partials/icon', { name: 'warning', size: 20, cls: 'text-red-400' }) %> Notifications (<%= notifications.length %>)</h2>
             <div class="space-y-2">
                 <% notifications.forEach(n => { %>
                 <div class="bg-throne-darker rounded-lg p-3 flex items-center justify-between">
@@ -40,11 +40,11 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <!-- Game Control -->
             <div class="card">
-                <h2 class="text-lg font-bold mb-3">🎮 Game Control</h2>
+                <h2 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'gamepad', size: 20, cls: '' }) %> Game Control</h2>
                 <% if (state.king) { %>
                 <div class="mb-3 p-3 bg-throne-darker rounded-lg">
                     <div class="text-sm text-gray-400">Current King</div>
-                    <div class="text-xl font-bold text-throne-gold">👑 <%= state.king.name %></div>
+                    <div class="text-xl font-bold text-throne-gold flex items-center gap-2"><%- include('partials/icon', { name: 'crown', size: 22, cls: 'text-throne-gold' }) %> <%= state.king.name %></div>
                 </div>
                 <% } %>
                 <% if (state.game) { %>
@@ -65,10 +65,10 @@
                     </div>
                     <% } %>
                     <div class="grid grid-cols-2 gap-2 mt-2">
-                        <button onclick="overrideResult(<%= state.game.id %>, 'king_won')" class="text-xs bg-green-800 hover:bg-green-700 px-2 py-2 rounded">👑 King Won</button>
-                        <button onclick="overrideResult(<%= state.game.id %>, 'challenger_won')" class="text-xs bg-red-800 hover:bg-red-700 px-2 py-2 rounded">⚔️ Challenger Won</button>
-                        <button onclick="overrideResult(<%= state.game.id %>, 'draw')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-2 rounded">🤝 Draw (King Stays)</button>
-                        <button onclick="removeChallenger()" class="text-xs bg-yellow-800 hover:bg-yellow-700 px-2 py-2 rounded">🚫 No Show</button>
+                        <button onclick="overrideResult(<%= state.game.id %>, 'king_won')" class="text-xs bg-green-800 hover:bg-green-700 px-2 py-2 rounded flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 14, cls: '' }) %> King Won</button>
+                        <button onclick="overrideResult(<%= state.game.id %>, 'challenger_won')" class="text-xs bg-red-800 hover:bg-red-700 px-2 py-2 rounded flex items-center gap-1"><%- include('partials/icon', { name: 'crossed-swords', size: 14, cls: '' }) %> Challenger Won</button>
+                        <button onclick="overrideResult(<%= state.game.id %>, 'draw')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-2 rounded flex items-center gap-1"><%- include('partials/icon', { name: 'handshake', size: 14, cls: '' }) %> Draw (King Stays)</button>
+                        <button onclick="removeChallenger()" class="text-xs bg-yellow-800 hover:bg-yellow-700 px-2 py-2 rounded flex items-center gap-1"><%- include('partials/icon', { name: 'warning', size: 14, cls: '' }) %> No Show</button>
                     </div>
                 </div>
                 <% } else if (state.king) { %>
@@ -104,7 +104,7 @@
                         <option value="<%= p.id %>"><%= p.name %></option>
                         <% }) %>
                     </select>
-                    <button onclick="crownKing()" class="btn-purple w-full text-sm">👑 Crown Selected Player</button>
+                    <button onclick="crownKing()" class="btn-purple w-full text-sm flex items-center justify-center gap-2"><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %> Crown Selected Player</button>
                 </div>
 
                 <!-- Set Challenger -->
@@ -116,13 +116,13 @@
                         <option value="<%= p.id %>"><%= p.name %></option>
                         <% }) %>
                     </select>
-                    <button onclick="setChallenger()" class="btn-purple w-full text-sm">⚔️ Set as Challenger</button>
+                    <button onclick="setChallenger()" class="btn-purple w-full text-sm flex items-center justify-center gap-2"><%- include('partials/icon', { name: 'crossed-swords', size: 16, cls: '' }) %> Set as Challenger</button>
                 </div>
             </div>
 
             <!-- Venue Code -->
             <div class="card">
-                <h2 class="text-lg font-bold mb-3">🔑 Venue Code</h2>
+                <h2 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'key', size: 20, cls: '' }) %> Venue Code</h2>
                 <% if (venueCode) { %>
                 <div class="text-center mb-4">
                     <div class="text-5xl font-mono font-bold text-throne-gold tracking-widest"><%= venueCode.code %></div>
@@ -131,15 +131,21 @@
                     </div>
                     <!-- Venue QR Code -->
                     <div class="mt-3 mb-2">
-                        <img id="venue-qr-img" src="/api/admin/venue-qr" alt="Venue QR Code" 
-                             class="mx-auto rounded-lg" style="width: 180px; height: 180px; background: #fff; padding: 8px;">
+                        <img id="venue-qr-img" src="/api/venue-qr.png" alt="Venue QR Code" 
+                             class="mx-auto rounded-lg" style="width: 180px; height: 180px; background: #fff; padding: 8px;"
+                             onerror="this.style.display='none'">
                     </div>
                     <div class="text-xs text-gray-500 mt-1">
                         <code class="text-gray-400"><%= process.env.BASE_URL || 'http://localhost:3000' %>/?code=<%= venueCode.code %></code>
                     </div>
-                    <button onclick="printVenueQR()" class="mt-2 text-xs bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded inline-flex items-center gap-1">
-                        🖨️ Print QR
-                    </button>
+                    <div class="flex items-center justify-center gap-2 mt-2">
+                        <button onclick="enlargeQR()" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded inline-flex items-center gap-1">
+                            🔍 Enlarge
+                        </button>
+                        <button onclick="printVenueQR()" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded inline-flex items-center gap-1">
+                            🖨️ Print QR
+                        </button>
+                    </div>
                 </div>
                 <% } %>
                 <button onclick="rotateCode()" class="btn-outline w-full text-sm">🔄 Generate New Code</button>
@@ -157,7 +163,7 @@
 
             <!-- Queue Management -->
             <div class="card">
-                <h2 class="text-lg font-bold mb-3">📋 Queue (<%= state.queue.length %>)</h2>
+                <h2 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'queue', size: 20, cls: '' }) %> Queue (<%= state.queue.length %>)</h2>
                 <% if (state.queue.length === 0) { %>
                 <p class="text-gray-500 text-sm">Queue empty</p>
                 <% } else { %>
@@ -166,7 +172,7 @@
                     <div class="flex items-center justify-between bg-throne-darker rounded p-2">
                         <span class="text-sm <%= q.status === 'on_deck' ? 'text-throne-gold font-bold' : '' %>">
                             #<%= q.position %> <%= q.player_name %>
-                            <% if (q.status === 'on_deck') { %> 🔔<% } %>
+                            <% if (q.status === 'on_deck') { %> <%- include('partials/icon', { name: 'bell', size: 14, cls: 'text-throne-gold' }) %><% } %>
                             <% if (q.timeout_count > 0) { %> <span class="text-red-400">(⚠ timeout x<%= q.timeout_count %>)</span><% } %>
                         </span>
                         <button onclick="removeFromQueue(<%= q.player_id %>)" class="text-xs text-red-400 hover:text-red-300">Remove</button>
@@ -187,7 +193,7 @@
 
             <!-- Config -->
             <div class="card">
-                <h2 class="text-lg font-bold mb-3">⚙️ Config</h2>
+                <h2 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'gear', size: 20, cls: '' }) %> Config</h2>
                 <div class="space-y-2 text-sm">
                     <% const editableKeys = ['sat_rate_per_second','time_control_base','time_control_increment','queue_timeout_seconds','winner_only_confirm_delay','venue_code_rotation_minutes']; %>
                     <% editableKeys.forEach(key => { %>
@@ -202,7 +208,7 @@
 
             <!-- Accounting Audit -->
             <div class="card" id="accounting-card">
-                <h2 class="text-lg font-bold mb-3">📊 Sat Accounting</h2>
+                <h2 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'chart', size: 20, cls: '' }) %> Sat Accounting</h2>
                 <p class="text-xs text-gray-500 mb-3">Verifies total sats credited = throne-occupied seconds × rate. Discrepancy should be ≤1 sat per reign transition (rounding).</p>
                 <div id="accounting-data" class="text-sm space-y-1">
                     <button onclick="loadAccounting()" class="btn-outline w-full text-sm">🔍 Run Audit</button>
@@ -220,7 +226,7 @@
                     <div class="text-xl font-mono text-red-300" id="reset-target-time"><%= new Date(scheduledReset.resetAt).toLocaleString() %></div>
                     <div class="text-4xl font-mono font-bold text-red-400 mt-2" id="reset-countdown">--:--:--</div>
                     <div class="text-xs text-red-500 mt-1">countdown to reset</div>
-                    <button onclick="cancelReset()" class="mt-3 text-sm bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded">❌ Cancel Reset</button>
+                    <button onclick="cancelReset()" class="mt-3 text-sm bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded flex items-center gap-1"><%- include('partials/icon', { name: 'cross', size: 14, cls: 'text-red-400' }) %> Cancel Reset</button>
                 </div>
                 <% } else { %>
                 <div class="space-y-2">
@@ -353,6 +359,20 @@
             if (await api('/api/admin/remove-challenger', {})) setTimeout(() => location.reload(), 500);
         }
         async function resolveNotification(id) { if (await api('/api/admin/notifications/resolve', { id })) setTimeout(() => location.reload(), 500); }
+
+        // Enlarge QR — fullscreen overlay
+        function enlargeQR() {
+            const qrImg = document.getElementById('venue-qr-img');
+            if (!qrImg) return;
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;cursor:pointer;';
+            overlay.innerHTML = `
+                <img src="${qrImg.src}" style="width:min(80vw,80vh);height:min(80vw,80vh);background:#fff;padding:16px;border-radius:12px;">
+                <div style="color:#999;margin-top:16px;font-size:14px;">Tap anywhere to close</div>
+            `;
+            overlay.addEventListener('click', () => overlay.remove());
+            document.body.appendChild(overlay);
+        }
 
         // Print Venue QR — opens fullscreen printable view
         function printVenueQR() {

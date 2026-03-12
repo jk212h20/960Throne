@@ -13,7 +13,7 @@
     <div class="max-w-md w-full">
         <!-- Header -->
         <div class="text-center mb-8">
-            <div class="text-6xl mb-4">⚡</div>
+            <div class="mb-4"><%- include('partials/icon', { name: 'lightning', size: 64, cls: 'text-throne-gold' }) %></div>
             <h1 class="text-3xl font-bold text-throne-gold mb-2">You're In!</h1>
             <p class="text-gray-400 text-lg">Lightning login successful</p>
         </div>
@@ -28,7 +28,7 @@
             <form id="name-form" onsubmit="return handleSetName(event)">
                 <input type="text" id="player-name" class="input mb-3 text-lg" placeholder="Your name" maxlength="30" required autofocus>
                 <button type="submit" id="submit-btn" class="btn-gold w-full text-lg">
-                    ⚔️ Enter the Arena
+                    <%- include('partials/icon', { name: 'crossed-swords', size: 22, cls: '' }) %> Enter the Arena
                 </button>
             </form>
         </div>

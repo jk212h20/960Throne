@@ -78,3 +78,14 @@
 .on-deck-pulse {
   animation: onDeckPulse 2s ease-in-out infinite;
 }
+
+/* Inline SVG icons */
+.icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.icon-inline {
+  display: inline;
+  vertical-align: -0.15em;
+}

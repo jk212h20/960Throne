@@ -3,14 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>👑 960 Throne — Live</title>
+    <title>960 Throne — Live</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; overflow: hidden; }
-        .chess-piece { font-size: 2.5rem; line-height: 1; }
+        .chess-piece { line-height: 1; }
+        .chess-piece-lg { font-size: 2.2rem; }
         .chess-piece-white { color: #fff; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 3px rgba(0,0,0,0.5); }
         .chess-piece-black { color: #1a1a1a; }
+        .board-square { width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; }
+        .sq-light { background: #f0d9b5; }
+        .sq-dark { background: #b58863; }
         .color-box-white { display: inline-block; background: #fff; color: #1a1a1a; padding: 2px 10px; border-radius: 4px; border: 2px solid #fff; }
         .color-box-black { display: inline-block; background: #1a1a1a; color: #fff; padding: 2px 10px; border-radius: 4px; border: 2px solid #555; }
         @keyframes satsGlow { 0%,100% { text-shadow: 0 0 10px #FFD700; } 50% { text-shadow: 0 0 30px #FFD700, 0 0 60px #FFD700; } }
@@ -26,7 +30,7 @@
         </div>
         <div class="flex items-center gap-6">
             <div class="text-right">
-                <div class="text-sm text-gray-400">⚡ Sats Earned</div>
+                <div class="text-sm text-gray-400 flex items-center gap-1"><%- include('partials/icon', { name: 'lightning', size: 14, cls: 'text-gray-400' }) %> Sats Earned</div>
                 <div class="text-lg font-mono font-bold text-throne-gold sats-glow" id="total-sats-earned"><%= state.stats.totalSatsDistributed.toLocaleString() %></div>
             </div>
             <div class="text-right">
@@ -38,92 +42,97 @@
 
     <div class="flex-1 flex">
         <!-- Left: King & Game (70%) -->
-        <div class="flex-[7] flex flex-col p-6">
-            <!-- King Section -->
-            <div class="text-center mb-4" id="king-section">
+        <div class="flex-[7] flex flex-col">
+            <!-- Compact King Info Bar -->
+            <div class="px-6 py-3 border-b border-gray-800 flex items-center justify-between" id="king-section">
                 <% if (state.king) { %>
-                <div class="inline-block">
-                    <div class="text-6xl mb-2 crown-drop">👑</div>
-                    <div class="text-5xl font-bold text-throne-gold mb-3" id="king-name"><%= state.king.name %></div>
-                    <div class="flex items-center justify-center gap-8 text-xl">
-                        <div>
-                            <span class="text-gray-400">Reign:</span>
-                            <span class="font-mono" id="reign-time"><%= Math.floor(state.reignSeconds / 3600) %>:<%= String(Math.floor((state.reignSeconds % 3600) / 60)).padStart(2, '0') %>:<%= String(state.reignSeconds % 60).padStart(2, '0') %></span>
-                        </div>
-                        <div>
-                            <span class="text-gray-400">Streak:</span>
-                            <span class="font-mono" id="win-streak"><%= state.reign ? state.reign.consecutive_wins : 0 %></span>
-                        </div>
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <%- include('partials/icon', { name: 'crown', size: 28, cls: 'text-throne-gold' }) %>
+                        <span class="text-2xl font-bold text-throne-gold" id="king-name"><%= state.king.name %></span>
                     </div>
-                    <% if (state.king.times_as_king > 1 || state.king.total_sats_earned > 0) { %>
-                    <div class="flex items-center justify-center gap-6 mt-2 text-sm text-gray-500">
-                        <span>All-time: <%= state.king.total_sats_earned.toLocaleString() %> sats</span>
-                        <span><%= Math.floor(state.king.total_reign_seconds / 60) %>m reign</span>
-                        <span><%= state.king.times_as_king %> reigns</span>
+                    <div class="text-sm text-gray-400">
+                        <span class="font-mono" id="reign-time"><%= Math.floor(state.reignSeconds / 3600) %>:<%= String(Math.floor((state.reignSeconds % 3600) / 60)).padStart(2, '0') %>:<%= String(state.reignSeconds % 60).padStart(2, '0') %></span>
+                        reign · <span class="font-mono" id="win-streak"><%= state.reign ? state.reign.consecutive_wins : 0 %></span> streak
                     </div>
-                    <% } %>
+                </div>
+                <div class="text-right">
+                    <div class="text-3xl font-mono font-bold text-throne-gold sats-glow" id="sat-counter"><%= state.liveSats.toLocaleString() %></div>
+                    <div class="text-xs text-gray-500">sats this reign (<%= state.config.satRate %>/s)</div>
                 </div>
                 <% } else { %>
-                <div class="text-3xl text-gray-500">No King on the Throne</div>
-                <div class="text-gray-600 mt-2">Waiting for the first player...</div>
+                <div class="text-lg text-gray-500">No King on the Throne</div>
+                <div class="text-sm text-gray-600">Waiting for the first player...</div>
                 <% } %>
             </div>
 
-            <!-- Sat Counter -->
-            <% if (state.king) { %>
-            <div class="text-center mb-6">
-                <div class="text-7xl font-mono font-bold text-throne-gold sats-glow" id="sat-counter"><%= state.liveSats.toLocaleString() %></div>
-                <div class="text-lg text-gray-400 mt-1">sats earned this reign (<%= state.config.satRate %>/sec)</div>
-            </div>
-            <% } %>
-
-            <!-- Active Game / Chess960 Position -->
-            <div class="flex-1 flex items-center justify-center" id="game-section">
+            <!-- Active Game / Chess960 Board -->
+            <div class="flex-1 flex items-center justify-center p-4" id="game-section">
                 <% if (state.game) { %>
-                <div class="text-center w-full">
-                    <div class="text-lg font-mono text-gray-400 mb-2">Game #<%= state.stats.totalGames + 1 %></div>
+                <div class="text-center">
                     <% const kc = state.game.king_color || 'white'; %>
-                    <div class="flex items-center justify-center gap-4 mb-4">
-                        <div class="text-2xl flex items-center gap-3">
-                            <span class="<%= kc === 'white' ? 'color-box-white' : 'color-box-black' %> text-xl font-bold">👑 <%= state.game.king_name %></span>
-                            <span class="text-gray-500">vs</span>
-                            <span class="<%= kc === 'white' ? 'color-box-black' : 'color-box-white' %> text-xl font-bold">⚔️ <%= state.game.challenger_name %></span>
-                        </div>
+                    <!-- Player matchup + game info -->
+                    <div class="flex items-center justify-center gap-3 mb-3">
+                        <span class="<%= kc === 'white' ? 'color-box-white' : 'color-box-black' %> text-lg font-bold flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %> <%= state.game.king_name %></span>
+                        <span class="text-gray-500 text-sm">vs</span>
+                        <span class="<%= kc === 'white' ? 'color-box-black' : 'color-box-white' %> text-lg font-bold flex items-center gap-1"><%- include('partials/icon', { name: 'crossed-swords', size: 16, cls: '' }) %> <%= state.game.challenger_name %></span>
+                        <span class="text-sm text-gray-500 ml-2">Game #<%= state.stats.totalGames + 1 %> · Pos #<%= state.game.chess960_position %> · <span id="game-elapsed" class="font-mono"><%= state.game.elapsed %></span>s</span>
                     </div>
-                    <!-- Chess960 Board — shows king's pieces so challenger can mirror -->
-                    <div class="inline-block bg-throne-dark rounded-xl p-4 border border-gray-700">
-                        <div class="text-sm text-gray-400 mb-2">Position #<%= state.game.chess960_position %></div>
+                    <!-- Chess960 Full Board — stub for live electronic board integration -->
+                    <div class="inline-block bg-throne-dark rounded-xl p-3 border border-gray-700" id="live-board" data-live-board="true" data-position="<%= state.game.chess960_position %>">
                         <%
                           const pieces = state.game.position.pieces;
                           const isKingWhite = kc === 'white';
-                          // Always use filled pieces (♚♛♜♝♞) — style color via CSS
-                          const filledPieces = {R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚'};
-                          // If king is black, mirror the board (show from black's perspective)
-                          const orderedPieces = isKingWhite ? pieces : [...pieces].reverse();
+                          const filledPieces = {R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚',P:'♟'};
+                          // Board orientation: white at bottom if king is white
                           const fileLabels = isKingWhite ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
-                          const pieceColorClass = isKingWhite ? 'chess-piece-white' : 'chess-piece-black';
+                          const rankLabels = isKingWhite ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+                          // Build 8x8 board array (from top rank to bottom as displayed)
+                          // White perspective: rank 8 at top, rank 1 at bottom
+                          // Black perspective: rank 1 at top, rank 8 at bottom
+                          const backRank = isKingWhite ? pieces : [...pieces].reverse();
+                          const board = [];
+                          if (isKingWhite) {
+                            // Row 0 = rank 8 (black pieces), Row 7 = rank 1 (white pieces)
+                            board.push(backRank.map(p => ({piece: filledPieces[p], color: 'black'})));
+                            board.push(Array(8).fill({piece: '♟', color: 'black'}));
+                            for (let r = 0; r < 4; r++) board.push(Array(8).fill(null));
+                            board.push(Array(8).fill({piece: '♟', color: 'white'}));
+                            board.push(backRank.map(p => ({piece: filledPieces[p], color: 'white'})));
+                          } else {
+                            // Flipped: Row 0 = rank 1 (white pieces from black's view)
+                            board.push([...pieces].reverse().map(p => ({piece: filledPieces[p], color: 'white'})));
+                            board.push(Array(8).fill({piece: '♟', color: 'white'}));
+                            for (let r = 0; r < 4; r++) board.push(Array(8).fill(null));
+                            board.push(Array(8).fill({piece: '♟', color: 'black'}));
+                            board.push(pieces.map(p => ({piece: filledPieces[p], color: 'black'})));
+                          }
                         %>
-                        <div class="text-xs text-gray-500 mb-2"><%= kc.charAt(0).toUpperCase() + kc.slice(1) %>'s pieces — challenger mirrors</div>
-                        <div class="flex gap-1" id="chess-board">
-                            <% orderedPieces.forEach((p, i) => { %>
-                            <div class="w-16 h-16 flex items-center justify-center rounded <%= i % 2 === 0 ? 'bg-amber-700' : 'bg-amber-100' %>">
-                                <span class="chess-piece <%= pieceColorClass %>"><%= filledPieces[p] || p %></span>
+                        <div class="inline-block">
+                            <% board.forEach((row, r) => { %>
+                            <div class="flex">
+                                <div class="w-5 flex items-center justify-center text-xs text-gray-500 font-mono"><%= rankLabels[r] %></div>
+                                <% row.forEach((sq, c) => { %>
+                                <div class="board-square <%= (r + c) % 2 === 0 ? 'sq-light' : 'sq-dark' %>" data-square="<%= fileLabels[c] %><%= rankLabels[r] %>">
+                                    <% if (sq) { %>
+                                    <span class="chess-piece chess-piece-lg chess-piece-<%= sq.color %>"><%= sq.piece %></span>
+                                    <% } %>
+                                </div>
+                                <% }) %>
                             </div>
                             <% }) %>
+                            <div class="flex">
+                                <div class="w-5"></div>
+                                <% fileLabels.forEach(f => { %>
+                                <div class="board-square" style="height:auto;"><span class="text-xs text-gray-500 font-mono"><%= f %></span></div>
+                                <% }) %>
+                            </div>
                         </div>
-                        <div class="flex gap-1 mt-1">
-                            <% fileLabels.forEach((f, i) => { %>
-                            <div class="w-16 text-center text-xs text-gray-500"><%= f %></div>
-                            <% }) %>
-                        </div>
-                    </div>
-                    <div class="text-sm text-gray-400 mt-3 font-mono" id="game-timer">
-                        Game time: <span id="game-elapsed"><%= state.game.elapsed %></span>s
                     </div>
                 </div>
                 <% } else if (state.king) { %>
                 <div class="text-center text-gray-500">
-                    <div class="text-4xl mb-3">⏳</div>
+                    <div class="mb-3"><%- include('partials/icon', { name: 'hourglass', size: 48, cls: 'text-gray-500' }) %></div>
                     <div class="text-xl">Waiting for challenger...</div>
                 </div>
                 <% } %>
@@ -133,12 +142,12 @@
         <!-- Right: Queue (30%) -->
         <div class="flex-[3] bg-throne-dark border-l border-gray-800 flex flex-col">
             <div class="p-4 border-b border-gray-800">
-                <h2 class="text-lg font-bold text-gray-300">📋 Challengers</h2>
+                <h2 class="text-lg font-bold text-gray-300 flex items-center gap-2"><%- include('partials/icon', { name: 'queue', size: 20, cls: '' }) %> Challengers</h2>
             </div>
             <div class="flex-1 overflow-y-auto p-4" id="queue-list">
                 <% if (state.queue.length === 0) { %>
                 <div class="text-center text-gray-600 mt-8">
-                    <div class="text-3xl mb-2">🏰</div>
+                    <div class="mb-2"><%- include('partials/icon', { name: 'castle', size: 36, cls: 'text-gray-600' }) %></div>
                     <div>No challengers in line</div>
                     <div class="text-sm mt-1">Scan QR to join!</div>
                 </div>
@@ -148,7 +157,7 @@
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
                             <span class="text-2xl font-bold <%= entry.status === 'on_deck' ? 'text-throne-gold' : 'text-gray-600' %>">
-                                <%= entry.status === 'on_deck' ? '🔔' : '#' + entry.position %>
+                                <% if (entry.status === 'on_deck') { %><%- include('partials/icon', { name: 'bell', size: 24, cls: 'text-throne-gold' }) %><% } else { %>#<%= entry.position %><% } %>
                             </span>
                             <span class="<%= i === 0 ? 'text-2xl font-bold text-throne-gold' : 'text-lg' %>">
                                 <%= entry.player_name %>
@@ -167,8 +176,7 @@
             <div class="p-4 border-t border-gray-800 text-center">
                 <% if (state.venueCode) { %>
                 <div class="text-xs text-gray-500 mb-2">Scan to join the line</div>
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=<%= encodeURIComponent(state.baseUrl + '/?code=' + state.venueCode.code) %>&bgcolor=1a1a2e&color=FFD700&format=png" 
-                     alt="QR" class="mx-auto rounded-lg mb-2" width="280" height="280">
+                <img src="/api/venue-qr.png" alt="QR" class="mx-auto rounded-lg mb-2" width="280" height="280" style="background: #fff; padding: 8px;">
                 <div class="text-3xl font-mono font-bold text-throne-gold tracking-[0.3em]"><%= state.venueCode.code %></div>
                 <% } %>
             </div>
@@ -181,11 +189,11 @@
         <% state.recentGames.forEach(g => { %>
         <span class="shrink-0 text-gray-400">
             <% if (g.result === 'king_won') { %>
-                👑 <%= g.king_name %> def. <%= g.challenger_name %>
+                <%- include('partials/icon', { name: 'crown', size: 14, cls: 'text-throne-gold' }) %> <%= g.king_name %> def. <%= g.challenger_name %>
             <% } else if (g.result === 'challenger_won') { %>
-                ⚔️ <%= g.challenger_name %> dethroned <%= g.king_name %>!
+                <%- include('partials/icon', { name: 'crossed-swords', size: 14, cls: 'text-red-400' }) %> <%= g.challenger_name %> dethroned <%= g.king_name %>!
             <% } else { %>
-                🤝 <%= g.king_name %> drew vs <%= g.challenger_name %>
+                <%- include('partials/icon', { name: 'handshake', size: 14, cls: '' }) %> <%= g.king_name %> drew vs <%= g.challenger_name %>
             <% } %>
             <span class="text-throne-gold ml-1"><%= g.sats_earned %> sats</span>
         </span>

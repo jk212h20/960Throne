@@ -96,13 +96,13 @@
         <!-- Header -->
         <div class="flex items-center justify-between mb-4">
             <h1 class="text-2xl font-bold">📜 Event Timeline</h1>
-            <a href="/leaderboard" class="text-gray-500 hover:text-throne-gold text-sm">🏆 Leaderboard</a>
+            <a href="/leaderboard" class="text-gray-500 hover:text-throne-gold text-sm flex items-center gap-1"><%- include('partials/icon', { name: 'trophy', size: 14, cls: '' }) %> Leaderboard</a>
         </div>
 
         <% if (timeline.totalGames === 0) { %>
         <!-- Empty state -->
         <div class="card text-center py-12">
-            <div class="text-4xl mb-4">🏰</div>
+            <div class="mb-4"><%- include('partials/icon', { name: 'castle', size: 48, cls: 'text-gray-600' }) %></div>
             <h2 class="text-xl font-bold text-gray-400 mb-2">No Games Yet</h2>
             <p class="text-gray-500">The throne awaits its first king. Games will appear here as they're played.</p>
         </div>
@@ -221,7 +221,7 @@
                     <div class="timeline-node crown" style="top: 8px;"></div>
                     <div class="rounded-xl p-3 sm:p-4 border" style="border-color: <%= entry.color %>40; background: <%= entry.color %>10;">
                         <div class="flex items-center gap-2 mb-1">
-                            <span class="text-lg">👑</span>
+                            <%- include('partials/icon', { name: 'crown', size: 20, cls: 'text-throne-gold' }) %>
                             <span class="font-bold text-throne-gold text-base sm:text-lg"><%= entry.reign.king_name %></span>
                             <span class="text-xs text-gray-400">crowned</span>
                         </div>
@@ -229,7 +229,7 @@
                             <% if (entry.reign.dethroned_at) { %>
                                 Reign: <%= formatDuration(entry.reign.total_reign_seconds) %> · <%= entry.reign.consecutive_wins %> win<%= entry.reign.consecutive_wins !== 1 ? 's' : '' %> · <%= (entry.reign.total_sats_earned || 0).toLocaleString() %> sats
                             <% } else { %>
-                                <span class="text-throne-gold font-bold">👑 Currently reigning</span>
+                                <span class="text-throne-gold font-bold flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 16, cls: 'text-throne-gold' }) %> Currently reigning</span>
                                 <% if (entry.reign.consecutive_wins > 0) { %>
                                  · <%= entry.reign.consecutive_wins %> win<%= entry.reign.consecutive_wins !== 1 ? 's' : '' %>
                                 <% } %>
@@ -305,12 +305,12 @@
                 <div class="timeline-node crown" style="top: 8px;"></div>
                 <div class="rounded-xl p-3 sm:p-4 border border-throne-gold/30 bg-throne-gold/5">
                     <div class="flex items-center gap-2">
-                        <span class="text-lg animate-pulse-slow">👑</span>
+                        <%- include('partials/icon', { name: 'crown', size: 20, cls: 'text-throne-gold animate-pulse-slow' }) %>
                         <span class="font-bold text-throne-gold"><%= currentKing.name %></span>
                         <span class="text-xs text-gray-400">rules the throne</span>
                     </div>
                     <div class="text-xs text-gray-500 mt-1">
-                        ⚡ Earning 21 sats/sec · <%= liveSats.toLocaleString() %> sats accumulated
+                        <%- include('partials/icon', { name: 'lightning', size: 14, cls: 'text-throne-gold' }) %> Earning 21 sats/sec · <%= liveSats.toLocaleString() %> sats accumulated
                     </div>
                 </div>
             </div>
@@ -321,9 +321,9 @@
 
         <!-- Footer Nav -->
         <div class="flex justify-center gap-6 mt-8 mb-4 text-sm text-gray-500">
-            <a href="/live" class="hover:text-throne-gold transition-colors">👑 Throne</a>
-            <a href="/leaderboard" class="hover:text-throne-gold transition-colors">🏆 Leaderboard</a>
-            <a href="/queue" class="hover:text-throne-gold transition-colors">📋 Queue</a>
+            <a href="/live" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %> Throne</a>
+            <a href="/leaderboard" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'trophy', size: 16, cls: '' }) %> Leaderboard</a>
+            <a href="/queue" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'queue', size: 16, cls: '' }) %> Queue</a>
         </div>
     </div>
 

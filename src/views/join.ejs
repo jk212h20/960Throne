@@ -10,7 +10,7 @@
 <body class="min-h-screen bg-throne-darker flex items-center justify-center p-4">
     <div class="max-w-md w-full">
         <div class="text-center mb-6">
-            <div class="text-4xl mb-2">📋</div>
+            <div class="mb-2"><%- include('partials/icon', { name: 'queue', size: 40, cls: '' }) %></div>
             <h1 class="text-2xl font-bold">Join the Queue</h1>
             <p class="text-gray-400 mt-1">Welcome, <span class="text-throne-gold"><%= player.name %></span></p>
         </div>
@@ -19,14 +19,14 @@
             <% if (venueCode) { %>
             <div class="text-center">
                 <p class="text-gray-300 mb-4">Ready to challenge the King?</p>
-                <button onclick="joinQueue()" id="join-btn" class="btn-gold w-full text-xl">⚔️ Join Queue</button>
+                <button onclick="joinQueue()" id="join-btn" class="btn-gold w-full text-xl flex items-center justify-center gap-2"><%- include('partials/icon', { name: 'crossed-swords', size: 22, cls: '' }) %> Join Queue</button>
             </div>
             <% } else { %>
             <div class="text-center">
                 <p class="text-gray-300 mb-4">Enter the venue code shown on the screen:</p>
                 <input type="text" id="venue-code-input" class="input text-center text-2xl font-mono tracking-widest mb-4"
                     placeholder="ABC123" maxlength="6" style="text-transform: uppercase;">
-                <button onclick="joinWithCode()" id="join-btn" class="btn-gold w-full text-xl">⚔️ Join Queue</button>
+                <button onclick="joinWithCode()" id="join-btn" class="btn-gold w-full text-xl flex items-center justify-center gap-2"><%- include('partials/icon', { name: 'crossed-swords', size: 22, cls: '' }) %> Join Queue</button>
             </div>
             <% } %>
 

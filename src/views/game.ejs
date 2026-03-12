@@ -49,17 +49,17 @@
             </div>
 
             <div class="flex items-center justify-center gap-2 text-lg mb-2">
-                <span class="<%= kingColor === 'white' ? 'color-box-white' : 'color-box-black' %> font-bold">👑 <%= state.game.king_name %></span>
+                <span class="<%= kingColor === 'white' ? 'color-box-white' : 'color-box-black' %> font-bold flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 18, cls: '' }) %> <%= state.game.king_name %></span>
                 <span class="text-gray-500">vs</span>
-                <span class="<%= kingColor === 'white' ? 'color-box-black' : 'color-box-white' %> font-bold">⚔️ <%= state.game.challenger_name %></span>
+                <span class="<%= kingColor === 'white' ? 'color-box-black' : 'color-box-white' %> font-bold flex items-center gap-1"><%- include('partials/icon', { name: 'crossed-swords', size: 18, cls: '' }) %> <%= state.game.challenger_name %></span>
             </div>
 
             <% const myColor = isKing ? kingColor : (kingColor === 'white' ? 'black' : 'white'); %>
             <div class="text-sm text-gray-400">
-                You are the <span class="text-throne-gold font-bold"><%= isKing ? 'King 👑' : 'Challenger ⚔️' %></span>
+                You are the <span class="text-throne-gold font-bold"><%= isKing ? 'King' : 'Challenger' %></span>
                 — playing <span class="font-bold <%= myColor === 'white' ? 'color-box-white' : 'color-box-black' %>" style="font-size: 0.875rem;"><%= myColor === 'white' ? 'White' : 'Black' %></span>
             </div>
-            <div class="text-sm text-yellow-400 mt-2">⏱️ Started <span id="game-elapsed">0:00</span> ago</div>
+            <div class="text-sm text-yellow-400 mt-2 flex items-center justify-center gap-1"><%- include('partials/icon', { name: 'stopwatch', size: 16, cls: 'text-yellow-400' }) %> Started <span id="game-elapsed">0:00</span> ago</div>
         </div>
 
         <!-- Report Result -->
@@ -70,30 +70,30 @@
                 <button onclick="report('king_won')" class="w-full p-4 rounded-lg text-lg font-bold transition-all
                     <%= isKing ? 'bg-green-800 hover:bg-green-700 text-white' : 'bg-red-900 hover:bg-red-800 text-white' %>">
                     <% if (isKing) { %>
-                        ✅ I Won (King Wins)
+                        <%- include('partials/icon', { name: 'checkmark', size: 20, cls: 'text-green-300' }) %> I Won (King Wins)
                     <% } else { %>
-                        ❌ I Lost (King Wins)
+                        <%- include('partials/icon', { name: 'cross', size: 20, cls: 'text-red-300' }) %> I Lost (King Wins)
                     <% } %>
                 </button>
 
                 <button onclick="report('challenger_won')" class="w-full p-4 rounded-lg text-lg font-bold transition-all
                     <%= isChallenger ? 'bg-green-800 hover:bg-green-700 text-white' : 'bg-red-900 hover:bg-red-800 text-white' %>">
                     <% if (isChallenger) { %>
-                        ✅ I Won (Challenger Wins)
+                        <%- include('partials/icon', { name: 'checkmark', size: 20, cls: 'text-green-300' }) %> I Won (Challenger Wins)
                     <% } else { %>
-                        ❌ I Lost (Challenger Wins)
+                        <%- include('partials/icon', { name: 'cross', size: 20, cls: 'text-red-300' }) %> I Lost (Challenger Wins)
                     <% } %>
                 </button>
 
                 <button onclick="report('draw')" class="w-full p-4 rounded-lg text-lg font-bold bg-gray-700 hover:bg-gray-600 text-white">
-                    🤝 Draw (King Stays)
+                    <%- include('partials/icon', { name: 'handshake', size: 20, cls: '' }) %> Draw (King Stays)
                 </button>
 
                 <button onclick="report('no_show')" class="w-full p-3 rounded-lg text-sm font-bold bg-yellow-900 hover:bg-yellow-800 text-yellow-300 transition-all">
                     <% if (isChallenger) { %>
-                        ⏭️ Skip Me
+                        <%- include('partials/icon', { name: 'skip', size: 18, cls: 'text-yellow-300' }) %> Skip Me
                     <% } else { %>
-                        🚫 No Show
+                        <%- include('partials/icon', { name: 'warning', size: 18, cls: 'text-yellow-300' }) %> No Show
                     <% } %>
                 </button>
             </div>
@@ -103,7 +103,7 @@
         <% } else { %>
         <!-- Not in this game -->
         <div class="card text-center">
-            <div class="text-2xl mb-2">👀</div>
+            <div class="text-2xl mb-2"><%- include('partials/icon', { name: 'gamepad', size: 28, cls: 'text-gray-400' }) %></div>
             <div class="text-lg">Game in progress</div>
             <div class="text-gray-400 mt-2"><%= state.game.king_name %> vs <%= state.game.challenger_name %></div>
             <a href="/player" class="btn-outline inline-block mt-4">← Back to Dashboard</a>
@@ -113,7 +113,7 @@
         <% } else { %>
         <!-- No active game -->
         <div class="card text-center">
-            <div class="text-2xl mb-2">⏳</div>
+            <div class="mb-2"><%- include('partials/icon', { name: 'hourglass', size: 28, cls: 'text-gray-400' }) %></div>
             <div class="text-lg">No active game</div>
             <a href="/player" class="btn-outline inline-block mt-4">← Back to Dashboard</a>
         </div>
