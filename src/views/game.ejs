@@ -8,8 +8,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
-        .chess-piece-white { color: #fff; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 3px rgba(0,0,0,0.5); }
-        .chess-piece-black { color: #1a1a1a; }
+        .piece-img { width: 85%; height: 85%; object-fit: contain; }
         .color-box-white { display: inline-block; background: #fff; color: #1a1a1a; padding: 2px 8px; border-radius: 4px; border: 2px solid #fff; }
         .color-box-black { display: inline-block; background: #1a1a1a; color: #fff; padding: 2px 8px; border-radius: 4px; border: 2px solid #555; }
     </style>
@@ -28,17 +27,16 @@
             <%
               const kingColor = state.game.king_color || 'white';
               const isKingWhiteG = kingColor === 'white';
-              const filledPiecesG = {R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚'};
               const gamePieces = state.game.position.pieces;
               const orderedPiecesG = isKingWhiteG ? gamePieces : [...gamePieces].reverse();
               const fileLabelsG = isKingWhiteG ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
-              const pieceColorClassG = isKingWhiteG ? 'chess-piece-white' : 'chess-piece-black';
+              const pieceColorPrefixG = isKingWhiteG ? 'w' : 'b';
             %>
             <div class="text-xs text-gray-500 mb-2"><%= kingColor.charAt(0).toUpperCase() + kingColor.slice(1) %>'s pieces — challenger mirrors</div>
             <div class="flex justify-center gap-1 mb-1">
                 <% orderedPiecesG.forEach((p, i) => { %>
-                <div class="w-10 h-10 flex items-center justify-center rounded text-2xl <%= i % 2 === 0 ? 'bg-amber-700' : 'bg-amber-100' %>">
-                    <span class="<%= pieceColorClassG %>"><%= filledPiecesG[p] || p %></span>
+                <div class="w-10 h-10 flex items-center justify-center rounded <%= i % 2 === 0 ? 'bg-amber-700' : 'bg-amber-100' %>">
+                    <img src="/pieces/<%= pieceColorPrefixG %><%= p %>.svg" class="piece-img" alt="<%= p %>">
                 </div>
                 <% }) %>
             </div>

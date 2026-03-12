@@ -8,9 +8,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; overflow: hidden; }
-        .chess-piece { font-size: 2.5rem; line-height: 1; }
-        .chess-piece-white { color: #fff; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 3px rgba(0,0,0,0.5); }
-        .chess-piece-black { color: #1a1a1a; }
+        .piece-img { width: 85%; height: 85%; object-fit: contain; }
         .color-box-white { display: inline-block; background: #fff; color: #1a1a1a; padding: 2px 10px; border-radius: 4px; border: 2px solid #fff; }
         .color-box-black { display: inline-block; background: #1a1a1a; color: #fff; padding: 2px 10px; border-radius: 4px; border: 2px solid #555; }
         @keyframes satsGlow { 0%,100% { text-shadow: 0 0 10px #FFD700; } 50% { text-shadow: 0 0 30px #FFD700, 0 0 60px #FFD700; } }
@@ -96,16 +94,15 @@
                         <%
                           const pieces = state.game.position.pieces;
                           const isKingWhite2 = kc2 === 'white';
-                          const filledPieces2 = {R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚'};
                           const orderedPieces2 = isKingWhite2 ? pieces : [...pieces].reverse();
                           const fileLabels2 = isKingWhite2 ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
-                          const pieceColorClass2 = isKingWhite2 ? 'chess-piece-white' : 'chess-piece-black';
+                          const piecePrefix2 = isKingWhite2 ? 'w' : 'b';
                         %>
                         <div class="text-xs text-gray-500 mb-2"><%= kc2.charAt(0).toUpperCase() + kc2.slice(1) %>'s pieces — challenger mirrors</div>
                         <div class="flex gap-1" id="chess-board">
                             <% orderedPieces2.forEach((p, i) => { %>
                             <div class="w-16 h-16 flex items-center justify-center rounded <%= i % 2 === 0 ? 'bg-amber-700' : 'bg-amber-100' %>">
-                                <span class="chess-piece <%= pieceColorClass2 %>"><%= filledPieces2[p] || p %></span>
+                                <img src="/pieces/<%= piecePrefix2 %><%= p %>.svg" class="piece-img" alt="<%= p %>">
                             </div>
                             <% }) %>
                         </div>

@@ -8,11 +8,8 @@
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; overflow: hidden; }
-        .chess-piece { line-height: 1; }
-        .chess-piece-lg { font-size: 2.2rem; }
-        .chess-piece-white { color: #fff; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 3px rgba(0,0,0,0.5); }
-        .chess-piece-black { color: #1a1a1a; }
         .board-square { width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; }
+        .piece-img { width: 85%; height: 85%; object-fit: contain; }
         .sq-light { background: #f0d9b5; }
         .sq-dark { background: #b58863; }
         .color-box-white { display: inline-block; background: #fff; color: #1a1a1a; padding: 2px 10px; border-radius: 4px; border: 2px solid #fff; }
@@ -83,29 +80,22 @@
                         <%
                           const pieces = state.game.position.pieces;
                           const isKingWhite = kc === 'white';
-                          const filledPieces = {R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚',P:'♟'};
-                          // Board orientation: white at bottom if king is white
                           const fileLabels = isKingWhite ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
                           const rankLabels = isKingWhite ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
-                          // Build 8x8 board array (from top rank to bottom as displayed)
-                          // White perspective: rank 8 at top, rank 1 at bottom
-                          // Black perspective: rank 1 at top, rank 8 at bottom
                           const backRank = isKingWhite ? pieces : [...pieces].reverse();
                           const board = [];
                           if (isKingWhite) {
-                            // Row 0 = rank 8 (black pieces), Row 7 = rank 1 (white pieces)
-                            board.push(backRank.map(p => ({piece: filledPieces[p], color: 'black'})));
-                            board.push(Array(8).fill({piece: '♟', color: 'black'}));
+                            board.push(backRank.map(p => ({img: 'b' + p})));
+                            board.push(Array(8).fill({img: 'bP'}));
                             for (let r = 0; r < 4; r++) board.push(Array(8).fill(null));
-                            board.push(Array(8).fill({piece: '♟', color: 'white'}));
-                            board.push(backRank.map(p => ({piece: filledPieces[p], color: 'white'})));
+                            board.push(Array(8).fill({img: 'wP'}));
+                            board.push(backRank.map(p => ({img: 'w' + p})));
                           } else {
-                            // Flipped: Row 0 = rank 1 (white pieces from black's view)
-                            board.push([...pieces].reverse().map(p => ({piece: filledPieces[p], color: 'white'})));
-                            board.push(Array(8).fill({piece: '♟', color: 'white'}));
+                            board.push([...pieces].reverse().map(p => ({img: 'w' + p})));
+                            board.push(Array(8).fill({img: 'wP'}));
                             for (let r = 0; r < 4; r++) board.push(Array(8).fill(null));
-                            board.push(Array(8).fill({piece: '♟', color: 'black'}));
-                            board.push(pieces.map(p => ({piece: filledPieces[p], color: 'black'})));
+                            board.push(Array(8).fill({img: 'bP'}));
+                            board.push(pieces.map(p => ({img: 'b' + p})));
                           }
                         %>
                         <div class="inline-block">
@@ -115,7 +105,7 @@
                                 <% row.forEach((sq, c) => { %>
                                 <div class="board-square <%= (r + c) % 2 === 0 ? 'sq-light' : 'sq-dark' %>" data-square="<%= fileLabels[c] %><%= rankLabels[r] %>">
                                     <% if (sq) { %>
-                                    <span class="chess-piece chess-piece-lg chess-piece-<%= sq.color %>"><%= sq.piece %></span>
+                                    <img src="/pieces/<%= sq.img %>.svg" class="piece-img" alt="<%= sq.img %>">
                                     <% } %>
                                 </div>
                                 <% }) %>

@@ -63,10 +63,10 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 13px;
         }
+        .mini-pieces .sq img { width: 85%; height: 85%; object-fit: contain; }
         @media (min-width: 640px) {
-            .mini-pieces .sq { width: 22px; height: 22px; font-size: 16px; }
+            .mini-pieces .sq { width: 22px; height: 22px; }
         }
         .sq-light { background: #f0d9b5; }
         .sq-dark { background: #b58863; }
@@ -209,9 +209,6 @@
                 // Sort chronologically
                 entries.sort((a, b) => new Date(a.time) - new Date(b.time));
 
-                // Unicode piece map
-                const pieceMap = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘' };
-                const pieceMapBlack = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞' };
             %>
 
             <% entries.forEach((entry, idx) => { %>
@@ -286,7 +283,7 @@
                                 <div class="mini-pieces">
                                     <% pieces.forEach((p, i) => { %>
                                         <div class="sq <%= i % 2 === 0 ? 'sq-dark' : 'sq-light' %>">
-                                            <%= isWhiteKing ? (pieceMap[p] || p) : (pieceMapBlack[p] || p) %>
+                                            <img src="/pieces/<%= isWhiteKing ? 'w' : 'b' %><%= p %>.svg" alt="<%= p %>">
                                         </div>
                                     <% }) %>
                                 </div>
