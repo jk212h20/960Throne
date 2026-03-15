@@ -99,7 +99,8 @@ router.get('/live', (req, res) => {
 // Board — Just the live board, nothing else (public, embeddable)
 router.get('/board', (req, res) => {
     const dgt = dgtBoard.getState();
-    res.render('board', { dgt });
+    const state = gameEngine.getThoneState();
+    res.render('board', { dgt, game: state.game });
 });
 
 // Game — Active game view (for players in the current game)

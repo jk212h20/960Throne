@@ -22,14 +22,14 @@
             width: min(90vw, 90vh, 600px);
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 0;
         }
         .board {
             display: grid;
             grid-template-columns: repeat(8, 1fr);
             aspect-ratio: 1;
-            border: 2px solid #444;
-            border-radius: 4px;
+            border-left: 2px solid #444;
+            border-right: 2px solid #444;
             overflow: hidden;
         }
         .sq {
@@ -43,55 +43,93 @@
         .sq-highlight { background: #cdd26a !important; }
         .piece-img { width: 85%; height: 85%; object-fit: contain; }
 
-        /* Clocks */
-        .clocks {
+        /* Player bar — name + clock on each side of the board */
+        .player-bar {
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
-            font-size: 1.4rem;
-            font-weight: bold;
+            padding: 8px 12px;
+            background: #1a1a2e;
+            border: 2px solid #444;
+            min-height: 44px;
         }
-        .clock {
+        .player-bar-top {
+            border-radius: 6px 6px 0 0;
+            border-bottom: none;
+        }
+        .player-bar-bottom {
+            border-radius: 0 0 6px 6px;
+            border-top: none;
+        }
+        .player-info {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 6px 14px;
-            border-radius: 6px;
-            background: #1a1a2e;
-            border: 1px solid #333;
         }
-        .clock-dot {
-            width: 14px;
-            height: 14px;
+        .player-dot {
+            width: 12px;
+            height: 12px;
             border-radius: 3px;
             border: 1px solid #555;
+            flex-shrink: 0;
         }
-        .clock-dot-white { background: #fff; }
-        .clock-dot-black { background: #222; }
-        .clock-active { border-color: #4ade80; background: #1a2e1a; }
+        .player-dot-white { background: #fff; }
+        .player-dot-black { background: #222; }
+        .player-name {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+        .player-clock {
+            font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #aaa;
+            padding: 2px 10px;
+            border-radius: 4px;
+            background: #111;
+        }
+        .player-clock-active {
+            color: #4ade80;
+            background: #0a1a0a;
+        }
 
-        /* Empty state */
-        .empty {
-            text-align: center;
-            color: #666;
-            font-size: 1.1rem;
-            padding: 40px 0;
-        }
-        .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+        /* Hidden when no data */
+        .hidden { display: none; }
 
         /* Status line */
         .status {
             text-align: center;
             font-size: 0.8rem;
             color: #555;
-            margin-top: 4px;
+            margin-top: 8px;
         }
         .status-connected { color: #4ade80; }
         .status-disconnected { color: #ef4444; }
     </style>
 </head>
 <body>
+    <%
+        // Derive white/black player names from game state
+        // game.king_color tells us which color the king plays
+        var whiteName = '';
+        var blackName = '';
+        if (game) {
+            var kc = game.king_color || 'white';
+            whiteName = kc === 'white' ? (game.king_name || '') : (game.challenger_name || '');
+            blackName = kc === 'white' ? (game.challenger_name || '') : (game.king_name || '');
+        }
+    %>
     <div class="board-wrap">
+        <!-- Black player (top — rank 8 side) -->
+        <div class="player-bar player-bar-top" id="bar-black">
+            <div class="player-info">
+                <span class="player-dot player-dot-black"></span>
+                <span class="player-name" id="name-black"><%= blackName %></span>
+            </div>
+            <span class="player-clock" id="clock-black"><%= (dgt && dgt.clock) ? Math.floor(dgt.clock.black/60)+':'+String(dgt.clock.black%60).padStart(2,'0') : '' %></span>
+        </div>
+
         <div class="board" id="board">
             <% if (dgt && dgt.board) { %>
                 <% dgt.board.forEach((row, ri) => { %>
@@ -112,15 +150,13 @@
             <% } %>
         </div>
 
-        <div class="clocks" id="clocks" style="<%= (dgt && dgt.clock) ? '' : 'display:none' %>">
-            <div class="clock" id="clock-white-wrap">
-                <span class="clock-dot clock-dot-white"></span>
-                <span id="clock-white"><%= (dgt && dgt.clock) ? Math.floor(dgt.clock.white/60)+':'+String(dgt.clock.white%60).padStart(2,'0') : '--:--' %></span>
+        <!-- White player (bottom — rank 1 side) -->
+        <div class="player-bar player-bar-bottom" id="bar-white">
+            <div class="player-info">
+                <span class="player-dot player-dot-white"></span>
+                <span class="player-name" id="name-white"><%= whiteName %></span>
             </div>
-            <div class="clock" id="clock-black-wrap">
-                <span class="clock-dot clock-dot-black"></span>
-                <span id="clock-black"><%= (dgt && dgt.clock) ? Math.floor(dgt.clock.black/60)+':'+String(dgt.clock.black%60).padStart(2,'0') : '--:--' %></span>
-            </div>
+            <span class="player-clock" id="clock-white"><%= (dgt && dgt.clock) ? Math.floor(dgt.clock.white/60)+':'+String(dgt.clock.white%60).padStart(2,'0') : '' %></span>
         </div>
 
         <div class="status" id="status">
@@ -135,9 +171,11 @@
     <script>
         const socket = io();
 
+        // Track current game info (updated via socket)
+        let currentGame = <%- JSON.stringify(game || null) %>;
+
         socket.on('dgt_board', (data) => {
             const boardEl = document.getElementById('board');
-            const clocksEl = document.getElementById('clocks');
             const statusEl = document.getElementById('status');
 
             // Update connection status
@@ -166,7 +204,6 @@
 
             // Update clocks
             if (data.clock) {
-                clocksEl.style.display = '';
                 const wm = Math.floor(data.clock.white / 60);
                 const ws = String(data.clock.white % 60).padStart(2, '0');
                 const bm = Math.floor(data.clock.black / 60);
@@ -175,6 +212,11 @@
                 document.getElementById('clock-black').textContent = bm + ':' + bs;
             }
         });
+
+        // Listen for game state changes to update player names
+        socket.on('game_started', () => location.reload());
+        socket.on('game_ended', () => location.reload());
+        socket.on('new_king', () => location.reload());
     </script>
 </body>
 </html>
