@@ -99,7 +99,7 @@
                             board.push(Array(8).fill({img: 'wP'}));
                             for (let r = 0; r < 4; r++) board.push(Array(8).fill(null));
                             board.push(Array(8).fill({img: 'bP'}));
-                            board.push(pieces.map(p => ({img: 'b' + p})));
+                            board.push([...pieces].reverse().map(p => ({img: 'b' + p})));
                           }
                         %>
                         <div class="inline-block">
