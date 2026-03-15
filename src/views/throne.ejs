@@ -123,6 +123,23 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Clock Display -->
+                    <%
+                      const tcBase = state.config.timeControl.base;
+                      const clockWhite = (dgt && dgt.clock) ? dgt.clock.white : tcBase;
+                      const clockBlack = (dgt && dgt.clock) ? dgt.clock.black : tcBase;
+                      const fmtClock = (s) => Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+                    %>
+                    <div id="dgt-clock-container" style="display:flex;align-items:center;justify-content:center;gap:24px;margin-top:12px;">
+                        <div style="text-align:center">
+                            <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">♔ White</div>
+                            <div id="dgt-clock-white" class="dgt-clock dgt-clock-active"><%= fmtClock(clockWhite) %></div>
+                        </div>
+                        <div style="text-align:center">
+                            <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">♚ Black</div>
+                            <div id="dgt-clock-black" class="dgt-clock dgt-clock-active"><%= fmtClock(clockBlack) %></div>
+                        </div>
+                    </div>
                 </div>
                 <% } else if (state.king) { %>
                 <div class="text-center text-gray-500">
