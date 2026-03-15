@@ -236,13 +236,18 @@
         setInterval(updateCounters, 1000);
         updateCounters();
 
-        // Socket events — refresh on state changes
-        socket.on('new_king', () => location.reload());
-        socket.on('game_started', () => location.reload());
-        socket.on('game_ended', () => location.reload());
-        socket.on('queue_updated', () => location.reload());
-        socket.on('on_deck', () => location.reload());
-        socket.on('player_removed_timeout', () => location.reload());
+        // Socket events — refresh on state changes (but NOT if DGT board is active)
+        let dgtActive = false;
+        function safeReload() {
+            if (!dgtActive) location.reload();
+            // When DGT is active, skip reloads — the live board is what matters
+        }
+        socket.on('new_king', safeReload);
+        socket.on('game_started', safeReload);
+        socket.on('game_ended', safeReload);
+        socket.on('queue_updated', safeReload);
+        socket.on('on_deck', safeReload);
+        socket.on('player_removed_timeout', safeReload);
 
         // DGT Board live updates
         function createDgtBoard() {
@@ -295,6 +300,7 @@
 
         socket.on('dgt_board', (data) => {
             if (!data.board) return;
+            dgtActive = true; // Stop page reloads — DGT board is live
             let boardEl = document.getElementById('live-board');
             // Create board dynamically if it doesn't exist yet
             if (!boardEl) {
