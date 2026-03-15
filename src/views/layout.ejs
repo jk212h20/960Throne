@@ -15,5 +15,29 @@
 <body class="min-h-screen">
     <%- typeof body !== 'undefined' ? body : '' %>
     <% if (typeof content !== 'undefined') { %><%- content %><% } %>
+    <script>
+    // Secret zoom control: Ctrl+Shift+Minus/Plus to shrink/grow 1%, Ctrl+Shift+0 to reset
+    (function() {
+        var zoom = parseFloat(localStorage.getItem('_tz') || '100');
+        document.documentElement.style.zoom = (zoom / 100);
+        document.addEventListener('keydown', function(e) {
+            if (!(e.ctrlKey && e.shiftKey)) return;
+            if (e.key === '-' || e.key === '_') {
+                e.preventDefault();
+                zoom = Math.max(10, zoom - 1);
+            } else if (e.key === '=' || e.key === '+') {
+                e.preventDefault();
+                zoom = Math.min(200, zoom + 1);
+            } else if (e.key === '0' || e.key === ')') {
+                e.preventDefault();
+                zoom = 100;
+            } else {
+                return;
+            }
+            localStorage.setItem('_tz', String(zoom));
+            document.documentElement.style.zoom = (zoom / 100);
+        });
+    })();
+    </script>
 </body>
 </html>
