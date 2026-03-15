@@ -145,6 +145,15 @@ router.get('/leaderboard', (req, res) => {
     res.render('leaderboard', { leaderboard, longestReigns, stats, player: req.player, state });
 });
 
+// DGT Board Relay page (admin-protected)
+router.get('/admin/dgt-relay', (req, res) => {
+    if (!req.isAdmin) {
+        return res.render('admin-login', { returnTo: '/admin/dgt-relay' });
+    }
+    const relaySecret = process.env.DGT_RELAY_SECRET || process.env.ADMIN_PASSWORD || 'changeme';
+    res.render('dgt-relay', { relaySecret });
+});
+
 // Admin
 router.get('/admin', (req, res) => {
     if (!req.isAdmin) {

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DGT Board Relay — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+        .board-square { width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; }
+        .piece-img { width: 85%; height: 85%; object-fit: contain; }
+        .sq-light { background: #f0d9b5; }
+        .sq-dark { background: #b58863; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+        .dot-green { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        .dot-red { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+        .dot-yellow { background: #eab308; box-shadow: 0 0 8px #eab308; }
+        .log-entry { font-family: monospace; font-size: 12px; padding: 2px 0; border-bottom: 1px solid #1a1a2e; }
+        .log-entry.error { color: #ef4444; }
+        .log-entry.success { color: #22c55e; }
+        .log-entry.info { color: #94a3b8; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="max-w-5xl mx-auto p-6">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-yellow-400 flex items-center gap-2">♟️ DGT Board Relay</h1>
+                <p class="text-gray-500 text-sm mt-1">Reads the physical board and pushes positions to the big screen</p>
+            </div>
+            <a href="/admin" class="text-gray-500 hover:text-gray-300 text-sm">← Back to Admin</a>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Left: Connection & Controls -->
+            <div class="space-y-4">
+                <!-- LiveChess Connection -->
+                <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+                    <h2 class="font-bold text-lg mb-3 flex items-center gap-2">
+                        <span class="status-dot dot-red" id="lc-dot"></span>
+                        LiveChess Connection
+                    </h2>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="text-sm text-gray-400 block mb-1">LiveChess WebSocket URL</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="lc-url" value="ws://localhost:1982/api/v1.0" 
+                                    class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono text-white">
+                                <button id="btn-connect" onclick="toggleConnection()"
+                                    class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold">
+                                    Connect
+                                </button>
+                            </div>
+                        </div>
+                        <div class="text-sm text-gray-500" id="lc-status">
+                            Not connected. Make sure DGT LiveChess is running on this computer.
+                        </div>
+                        <div class="text-xs text-gray-600">
+                            💡 Open <a href="http://localhost:1982" target="_blank" class="text-blue-400 underline">http://localhost:1982</a> to check if LiveChess is running
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manual FEN Input -->
+                <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+                    <h2 class="font-bold text-lg mb-3">📝 Manual FEN Input</h2>
+                    <p class="text-sm text-gray-500 mb-3">Fallback: paste a FEN string to push manually</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="fen-input" placeholder="rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR"
+                            class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono text-white">
+                        <button onclick="pushManualFen()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold">
+                            Push
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Server Push Status -->
+                <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+                    <h2 class="font-bold text-lg mb-3 flex items-center gap-2">
+                        <span class="status-dot dot-red" id="server-dot"></span>
+                        Server Status
+                    </h2>
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <span class="text-gray-500">Pushes sent:</span>
+                            <span class="font-mono font-bold text-white" id="push-count">0</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Last push:</span>
+                            <span class="font-mono text-white" id="last-push">—</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Board changes:</span>
+                            <span class="font-mono font-bold text-white" id="change-count">0</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Errors:</span>
+                            <span class="font-mono font-bold text-red-400" id="error-count">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log -->
+                <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+                    <h2 class="font-bold text-lg mb-3">📋 Activity Log</h2>
+                    <div id="log" class="max-h-48 overflow-y-auto bg-gray-950 rounded-lg p-3 space-y-0.5">
+                        <div class="log-entry info">Ready. Connect to LiveChess or enter FEN manually.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Board Preview -->
+            <div>
+                <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+                    <h2 class="font-bold text-lg mb-3">♟️ Board Preview</h2>
+                    <p class="text-sm text-gray-500 mb-3" id="board-label">Showing what the big screen sees</p>
+                    <div class="flex justify-center">
+                        <div id="preview-board" class="inline-block">
+                            <!-- Board rendered by JS -->
+                        </div>
+                    </div>
+                    <div class="mt-3 text-center">
+                        <code class="text-xs text-gray-600 font-mono" id="current-fen">No board data</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ─── Config ──────────────────────────────────────────
+    const RELAY_SECRET = '<%= relaySecret %>';
+    const SERVER_BASE = ''; // same origin
+    
+    // ─── State ───────────────────────────────────────────
+    let ws = null;
+    let connected = false;
+    let feedId = null;
+    let lastFen = null;
+    let pushCount = 0;
+    let changeCount = 0;
+    let errorCount = 0;
+    let msgIdCounter = 10;
+    
+    // Piece map for FEN
+    const FEN_PIECES = {
+        'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
+        'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP',
+    };
+
+    // ─── Logging ─────────────────────────────────────────
+    function log(msg, type = 'info') {
+        const el = document.getElementById('log');
+        const time = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        entry.className = 'log-entry ' + type;
+        entry.textContent = `[${time}] ${msg}`;
+        el.appendChild(entry);
+        el.scrollTop = el.scrollHeight;
+        // Keep last 100 entries
+        while (el.children.length > 100) el.removeChild(el.firstChild);
+    }
+    
+    // ─── Board Rendering ─────────────────────────────────
+    function renderBoard(fen) {
+        const container = document.getElementById('preview-board');
+        const placement = fen.split(' ')[0];
+        const ranks = placement.split('/');
+        
+        let html = '';
+        const files = ['a','b','c','d','e','f','g','h'];
+        
+        for (let r = 0; r < 8; r++) {
+            html += '<div class="flex">';
+            html += `<div style="width:20px" class="flex items-center justify-center text-xs text-gray-500 font-mono">${8 - r}</div>`;
+            
+            let f = 0;
+            for (const ch of ranks[r]) {
+                if (ch >= '1' && ch <= '8') {
+                    const empty = parseInt(ch);
+                    for (let e = 0; e < empty; e++) {
+                        const light = (r + f) % 2 === 0;
+                        html += `<div class="board-square ${light ? 'sq-light' : 'sq-dark'}"></div>`;
+                        f++;
+                    }
+                } else {
+                    const light = (r + f) % 2 === 0;
+                    const piece = FEN_PIECES[ch];
+                    html += `<div class="board-square ${light ? 'sq-light' : 'sq-dark'}">`;
+                    if (piece) html += `<img src="/pieces/${piece}.svg" class="piece-img" alt="${piece}">`;
+                    html += '</div>';
+                    f++;
+                }
+            }
+            html += '</div>';
+        }
+        // File labels
+        html += '<div class="flex"><div style="width:20px"></div>';
+        files.forEach(f => {
+            html += `<div class="board-square" style="height:auto"><span class="text-xs text-gray-500 font-mono">${f}</span></div>`;
+        });
+        html += '</div>';
+        
+        container.innerHTML = html;
+        document.getElementById('current-fen').textContent = placement;
+    }
+    
+    // Render starting position initially
+    renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
+    
+    // ─── Push to Server ──────────────────────────────────
+    async function pushToServer(fen) {
+        pushCount++;
+        document.getElementById('push-count').textContent = pushCount;
+        document.getElementById('last-push').textContent = new Date().toLocaleTimeString();
+        
+        try {
+            const res = await fetch('/api/dgt/board-state', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-relay-secret': RELAY_SECRET,
+                },
+                body: JSON.stringify({ fen, source: 'relay-page' }),
+            });
+            const data = await res.json();
+            
+            if (data.error) {
+                errorCount++;
+                document.getElementById('error-count').textContent = errorCount;
+                log('Server error: ' + data.error, 'error');
+                return;
+            }
+            
+            if (data.changed) {
+                changeCount++;
+                document.getElementById('change-count').textContent = changeCount;
+                log('Board updated on server', 'success');
+                document.getElementById('server-dot').className = 'status-dot dot-green';
+            } else {
+                // No change — still ok
+                document.getElementById('server-dot').className = 'status-dot dot-green';
+            }
+        } catch (err) {
+            errorCount++;
+            document.getElementById('error-count').textContent = errorCount;
+            document.getElementById('server-dot').className = 'status-dot dot-red';
+            log('Push failed: ' + err.message, 'error');
+        }
+    }
+    
+    // ─── Manual FEN ──────────────────────────────────────
+    function pushManualFen() {
+        const input = document.getElementById('fen-input');
+        const fen = input.value.trim();
+        if (!fen) return;
+        
+        // Validate
+        const placement = fen.split(' ')[0];
+        if ((placement.match(/\//g) || []).length !== 7) {
+            log('Invalid FEN — need 8 ranks separated by /', 'error');
+            return;
+        }
+        
+        renderBoard(fen);
+        pushToServer(fen);
+        log('Manual FEN pushed: ' + placement.substring(0, 40), 'info');
+    }
+    
+    // Enter key on FEN input
+    document.getElementById('fen-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') pushManualFen();
+    });
+    
+    // ─── LiveChess WebSocket ─────────────────────────────
+    function toggleConnection() {
+        if (connected) {
+            disconnect();
+        } else {
+            connectLiveChess();
+        }
+    }
+    
+    function disconnect() {
+        if (ws) {
+            ws.close();
+            ws = null;
+        }
+        connected = false;
+        feedId = null;
+        updateConnectionUI(false);
+        log('Disconnected from LiveChess', 'info');
+    }
+    
+    function updateConnectionUI(isConnected, statusText) {
+        const dot = document.getElementById('lc-dot');
+        const btn = document.getElementById('btn-connect');
+        const status = document.getElementById('lc-status');
+        
+        if (isConnected) {
+            dot.className = 'status-dot dot-green';
+            btn.textContent = 'Disconnect';
+            btn.className = 'bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-bold';
+        } else {
+            dot.className = 'status-dot dot-red';
+            btn.textContent = 'Connect';
+            btn.className = 'bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold';
+        }
+        if (statusText) status.textContent = statusText;
+    }
+    
+    function connectLiveChess() {
+        const url = document.getElementById('lc-url').value.trim();
+        if (!url) return;
+        
+        log('Connecting to ' + url + '...', 'info');
+        document.getElementById('lc-dot').className = 'status-dot dot-yellow';
+        document.getElementById('lc-status').textContent = 'Connecting...';
+        
+        try {
+            ws = new WebSocket(url);
+        } catch (e) {
+            log('WebSocket error: ' + e.message, 'error');
+            updateConnectionUI(false, 'Connection failed: ' + e.message);
+            return;
+        }
+        
+        ws.onopen = () => {
+            connected = true;
+            updateConnectionUI(true, 'Connected! Looking for boards...');
+            log('Connected to LiveChess', 'success');
+            // Request board list
+            wsSend({ call: 'eboards', id: 1, param: {} });
+        };
+        
+        ws.onmessage = (evt) => {
+            try {
+                const msg = JSON.parse(evt.data);
+                handleLiveChessMsg(msg);
+            } catch (e) {
+                // ignore non-JSON
+            }
+        };
+        
+        ws.onclose = () => {
+            if (connected) {
+                log('LiveChess connection lost. Will retry in 5s...', 'error');
+                connected = false;
+                feedId = null;
+                updateConnectionUI(false, 'Connection lost. Retrying...');
+                setTimeout(connectLiveChess, 5000);
+            }
+        };
+        
+        ws.onerror = (err) => {
+            log('LiveChess error — is LiveChess software running?', 'error');
+            updateConnectionUI(false, 'Cannot connect. Is LiveChess running on this computer?');
+        };
+    }
+    
+    function wsSend(msg) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(msg));
+        }
+    }
+    
+    function handleLiveChessMsg(msg) {
+        // Response to eboards — list of connected boards
+        if (msg.id === 1 && msg.param) {
+            let feeds = null;
+            if (Array.isArray(msg.param) && msg.param.length > 0) {
+                feeds = msg.param;
+            } else if (msg.param.feeds && msg.param.feeds.length > 0) {
+                feeds = msg.param.feeds;
+            }
+            
+            if (feeds && feeds.length > 0) {
+                feedId = feeds[0].id || feeds[0];
+                log('Found board: ' + feedId, 'success');
+                updateConnectionUI(true, 'Board found! Subscribing to positions...');
+                // Subscribe to board updates
+                wsSend({ call: 'subscribe', id: 2, param: { feed: feedId, param: { board: true, san: false } } });
+            } else {
+                log('No boards found. Connect a DGT board and try again.', 'error');
+                updateConnectionUI(true, 'Connected to LiveChess but no board detected. Retrying in 5s...');
+                setTimeout(() => wsSend({ call: 'eboards', id: 1, param: {} }), 5000);
+            }
+            return;
+        }
+        
+        // Subscription confirmed
+        if (msg.id === 2) {
+            log('Subscribed to board updates — positions will auto-push!', 'success');
+            updateConnectionUI(true, '✅ Streaming board positions to the big screen!');
+            // Get current board state
+            if (feedId) {
+                wsSend({ call: 'feed', id: 3, param: { id: feedId } });
+            }
+            return;
+        }
+        
+        // Board data (from subscription push, feed response, or update)
+        if (msg.param && (msg.param.board || msg.param.fen)) {
+            const fen = msg.param.fen || boardArrayToFen(msg.param.board);
+            if (fen) {
+                handleBoardFen(fen);
+            }
+            return;
+        }
+        
+        // Feed response
+        if (msg.id === 3 && msg.param) {
+            const fen = msg.param.fen || (msg.param.board ? boardArrayToFen(msg.param.board) : null);
+            if (fen) {
+                handleBoardFen(fen);
+            }
+            return;
+        }
+    }
+    
+    function handleBoardFen(fen) {
+        const placement = fen.split(' ')[0];
+        if (placement === lastFen) return; // No change
+        lastFen = placement;
+        
+        renderBoard(fen);
+        pushToServer(fen);
+        document.getElementById('fen-input').value = placement;
+    }
+    
+    /**
+     * Convert LiveChess board string/array to FEN.
+     * Board is 64 chars: uppercase=white, lowercase=black, '.'=empty
+     * Index 0 = a8, Index 63 = h1
+     */
+    function boardArrayToFen(board) {
+        if (!board) return null;
+        const squares = typeof board === 'string' ? board.split('') : board;
+        if (squares.length !== 64) return null;
+        
+        let fen = '';
+        for (let rank = 0; rank < 8; rank++) {
+            let empty = 0;
+            for (let file = 0; file < 8; file++) {
+                const piece = squares[rank * 8 + file];
+                if (!piece || piece === '.' || piece === ' ') {
+                    empty++;
+                } else {
+                    if (empty > 0) { fen += empty; empty = 0; }
+                    fen += piece;
+                }
+            }
+            if (empty > 0) fen += empty;
+            if (rank < 7) fen += '/';
+        }
+        return fen;
+    }
+    </script>
+</body>
+</html>

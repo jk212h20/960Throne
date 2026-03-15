@@ -7,14 +7,26 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
-### DGT LiveChessCloud Integration + Widget Piece Icons (Mar 14, 2026)
-- **Replaced piece SVGs with widget icons**: Extracted 12 piece SVGs from `btc-chess-widget(5).html` — classic outline style (white=filled with gradient, black=outline-only dark). Wrote to `public/pieces/`.
-- **New service `src/services/dgtBoard.js`**: Polls DGT LiveChessCloud API (`https://1.dgtlivecloud.com/api/`) for live tournament board state. Uses `chess.js` to replay moves from game PGN into an 8×8 board array. Emits `dgt_board` Socket.io events with board + clock data.
-- **API endpoints**: `GET /api/dgt/state` (public board state), `POST /api/admin/dgt/tournament` (set tournament ID)
-- **Throne views upgraded**: Both `throne.ejs` and `throne-live.ejs` now show full 8×8 boards (starting position from Chess960 when no DGT data, live DGT board when connected). Socket.io `dgt_board` handler updates pieces + highlights last move in real-time.
-- **DGT clocks**: Displayed below board on throne-live.ejs when clock data available
-- **Dependencies**: Added `chess.js` package
+### DGT Direct Board Relay System (Mar 14, 2026)
+- **Problem**: LiveChessCloud requires tournament mode (manual game start/stop per game). Not suitable for autopilot 24/7 throne display.
+- **Solution**: New direct board position path — relay scripts on venue laptop push raw board state to server, bypassing move replay entirely.
+- **New API**: `POST /api/dgt/board-state` — accepts FEN from relay scripts, authenticated via `x-relay-secret` header
+- **New function**: `dgtBoard.setBoardState(data)` — accepts FEN or board array, converts to 8×8 board, broadcasts via Socket.io
+- **3 relay scripts in `dgt-relay/`**:
+  - `dgt-relay-livechess.js` — connects to DGT LiveChess WebSocket (`ws://localhost:1982/api/v1.0`), reads raw board positions. **Recommended path.**
+  - `dgt-relay-serial.js` — talks directly to DGT board over USB serial (DGT binary protocol). Fallback if LiveChess won't cooperate.
+  - `dgt-relay-fen.js` — manual FEN input (interactive, file watch, or pipe). Nuclear fallback.
+- **`dgt-relay/DGT-SETUP.md`**: Complete setup guide for all 4 board paths (LiveChess WS, Serial, FEN, LiveChessCloud)
+- **Hardware**: DGT Smart Board + DGT 3000 clock. Board reads pieces via RFID sensors.
+- **Auth**: `DGT_RELAY_SECRET` env var (falls back to `ADMIN_PASSWORD`)
+- **LiveChessCloud path preserved**: Tournament polling still works as Option 4
 - **Deployed to Railway**
+
+### Previous: DGT LiveChessCloud + Widget Piece Icons (Mar 14, 2026)
+- Extracted 12 piece SVGs from `btc-chess-widget(5).html` → `public/pieces/`
+- Custom Chess960 move replayer (replaced chess.js for castling compatibility)
+- LiveChessCloud polling with tournament ID
+- Throne views show 8×8 boards with widget piece icons
 
 ### Game-Count Position Offset (Mar 11, 2026)
 - **Problem**: Multiple games within the same Bitcoin block got the same Chess960 position
@@ -114,7 +126,9 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 | `src/services/database.js` | SQLite schema, all DB queries |
 | `src/services/gameEngine.js` | Game state machine, sat tracking |
 | `src/services/chess960.js` | Chess960 position generation |
-| `src/services/dgtBoard.js` | DGT LiveChessCloud integration (board polling, chess.js replay) |
+| `src/services/dgtBoard.js` | DGT board integration (LiveChessCloud polling + direct board state push) |
+| `dgt-relay/` | Relay scripts for venue laptop (LiveChess WS, USB serial, FEN input) |
+| `dgt-relay/DGT-SETUP.md` | Complete DGT setup guide for all 4 board connection paths |
 | `src/routes/api.js` | All REST API endpoints (auth, game, admin, DGT) |
 | `src/routes/pages.js` | Page rendering + auth flow routing |
 | `src/services/telegram.js` | Telegram bot polling + player notifications |
