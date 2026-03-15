@@ -479,6 +479,8 @@ function setExpectedPosition(posNumber) {
 
 /**
  * Clear expected position (no game active, or game ended).
+ * Also clears the cached board state so the old game's final position
+ * doesn't flash on screen when the page reloads for the next game.
  */
 function clearExpectedPosition() {
     expectedPosition = {
@@ -487,6 +489,15 @@ function clearExpectedPosition() {
         pieces: null,
         gameStarted: false,
     };
+    // Clear cached board so stale position from previous game doesn't re-display
+    currentState.board = null;
+    currentState.fen = null;
+    currentState.lastMove = null;
+    currentState.moves = [];
+    currentState.moveCount = 0;
+    currentState.result = null;
+    currentState.chess960Position = null;
+    broadcast();
 }
 
 /**
