@@ -7,6 +7,13 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Position Verification System (Mar 15, 2026)
+- `chess960.js`: Added `positionToStartingFen(posNum)` — generates full FEN placement from position number
+- `dgtBoard.js`: `setExpectedPosition()`, `clearExpectedPosition()`, `checkPositionMatch()`, `boardToFenPlacement()`
+- `gameEngine.js`: Calls `setExpectedPosition()` on game start, `clearExpectedPosition()` on finalize
+- `throne.ejs` + `admin.ejs`: Live green/red/yellow indicators for board position match
+- **Phase 1 (soft)**: Informational only — games start regardless. Phase 2 (hard gate) can be added later.
+
 ### DGT Direct Board Relay System (Mar 14, 2026)
 - **Problem**: LiveChessCloud requires tournament mode (manual game start/stop per game). Not suitable for autopilot 24/7 throne display.
 - **Solution**: New direct board position path — relay scripts on venue laptop push raw board state to server, bypassing move replay entirely.
