@@ -36,6 +36,14 @@ let currentState = {
     error: null,
 };
 
+// Position verification state — expected Chess960 starting position for current game
+let expectedPosition = {
+    positionNumber: null,   // Chess960 position number (0-959)
+    expectedFen: null,      // Expected piece placement FEN (just the position part)
+    pieces: null,           // Back rank pieces array e.g. ['R','N','B','Q','K','B','N','R']
+    gameStarted: false,     // True once moves have been made (stop checking)
+};
+
 const POLL_INTERVAL = 3000; // 3 seconds
 const POOL_URL = 'https://1.pool.livechesscloud.com/get';
 
@@ -449,11 +457,114 @@ function formatPlayerName(player) {
     return parts.join(' ') || 'Unknown';
 }
 
+// ============================================================
+// Position Verification — compare DGT board to expected Chess960 starting position
+// ============================================================
+
+/**
+ * Set the expected Chess960 position for the current game.
+ * Called by gameEngine when a new game starts.
+ */
+function setExpectedPosition(posNumber) {
+    expectedPosition = {
+        positionNumber: posNumber,
+        expectedFen: chess960.positionToStartingFen(posNumber),
+        pieces: chess960.positionFromNumber(posNumber),
+        gameStarted: false,
+    };
+    console.log(`♟️  DGT: Expected position set to #${posNumber} (${expectedPosition.pieces.join('')})`);
+    // Re-broadcast so clients get the updated verification status
+    broadcast();
+}
+
+/**
+ * Clear expected position (no game active, or game ended).
+ */
+function clearExpectedPosition() {
+    expectedPosition = {
+        positionNumber: null,
+        expectedFen: null,
+        pieces: null,
+        gameStarted: false,
+    };
+}
+
+/**
+ * Mark game as started (moves have been made — stop checking starting position).
+ */
+function markGameStarted() {
+    expectedPosition.gameStarted = true;
+}
+
+/**
+ * Check if the current DGT board matches the expected starting position.
+ * Returns { matches, expected, actual, positionNumber, pieces, details }
+ * Returns null if no expected position is set or game already started.
+ */
+function checkPositionMatch() {
+    if (!expectedPosition.expectedFen || expectedPosition.gameStarted) {
+        return null; // No verification needed
+    }
+
+    if (!currentState.connected || !currentState.board) {
+        return {
+            matches: null,  // Can't determine — no board data
+            positionNumber: expectedPosition.positionNumber,
+            pieces: expectedPosition.pieces,
+            expected: expectedPosition.expectedFen,
+            actual: null,
+            details: 'DGT board not connected',
+        };
+    }
+
+    // Convert current board state to a FEN placement string for comparison
+    const actualFen = boardToFenPlacement(currentState.board);
+    const matches = actualFen === expectedPosition.expectedFen;
+
+    return {
+        matches,
+        positionNumber: expectedPosition.positionNumber,
+        pieces: expectedPosition.pieces,
+        expected: expectedPosition.expectedFen,
+        actual: actualFen,
+        details: matches ? 'Board matches expected position' : 'Board does not match expected position',
+    };
+}
+
+/**
+ * Convert an 8x8 board array back to FEN placement string.
+ * Board format: array of 8 rows (rank 8 to rank 1), each row is array of 8 squares.
+ * Each square: { piece: 'K'|null, color: 'w'|'b'|null }
+ */
+function boardToFenPlacement(board) {
+    const rows = [];
+    for (const row of board) {
+        let fenRow = '';
+        let emptyCount = 0;
+        for (const sq of row) {
+            if (!sq.piece) {
+                emptyCount++;
+            } else {
+                if (emptyCount > 0) {
+                    fenRow += emptyCount;
+                    emptyCount = 0;
+                }
+                const ch = sq.color === 'w' ? sq.piece.toUpperCase() : sq.piece.toLowerCase();
+                fenRow += ch;
+            }
+        }
+        if (emptyCount > 0) fenRow += emptyCount;
+        rows.push(fenRow);
+    }
+    return rows.join('/');
+}
+
 /**
  * Broadcast current state to all connected clients
  */
 function broadcast() {
     if (io) {
+        const posMatch = checkPositionMatch();
         io.emit('dgt_board', {
             fen: currentState.fen,
             board: currentState.board,
@@ -465,6 +576,7 @@ function broadcast() {
             chess960Position: currentState.chess960Position,
             connected: currentState.connected,
             error: currentState.error,
+            positionVerification: posMatch,
         });
     }
 }
@@ -473,7 +585,10 @@ function broadcast() {
  * Get current state (for initial page load / API)
  */
 function getState() {
-    return { ...currentState };
+    return {
+        ...currentState,
+        positionVerification: checkPositionMatch(),
+    };
 }
 
 /**
@@ -545,4 +660,8 @@ module.exports = {
     getState,
     formatClock,
     stopPolling,
+    setExpectedPosition,
+    clearExpectedPosition,
+    markGameStarted,
+    checkPositionMatch,
 };

@@ -57,6 +57,7 @@
                         <span style="display:inline-block;background:<%= adminKc === 'white' ? '#1a1a1a' : '#fff' %>;color:<%= adminKc === 'white' ? '#fff' : '#1a1a1a' %>;padding:1px 6px;border-radius:3px;border:1px solid <%= adminKc === 'white' ? '#555' : '#fff' %>;">⚔️ <%= state.game.challenger_name %></span>
                     </div>
                     <div class="text-xs text-gray-500">Position #<%= state.game.chess960_position %></div>
+                    <div id="admin-pos-verify" class="text-xs mt-1 px-2 py-1 rounded" style="display:none;"></div>
                     <div class="text-sm text-yellow-400 mt-1">⏱️ Started <span id="admin-game-elapsed">0:00</span> ago</div>
                     <% if (state.game.king_reported || state.game.challenger_reported) { %>
                     <div class="text-xs text-gray-500 mt-1">
@@ -474,6 +475,28 @@
             setInterval(tickGame, 1000);
         })();
         <% } %>
+
+        // DGT position verification indicator
+        socket.on('dgt_board', (data) => {
+            const el = document.getElementById('admin-pos-verify');
+            if (!el) return;
+            const pv = data.positionVerification;
+            if (!pv) { el.style.display = 'none'; return; }
+            el.style.display = 'block';
+            if (pv.matches === true) {
+                el.style.background = 'rgba(34,197,94,0.15)';
+                el.style.color = '#22c55e';
+                el.textContent = '🟢 Board matches Position #' + pv.positionNumber;
+            } else if (pv.matches === false) {
+                el.style.background = 'rgba(239,68,68,0.15)';
+                el.style.color = '#ef4444';
+                el.textContent = '🔴 Board mismatch — set up: ' + (pv.pieces ? pv.pieces.join(' ') : '');
+            } else {
+                el.style.background = 'rgba(234,179,8,0.15)';
+                el.style.color = '#eab308';
+                el.textContent = '🟡 Waiting for DGT board';
+            }
+        });
 
         socket.on('game_started', () => setTimeout(() => location.reload(), 500));
         socket.on('game_ended', () => setTimeout(() => location.reload(), 1000));

@@ -298,9 +298,47 @@
             return container;
         }
 
+        // Position verification indicator
+        function updatePositionVerification(pv) {
+            let indicator = document.getElementById('pos-verify');
+            if (!pv) {
+                if (indicator) indicator.remove();
+                return;
+            }
+            const gameSection = document.getElementById('game-section');
+            if (!gameSection) return;
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.id = 'pos-verify';
+                indicator.style.cssText = 'text-align:center;padding:8px 16px;border-radius:8px;margin-bottom:8px;font-size:14px;font-weight:600;';
+                gameSection.prepend(indicator);
+            }
+            if (pv.matches === true) {
+                indicator.style.background = 'rgba(34,197,94,0.15)';
+                indicator.style.border = '1px solid rgba(34,197,94,0.4)';
+                indicator.style.color = '#22c55e';
+                indicator.innerHTML = '🟢 Board ready — Position #' + pv.positionNumber;
+            } else if (pv.matches === false) {
+                indicator.style.background = 'rgba(239,68,68,0.15)';
+                indicator.style.border = '1px solid rgba(239,68,68,0.4)';
+                indicator.style.color = '#ef4444';
+                const piecesStr = pv.pieces ? pv.pieces.join(' ') : '';
+                indicator.innerHTML = '🔴 Set up Position #' + pv.positionNumber + ': <span class="font-mono">' + piecesStr + '</span>';
+            } else {
+                indicator.style.background = 'rgba(234,179,8,0.15)';
+                indicator.style.border = '1px solid rgba(234,179,8,0.4)';
+                indicator.style.color = '#eab308';
+                indicator.innerHTML = '🟡 Waiting for DGT board — Position #' + pv.positionNumber;
+            }
+        }
+
         socket.on('dgt_board', (data) => {
             if (!data.board) return;
             dgtActive = true; // Stop page reloads — DGT board is live
+
+            // Update position verification indicator
+            updatePositionVerification(data.positionVerification);
+
             let boardEl = document.getElementById('live-board');
             // Create board dynamically if it doesn't exist yet
             if (!boardEl) {

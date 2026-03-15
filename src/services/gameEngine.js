@@ -6,6 +6,7 @@
 const db = require('./database');
 const chess960 = require('./chess960');
 const telegram = require('./telegram');
+const dgtBoard = require('./dgtBoard');
 const { v4: uuidv4 } = require('uuid');
 
 let io = null; // Socket.io instance, set by index.js
@@ -201,6 +202,9 @@ async function callNextChallenger(forcedPosition = null) {
 
     console.log(`♟️  Auto-started Game #${gameId}: ${king.name} (${kingColor}) vs ${challenger.name} (${kingColor === 'white' ? 'black' : 'white'}) — Position #${posNumber}`);
     broadcast('game_started', gameData);
+
+    // Set expected position on DGT board for verification
+    dgtBoard.setExpectedPosition(posNumber);
 
     // Telegram notifications — notify both players their game started
     const challengerColor = kingColor === 'white' ? 'black' : 'white';
@@ -497,6 +501,9 @@ function finalizeGameResult(gameId, result) {
 
     const game = db.getGameById(gameId);
     if (!game) return { error: 'Game not found' };
+
+    // Clear position verification — game is ending
+    dgtBoard.clearExpectedPosition();
 
     // Flush accumulated sats before finalizing (ensures DB is up to date)
     flushAccumulatedSats();

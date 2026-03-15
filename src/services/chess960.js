@@ -89,6 +89,18 @@ function standardPosition() {
 }
 
 /**
+ * Generate the full starting FEN for a Chess960 position number.
+ * Used for position verification — comparing DGT board state against expected setup.
+ * Returns just the piece placement part (e.g. "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR")
+ */
+function positionToStartingFen(posNumber) {
+    const pieces = positionFromNumber(posNumber);
+    const whiteRank = pieces.join('');           // e.g. "RNBQKBNR"
+    const blackRank = pieces.join('').toLowerCase(); // e.g. "rnbqkbnr"
+    return `${blackRank}/pppppppp/8/8/8/8/PPPPPPPP/${whiteRank}`;
+}
+
+/**
  * Convert a position to a display-friendly format
  */
 function positionToDisplay(posNumber) {
@@ -194,6 +206,7 @@ module.exports = {
     positionFromNumber,
     randomPositionNumber,
     standardPosition,
+    positionToStartingFen,
     positionToDisplay,
     buildFEN,
     pieceToUnicode,
