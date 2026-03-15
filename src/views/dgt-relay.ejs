@@ -43,9 +43,9 @@
                     </h2>
                     <div class="space-y-3">
                         <div>
-                            <label class="text-sm text-gray-400 block mb-1">LiveChess WebSocket URL</label>
+                            <label class="text-sm text-gray-400 block mb-1">LiveChess URL (this computer)</label>
                             <div class="flex gap-2">
-                                <input type="text" id="lc-url" value="ws://localhost:1982/api/v1.0" 
+                                <input type="text" id="lc-url" value="http://localhost:1982" 
                                     class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono text-white">
                                 <button id="btn-connect" onclick="toggleConnection()"
                                     class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold">
@@ -57,7 +57,7 @@
                             Not connected. Make sure DGT LiveChess is running on this computer.
                         </div>
                         <div class="text-xs text-gray-600">
-                            💡 Open <a href="http://localhost:1982" target="_blank" class="text-blue-400 underline">http://localhost:1982</a> to check if LiveChess is running
+                            💡 Uses HTTP polling (every 1s) — works even from HTTPS pages
                         </div>
                     </div>
                 </div>
@@ -131,17 +131,18 @@
     <script>
     // ─── Config ──────────────────────────────────────────
     const RELAY_SECRET = '<%= relaySecret %>';
-    const SERVER_BASE = ''; // same origin
+    const SERVER_URL = '<%= serverUrl %>';
     
     // ─── State ───────────────────────────────────────────
     let ws = null;
     let connected = false;
+    let polling = false;
+    let pollTimer = null;
     let feedId = null;
     let lastFen = null;
     let pushCount = 0;
     let changeCount = 0;
     let errorCount = 0;
-    let msgIdCounter = 10;
     
     // Piece map for FEN
     const FEN_PIECES = {
@@ -158,7 +159,6 @@
         entry.textContent = `[${time}] ${msg}`;
         el.appendChild(entry);
         el.scrollTop = el.scrollHeight;
-        // Keep last 100 entries
         while (el.children.length > 100) el.removeChild(el.firstChild);
     }
     
@@ -188,14 +188,13 @@
                     const light = (r + f) % 2 === 0;
                     const piece = FEN_PIECES[ch];
                     html += `<div class="board-square ${light ? 'sq-light' : 'sq-dark'}">`;
-                    if (piece) html += `<img src="/pieces/${piece}.svg" class="piece-img" alt="${piece}">`;
+                    if (piece) html += `<img src="${SERVER_URL}/pieces/${piece}.svg" class="piece-img" alt="${piece}">`;
                     html += '</div>';
                     f++;
                 }
             }
             html += '</div>';
         }
-        // File labels
         html += '<div class="flex"><div style="width:20px"></div>';
         files.forEach(f => {
             html += `<div class="board-square" style="height:auto"><span class="text-xs text-gray-500 font-mono">${f}</span></div>`;
@@ -206,7 +205,6 @@
         document.getElementById('current-fen').textContent = placement;
     }
     
-    // Render starting position initially
     renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
     
     // ─── Push to Server ──────────────────────────────────
@@ -216,7 +214,7 @@
         document.getElementById('last-push').textContent = new Date().toLocaleTimeString();
         
         try {
-            const res = await fetch('/api/dgt/board-state', {
+            const res = await fetch(SERVER_URL + '/api/dgt/board-state', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -236,12 +234,9 @@
             if (data.changed) {
                 changeCount++;
                 document.getElementById('change-count').textContent = changeCount;
-                log('Board updated on server', 'success');
-                document.getElementById('server-dot').className = 'status-dot dot-green';
-            } else {
-                // No change — still ok
-                document.getElementById('server-dot').className = 'status-dot dot-green';
+                log('Board updated on server ✓', 'success');
             }
+            document.getElementById('server-dot').className = 'status-dot dot-green';
         } catch (err) {
             errorCount++;
             document.getElementById('error-count').textContent = errorCount;
@@ -255,27 +250,27 @@
         const input = document.getElementById('fen-input');
         const fen = input.value.trim();
         if (!fen) return;
-        
-        // Validate
         const placement = fen.split(' ')[0];
         if ((placement.match(/\//g) || []).length !== 7) {
             log('Invalid FEN — need 8 ranks separated by /', 'error');
             return;
         }
-        
+        lastFen = placement;
         renderBoard(fen);
         pushToServer(fen);
         log('Manual FEN pushed: ' + placement.substring(0, 40), 'info');
     }
     
-    // Enter key on FEN input
     document.getElementById('fen-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') pushManualFen();
     });
     
-    // ─── LiveChess WebSocket ─────────────────────────────
+    // ─── LiveChess Connection ────────────────────────────
+    // Strategy: try WebSocket first. If that fails (mixed content from HTTPS),
+    // fall back to HTTP polling via LiveChess REST API.
+    
     function toggleConnection() {
-        if (connected) {
+        if (connected || polling) {
             disconnect();
         } else {
             connectLiveChess();
@@ -283,14 +278,13 @@
     }
     
     function disconnect() {
-        if (ws) {
-            ws.close();
-            ws = null;
-        }
+        if (ws) { ws.close(); ws = null; }
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         connected = false;
+        polling = false;
         feedId = null;
-        updateConnectionUI(false);
-        log('Disconnected from LiveChess', 'info');
+        updateConnectionUI(false, 'Disconnected');
+        log('Disconnected', 'info');
     }
     
     function updateConnectionUI(isConnected, statusText) {
@@ -298,64 +292,72 @@
         const btn = document.getElementById('btn-connect');
         const status = document.getElementById('lc-status');
         
-        if (isConnected) {
-            dot.className = 'status-dot dot-green';
-            btn.textContent = 'Disconnect';
-            btn.className = 'bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-bold';
-        } else {
-            dot.className = 'status-dot dot-red';
-            btn.textContent = 'Connect';
-            btn.className = 'bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold';
-        }
+        dot.className = isConnected ? 'status-dot dot-green' : 'status-dot dot-red';
+        btn.textContent = isConnected ? 'Disconnect' : 'Connect';
+        btn.className = isConnected 
+            ? 'bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-bold'
+            : 'bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold';
         if (statusText) status.textContent = statusText;
     }
     
     function connectLiveChess() {
-        const url = document.getElementById('lc-url').value.trim();
-        if (!url) return;
+        const baseUrl = document.getElementById('lc-url').value.trim().replace(/\/+$/, '');
+        if (!baseUrl) return;
         
-        log('Connecting to ' + url + '...', 'info');
+        log('Trying WebSocket connection...', 'info');
         document.getElementById('lc-dot').className = 'status-dot dot-yellow';
         document.getElementById('lc-status').textContent = 'Connecting...';
         
+        // Derive WS URL from HTTP URL
+        const wsUrl = baseUrl.replace(/^http/, 'ws') + '/api/v1.0';
+        
         try {
-            ws = new WebSocket(url);
+            ws = new WebSocket(wsUrl);
         } catch (e) {
-            log('WebSocket error: ' + e.message, 'error');
-            updateConnectionUI(false, 'Connection failed: ' + e.message);
+            log('WebSocket blocked (mixed content). Trying HTTP polling...', 'info');
+            startHttpPolling(baseUrl);
             return;
         }
         
+        const wsTimeout = setTimeout(() => {
+            if (!connected) {
+                log('WebSocket timeout. Trying HTTP polling...', 'info');
+                if (ws) { ws.close(); ws = null; }
+                startHttpPolling(baseUrl);
+            }
+        }, 3000);
+        
         ws.onopen = () => {
+            clearTimeout(wsTimeout);
             connected = true;
-            updateConnectionUI(true, 'Connected! Looking for boards...');
-            log('Connected to LiveChess', 'success');
-            // Request board list
+            updateConnectionUI(true, 'WebSocket connected! Looking for boards...');
+            log('WebSocket connected to LiveChess ✓', 'success');
             wsSend({ call: 'eboards', id: 1, param: {} });
         };
         
         ws.onmessage = (evt) => {
             try {
                 const msg = JSON.parse(evt.data);
+                log('WS msg: ' + JSON.stringify(msg).substring(0, 120), 'info');
                 handleLiveChessMsg(msg);
-            } catch (e) {
-                // ignore non-JSON
-            }
+            } catch (e) { /* ignore */ }
         };
         
         ws.onclose = () => {
+            clearTimeout(wsTimeout);
             if (connected) {
-                log('LiveChess connection lost. Will retry in 5s...', 'error');
+                log('WebSocket lost. Falling back to HTTP polling...', 'error');
                 connected = false;
                 feedId = null;
-                updateConnectionUI(false, 'Connection lost. Retrying...');
-                setTimeout(connectLiveChess, 5000);
+                startHttpPolling(baseUrl);
             }
         };
         
-        ws.onerror = (err) => {
-            log('LiveChess error — is LiveChess software running?', 'error');
-            updateConnectionUI(false, 'Cannot connect. Is LiveChess running on this computer?');
+        ws.onerror = () => {
+            clearTimeout(wsTimeout);
+            log('WebSocket error (likely mixed content block). Trying HTTP polling...', 'info');
+            if (ws) { ws.close(); ws = null; }
+            startHttpPolling(baseUrl);
         };
     }
     
@@ -377,51 +379,123 @@
             
             if (feeds && feeds.length > 0) {
                 feedId = feeds[0].id || feeds[0];
-                log('Found board: ' + feedId, 'success');
-                updateConnectionUI(true, 'Board found! Subscribing to positions...');
-                // Subscribe to board updates
+                log('Board found: ' + feedId, 'success');
+                updateConnectionUI(true, 'Board found! Subscribing...');
                 wsSend({ call: 'subscribe', id: 2, param: { feed: feedId, param: { board: true, san: false } } });
             } else {
-                log('No boards found. Connect a DGT board and try again.', 'error');
-                updateConnectionUI(true, 'Connected to LiveChess but no board detected. Retrying in 5s...');
+                log('No boards detected. Retrying in 5s...', 'error');
+                updateConnectionUI(true, 'LiveChess running but no board. Retrying...');
                 setTimeout(() => wsSend({ call: 'eboards', id: 1, param: {} }), 5000);
             }
             return;
         }
         
-        // Subscription confirmed
         if (msg.id === 2) {
-            log('Subscribed to board updates — positions will auto-push!', 'success');
-            updateConnectionUI(true, '✅ Streaming board positions to the big screen!');
-            // Get current board state
-            if (feedId) {
-                wsSend({ call: 'feed', id: 3, param: { id: feedId } });
-            }
+            log('Subscribed to board updates!', 'success');
+            updateConnectionUI(true, '✅ Streaming positions (WebSocket)');
+            if (feedId) wsSend({ call: 'feed', id: 3, param: { id: feedId } });
             return;
         }
         
-        // Board data (from subscription push, feed response, or update)
-        if (msg.param && (msg.param.board || msg.param.fen)) {
-            const fen = msg.param.fen || boardArrayToFen(msg.param.board);
-            if (fen) {
-                handleBoardFen(fen);
-            }
-            return;
-        }
-        
-        // Feed response
-        if (msg.id === 3 && msg.param) {
-            const fen = msg.param.fen || (msg.param.board ? boardArrayToFen(msg.param.board) : null);
-            if (fen) {
-                handleBoardFen(fen);
-            }
+        // Board data — try multiple field names
+        const fen = extractFenFromMsg(msg);
+        if (fen) {
+            handleBoardFen(fen);
             return;
         }
     }
     
+    // ─── HTTP Polling Fallback ───────────────────────────
+    // LiveChess also has a REST API. We poll it every second.
+    // This avoids mixed-content issues (fetch with mode: 'cors').
+    
+    function startHttpPolling(baseUrl) {
+        if (polling) return;
+        polling = true;
+        
+        log('Starting HTTP polling at ' + baseUrl, 'info');
+        updateConnectionUI(false, 'Trying HTTP polling...');
+        
+        let consecutiveErrors = 0;
+        
+        async function poll() {
+            try {
+                // First, get the list of boards
+                const boardsRes = await fetch(baseUrl + '/api/v1.0/eboards', { 
+                    mode: 'cors',
+                    signal: AbortSignal.timeout(2000)
+                });
+                const boardsData = await boardsRes.json();
+                consecutiveErrors = 0;
+                
+                if (!connected) {
+                    connected = true;
+                    log('HTTP connection to LiveChess ✓', 'success');
+                }
+                
+                // Extract board list
+                let boards = [];
+                if (Array.isArray(boardsData)) boards = boardsData;
+                else if (boardsData.feeds) boards = boardsData.feeds;
+                else if (boardsData.param && Array.isArray(boardsData.param)) boards = boardsData.param;
+                
+                if (boards.length === 0) {
+                    updateConnectionUI(true, 'LiveChess running — no board connected');
+                    return;
+                }
+                
+                const boardId = boards[0].id || boards[0].serialnr || boards[0];
+                
+                // Get board state
+                const stateRes = await fetch(baseUrl + '/api/v1.0/feed/' + boardId, {
+                    mode: 'cors',
+                    signal: AbortSignal.timeout(2000)
+                });
+                const stateData = await stateRes.json();
+                
+                const fen = extractFenFromMsg(stateData) || extractFenFromMsg({ param: stateData });
+                if (fen) {
+                    handleBoardFen(fen);
+                    updateConnectionUI(true, '✅ Streaming positions (HTTP polling)');
+                } else {
+                    updateConnectionUI(true, 'Connected — waiting for board data...');
+                    log('Poll response: ' + JSON.stringify(stateData).substring(0, 150), 'info');
+                }
+            } catch (err) {
+                consecutiveErrors++;
+                if (consecutiveErrors <= 3) {
+                    log('HTTP poll error: ' + err.message, 'error');
+                }
+                if (consecutiveErrors >= 3) {
+                    updateConnectionUI(false, 'Cannot reach LiveChess. Is it running? Use manual FEN below.');
+                    connected = false;
+                }
+            }
+        }
+        
+        poll(); // First poll immediately
+        pollTimer = setInterval(poll, 1500);
+    }
+    
+    // ─── Helpers ─────────────────────────────────────────
+    
+    function extractFenFromMsg(msg) {
+        if (!msg) return null;
+        // Direct fen field
+        if (msg.fen) return msg.fen;
+        // In param
+        if (msg.param) {
+            if (msg.param.fen) return msg.param.fen;
+            if (msg.param.board) return boardArrayToFen(msg.param.board);
+        }
+        // Board at top level
+        if (msg.board) return boardArrayToFen(msg.board);
+        return null;
+    }
+    
     function handleBoardFen(fen) {
         const placement = fen.split(' ')[0];
-        if (placement === lastFen) return; // No change
+        if (placement === lastFen) return;
         lastFen = placement;
         
         renderBoard(fen);
@@ -429,11 +503,6 @@
         document.getElementById('fen-input').value = placement;
     }
     
-    /**
-     * Convert LiveChess board string/array to FEN.
-     * Board is 64 chars: uppercase=white, lowercase=black, '.'=empty
-     * Index 0 = a8, Index 63 = h1
-     */
     function boardArrayToFen(board) {
         if (!board) return null;
         const squares = typeof board === 'string' ? board.split('') : board;

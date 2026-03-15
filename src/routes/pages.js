@@ -151,7 +151,8 @@ router.get('/admin/dgt-relay', (req, res) => {
         return res.render('admin-login', { returnTo: '/admin/dgt-relay' });
     }
     const relaySecret = process.env.DGT_RELAY_SECRET || process.env.ADMIN_PASSWORD || 'changeme';
-    res.render('dgt-relay', { relaySecret });
+    const serverUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    res.render('dgt-relay', { relaySecret, serverUrl });
 });
 
 // Admin
