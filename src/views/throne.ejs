@@ -383,50 +383,51 @@
             if (!data.board && !data.clock) return;
             dgtActive = true; // Stop page reloads — DGT board is live
 
-            // Update clock display
-            if (data.clock) {
-                updateClockDisplay(data.clock);
-            }
-
             // Update position verification indicator
             updatePositionVerification(data.positionVerification);
 
-            if (!data.board) return;
+            // Update board if board data present
+            if (data.board) {
+                let boardEl = document.getElementById('live-board');
+                // Create board dynamically if it doesn't exist yet
+                if (!boardEl) {
+                    boardEl = createDgtBoard();
+                    if (!boardEl) { return; }
+                }
 
-            let boardEl = document.getElementById('live-board');
-            // Create board dynamically if it doesn't exist yet
-            if (!boardEl) {
-                boardEl = createDgtBoard();
-                if (!boardEl) return;
+                const squares = boardEl.querySelectorAll('.board-square');
+                if (squares.length >= 64) {
+                    let idx = 0;
+                    data.board.forEach((row, ri) => {
+                        row.forEach((sq, fi) => {
+                            const el = squares[idx];
+                            if (!el) { idx++; return; }
+                            el.classList.remove('sq-highlight');
+                            if (data.lastMove && (sq.square === data.lastMove.from || sq.square === data.lastMove.to)) {
+                                el.classList.add('sq-highlight');
+                            }
+                            const img = el.querySelector('img');
+                            if (sq.piece) {
+                                const src = '/pieces/' + sq.color + sq.piece + '.svg';
+                                if (img) {
+                                    img.src = src;
+                                    img.alt = sq.piece;
+                                } else {
+                                    el.innerHTML = '<img src="' + src + '" class="piece-img" alt="' + sq.piece + '">';
+                                }
+                            } else {
+                                if (img) img.remove();
+                            }
+                            idx++;
+                        });
+                    });
+                }
             }
 
-            const squares = boardEl.querySelectorAll('.board-square');
-            if (squares.length < 64) return;
-
-            let idx = 0;
-            data.board.forEach((row, ri) => {
-                row.forEach((sq, fi) => {
-                    const el = squares[idx];
-                    if (!el) { idx++; return; }
-                    el.classList.remove('sq-highlight');
-                    if (data.lastMove && (sq.square === data.lastMove.from || sq.square === data.lastMove.to)) {
-                        el.classList.add('sq-highlight');
-                    }
-                    const img = el.querySelector('img');
-                    if (sq.piece) {
-                        const src = '/pieces/' + sq.color + sq.piece + '.svg';
-                        if (img) {
-                            img.src = src;
-                            img.alt = sq.piece;
-                        } else {
-                            el.innerHTML = '<img src="' + src + '" class="piece-img" alt="' + sq.piece + '">';
-                        }
-                    } else {
-                        if (img) img.remove();
-                    }
-                    idx++;
-                });
-            });
+            // Update clock display AFTER board creation (so createDgtBoard doesn't nuke it)
+            if (data.clock) {
+                updateClockDisplay(data.clock);
+            }
         });
     </script>
 </body>

@@ -15,6 +15,12 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 - **Clock-only updates**: When board FEN hasn't changed but clock has, relay pushes a clock-only update to keep display current.
 - Status: **deployed to Railway** (commit 460b292)
 
+### Removed LiveChessCloud Code (Mar 15, 2026)
+- Removed all old LiveChessCloud tournament polling code from `dgtBoard.js` (404 lines deleted): `setTournament()`, `startPolling()`, `stopPolling()`, `pollGame()`, `replayMoves()`, `formatPlayerName()`, `POOL_URL` constant
+- Removed `POST /admin/dgt/tournament` endpoint from `api.js`
+- The `dgt-relay/` relay page system fully replaces the LiveChessCloud tournament path
+- Status: **deployed to Railway** (commit c047ecb)
+
 ### Position Verification System (Mar 15, 2026)
 - `chess960.js`: Added `positionToStartingFen(posNum)` — generates full FEN placement from position number
 - `dgtBoard.js`: `setExpectedPosition()`, `clearExpectedPosition()`, `checkPositionMatch()`, `boardToFenPlacement()`
@@ -141,7 +147,7 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 | `src/services/database.js` | SQLite schema, all DB queries |
 | `src/services/gameEngine.js` | Game state machine, sat tracking |
 | `src/services/chess960.js` | Chess960 position generation |
-| `src/services/dgtBoard.js` | DGT board integration (LiveChessCloud polling + direct board state push) |
+| `src/services/dgtBoard.js` | DGT board integration (direct relay mode — accepts FEN/clock via POST) |
 | `dgt-relay/` | Relay scripts for venue laptop (LiveChess WS, USB serial, FEN input) |
 | `dgt-relay/DGT-SETUP.md` | Complete DGT setup guide for all 4 board connection paths |
 | `src/routes/api.js` | All REST API endpoints (auth, game, admin, DGT) |
