@@ -245,25 +245,75 @@
         socket.on('player_removed_timeout', () => location.reload());
 
         // DGT Board live updates
-        socket.on('dgt_board', (data) => {
-            const boardEl = document.getElementById('live-board');
-            if (!boardEl || !data.board) return;
+        function createDgtBoard() {
+            const gameSection = document.getElementById('game-section');
+            if (!gameSection) return null;
+            // Clear the section and create a fresh board
+            gameSection.innerHTML = '';
+            const wrapper = document.createElement('div');
+            wrapper.className = 'text-center';
+            const container = document.createElement('div');
+            container.id = 'live-board';
+            container.className = 'inline-block bg-throne-dark rounded-xl p-3 border border-gray-700';
+            const inner = document.createElement('div');
+            inner.className = 'inline-block';
+            const files = ['a','b','c','d','e','f','g','h'];
+            for (let r = 0; r < 8; r++) {
+                const row = document.createElement('div');
+                row.className = 'flex';
+                const label = document.createElement('div');
+                label.className = 'w-5 flex items-center justify-center text-xs text-gray-500 font-mono';
+                label.textContent = 8 - r;
+                row.appendChild(label);
+                for (let f = 0; f < 8; f++) {
+                    const sq = document.createElement('div');
+                    sq.className = 'board-square ' + ((r + f) % 2 === 0 ? 'sq-light' : 'sq-dark');
+                    sq.setAttribute('data-square', files[f] + (8 - r));
+                    row.appendChild(sq);
+                }
+                inner.appendChild(row);
+            }
+            // File labels
+            const labelRow = document.createElement('div');
+            labelRow.className = 'flex';
+            const spacer = document.createElement('div');
+            spacer.className = 'w-5';
+            labelRow.appendChild(spacer);
+            files.forEach(f => {
+                const d = document.createElement('div');
+                d.className = 'board-square';
+                d.style.height = 'auto';
+                d.innerHTML = '<span class="text-xs text-gray-500 font-mono">' + f + '</span>';
+                labelRow.appendChild(d);
+            });
+            inner.appendChild(labelRow);
+            container.appendChild(inner);
+            wrapper.appendChild(container);
+            gameSection.appendChild(wrapper);
+            return container;
+        }
 
-            // Find all board squares and update them
+        socket.on('dgt_board', (data) => {
+            if (!data.board) return;
+            let boardEl = document.getElementById('live-board');
+            // Create board dynamically if it doesn't exist yet
+            if (!boardEl) {
+                boardEl = createDgtBoard();
+                if (!boardEl) return;
+            }
+
             const squares = boardEl.querySelectorAll('.board-square');
-            if (squares.length !== 64) return; // Safety check
+            if (squares.length < 64) return;
 
             let idx = 0;
             data.board.forEach((row, ri) => {
                 row.forEach((sq, fi) => {
                     const el = squares[idx];
                     if (!el) { idx++; return; }
-                    // Update highlight
                     el.classList.remove('sq-highlight');
                     if (data.lastMove && (sq.square === data.lastMove.from || sq.square === data.lastMove.to)) {
                         el.classList.add('sq-highlight');
                     }
-                    // Update piece
                     const img = el.querySelector('img');
                     if (sq.piece) {
                         const src = '/pieces/' + sq.color + sq.piece + '.svg';

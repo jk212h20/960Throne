@@ -339,7 +339,10 @@
         ws.onmessage = (evt) => {
             try {
                 const msg = JSON.parse(evt.data);
-                log('WS msg: ' + JSON.stringify(msg).substring(0, 120), 'info');
+                // Only log non-polling messages (polling is every 500ms, too noisy)
+                if (msg.id <= 1 || msg.response === 'error') {
+                    log('WS msg: ' + JSON.stringify(msg).substring(0, 120), 'info');
+                }
                 handleLiveChessMsg(msg);
             } catch (e) { /* ignore */ }
         };
@@ -386,9 +389,13 @@
             
             if (feeds && feeds.length > 0) {
                 const board = feeds[0];
-                feedId = board.serialnr || board.id || board;
-                log('Board: ' + JSON.stringify(board).substring(0, 200) + ' (v8)', 'success');
-                updateConnectionUI(true, 'Board found! Polling for positions...');
+                const newFeedId = board.serialnr || board.id || board;
+                // Only log board found once (not on every poll)
+                if (feedId !== newFeedId) {
+                    feedId = newFeedId;
+                    log('Board: ' + feedId + ' (v10)', 'success');
+                    updateConnectionUI(true, '✅ Polling board positions (500ms)');
+                }
                 
                 // The board field IS the FEN position string (not a 64-char array)
                 const fen = board.fen || board.board;
@@ -436,7 +443,7 @@
         eboardsPollTimer = setInterval(() => {
             eboardsPollId++;
             wsSend({ call: 'eboards', id: eboardsPollId, param: {} });
-        }, 1500);
+        }, 500);
     }
     
     // ─── HTTP Polling Fallback ───────────────────────────
