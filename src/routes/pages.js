@@ -37,9 +37,19 @@ router.get('/', (req, res) => {
             const code = req.query.code || '';
             return res.redirect('/set-name' + (code ? '?code=' + code : ''));
         }
+        // Check current game state to route player appropriately
+        const state = gameEngine.getThoneState();
+
+        // If player is in an active game (king or challenger), go straight to game page
+        if (state.game && (state.game.king_id === req.player.id || state.game.challenger_id === req.player.id)) {
+            return res.redirect('/game');
+        }
+
         // If they have a venue code, auto-join queue before redirecting
+        // (joinQueue already guards against king/duplicate, but skip the call for clarity)
         const code = req.query.code;
-        if (code && db.validateVenueCode(code) && !db.isPlayerInQueue(req.player.id)) {
+        const isKing = state.king && state.king.id === req.player.id;
+        if (code && db.validateVenueCode(code) && !isKing && !db.isPlayerInQueue(req.player.id)) {
             gameEngine.joinQueue(req.player.id);
         }
         return res.redirect('/player');
@@ -117,6 +127,20 @@ router.get('/join', (req, res) => {
         // Store the code and redirect to login
         res.cookie('venue_code', code || '', { maxAge: 10 * 60 * 1000 });
         return res.redirect('/?join=true&code=' + (code || ''));
+    }
+    // If player is in an active game, go straight to game page
+    const state = gameEngine.getThoneState();
+    if (state.game && (state.game.king_id === req.player.id || state.game.challenger_id === req.player.id)) {
+        return res.redirect('/game');
+    }
+    // If player is already in the queue, go to player dashboard (shows position + leave button)
+    if (db.isPlayerInQueue(req.player.id)) {
+        return res.redirect('/player');
+    }
+    // If they have a valid venue code, auto-join and redirect to player dashboard
+    if (code && db.validateVenueCode(code)) {
+        gameEngine.joinQueue(req.player.id);
+        return res.redirect('/player');
     }
     res.render('join', { player: req.player, venueCode: code || '' });
 });
