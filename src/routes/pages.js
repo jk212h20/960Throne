@@ -96,6 +96,12 @@ router.get('/live', (req, res) => {
     res.render('throne-live', { state, dgt });
 });
 
+// Board — Just the live board, nothing else (public, embeddable)
+router.get('/board', (req, res) => {
+    const dgt = dgtBoard.getState();
+    res.render('board', { dgt });
+});
+
 // Game — Active game view (for players in the current game)
 router.get('/game', (req, res) => {
     if (!req.player) return res.redirect('/');

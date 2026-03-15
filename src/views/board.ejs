@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>960 Throne — Live Board</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0f0f1a;
+            color: #fff;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 16px;
+        }
+        .board-wrap {
+            width: min(90vw, 90vh, 600px);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            aspect-ratio: 1;
+            border: 2px solid #444;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .sq {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sq-light { background: #f0d9b5; }
+        .sq-dark { background: #b58863; }
+        .sq-highlight { background: #cdd26a !important; }
+        .piece-img { width: 85%; height: 85%; object-fit: contain; }
+
+        /* Clocks */
+        .clocks {
+            display: flex;
+            justify-content: space-between;
+            font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+            font-size: 1.4rem;
+            font-weight: bold;
+        }
+        .clock {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 6px;
+            background: #1a1a2e;
+            border: 1px solid #333;
+        }
+        .clock-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            border: 1px solid #555;
+        }
+        .clock-dot-white { background: #fff; }
+        .clock-dot-black { background: #222; }
+        .clock-active { border-color: #4ade80; background: #1a2e1a; }
+
+        /* Empty state */
+        .empty {
+            text-align: center;
+            color: #666;
+            font-size: 1.1rem;
+            padding: 40px 0;
+        }
+        .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+
+        /* Status line */
+        .status {
+            text-align: center;
+            font-size: 0.8rem;
+            color: #555;
+            margin-top: 4px;
+        }
+        .status-connected { color: #4ade80; }
+        .status-disconnected { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="board-wrap">
+        <div class="board" id="board">
+            <% if (dgt && dgt.board) { %>
+                <% dgt.board.forEach((row, ri) => { %>
+                    <% row.forEach((sq, fi) => { %>
+                        <div class="sq <%= (ri + fi) % 2 === 0 ? 'sq-light' : 'sq-dark' %>">
+                            <% if (sq.piece) { %>
+                                <img src="/pieces/<%= sq.color %><%= sq.piece %>.svg" class="piece-img" alt="<%= sq.color === 'w' ? 'White' : 'Black' %> <%= sq.piece %>">
+                            <% } %>
+                        </div>
+                    <% }) %>
+                <% }) %>
+            <% } else { %>
+                <% for (let ri = 0; ri < 8; ri++) { %>
+                    <% for (let fi = 0; fi < 8; fi++) { %>
+                        <div class="sq <%= (ri + fi) % 2 === 0 ? 'sq-light' : 'sq-dark' %>"></div>
+                    <% }) %>
+                <% } %>
+            <% } %>
+        </div>
+
+        <div class="clocks" id="clocks" style="<%= (dgt && dgt.clock) ? '' : 'display:none' %>">
+            <div class="clock" id="clock-white-wrap">
+                <span class="clock-dot clock-dot-white"></span>
+                <span id="clock-white"><%= (dgt && dgt.clock) ? Math.floor(dgt.clock.white/60)+':'+String(dgt.clock.white%60).padStart(2,'0') : '--:--' %></span>
+            </div>
+            <div class="clock" id="clock-black-wrap">
+                <span class="clock-dot clock-dot-black"></span>
+                <span id="clock-black"><%= (dgt && dgt.clock) ? Math.floor(dgt.clock.black/60)+':'+String(dgt.clock.black%60).padStart(2,'0') : '--:--' %></span>
+            </div>
+        </div>
+
+        <div class="status" id="status">
+            <% if (dgt && dgt.connected) { %>
+                <span class="status-connected">● Board connected</span>
+            <% } else { %>
+                <span class="status-disconnected">● Waiting for board</span>
+            <% } %>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        socket.on('dgt_board', (data) => {
+            const boardEl = document.getElementById('board');
+            const clocksEl = document.getElementById('clocks');
+            const statusEl = document.getElementById('status');
+
+            // Update connection status
+            if (data.connected) {
+                statusEl.innerHTML = '<span class="status-connected">● Board connected</span>';
+            } else {
+                statusEl.innerHTML = '<span class="status-disconnected">● Waiting for board</span>';
+            }
+
+            // Rebuild board if we have data
+            if (data.board) {
+                let html = '';
+                data.board.forEach((row, ri) => {
+                    row.forEach((sq, fi) => {
+                        const light = (ri + fi) % 2 === 0 ? 'sq-light' : 'sq-dark';
+                        const hl = (data.lastMove && (sq.square === data.lastMove.from || sq.square === data.lastMove.to)) ? 'sq-highlight' : '';
+                        html += '<div class="sq ' + light + ' ' + hl + '">';
+                        if (sq.piece) {
+                            html += '<img src="/pieces/' + sq.color + sq.piece + '.svg" class="piece-img" alt="' + (sq.color === 'w' ? 'White' : 'Black') + ' ' + sq.piece + '">';
+                        }
+                        html += '</div>';
+                    });
+                });
+                boardEl.innerHTML = html;
+            }
+
+            // Update clocks
+            if (data.clock) {
+                clocksEl.style.display = '';
+                const wm = Math.floor(data.clock.white / 60);
+                const ws = String(data.clock.white % 60).padStart(2, '0');
+                const bm = Math.floor(data.clock.black / 60);
+                const bs = String(data.clock.black % 60).padStart(2, '0');
+                document.getElementById('clock-white').textContent = wm + ':' + ws;
+                document.getElementById('clock-black').textContent = bm + ':' + bs;
+            }
+        });
+    </script>
+</body>
+</html>
