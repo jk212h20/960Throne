@@ -393,16 +393,18 @@
         if (msg.id === 2) {
             log('Subscribed to board updates!', 'success');
             updateConnectionUI(true, '✅ Streaming positions (WebSocket)');
-            if (feedId) wsSend({ call: 'feed', id: 3, param: { id: feedId } });
             return;
         }
         
-        // Board data — try multiple field names
+        // Board data — try multiple field names from any message
         const fen = extractFenFromMsg(msg);
         if (fen) {
             handleBoardFen(fen);
             return;
         }
+        
+        // Log unhandled messages for debugging
+        log('Unhandled msg: ' + JSON.stringify(msg).substring(0, 150), 'info');
     }
     
     // ─── HTTP Polling Fallback ───────────────────────────
