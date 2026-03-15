@@ -384,10 +384,11 @@
             }
             
             if (feeds && feeds.length > 0) {
-                feedId = feeds[0].id || feeds[0].serialnr || feeds[0];
-                log('Board found: ' + feedId, 'success');
+                const raw = feeds[0].serialnr || feeds[0].id || feeds[0];
+                feedId = typeof raw === 'string' ? parseInt(raw, 10) : raw;
+                log('Board found: ' + feedId + ' (v5)', 'success');
                 updateConnectionUI(true, 'Board found! Subscribing...');
-                // LiveChess 2.2.9: subscribe takes { id: serialnr }
+                // LiveChess 2.2.9: subscribe takes { id: <int> }
                 wsSend({ call: 'subscribe', id: 2, param: { id: feedId } });
             } else {
                 log('No boards detected. Retrying in 5s...', 'error');
