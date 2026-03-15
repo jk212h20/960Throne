@@ -624,4 +624,21 @@ router.post('/admin/dgt/tournament', requireAdmin, (req, res) => {
     res.json({ success: true, state });
 });
 
+// Push board state from relay script (direct board reading — no tournament needed)
+// Accepts FEN or raw board array. Authenticated with relay secret.
+router.post('/dgt/board-state', (req, res) => {
+    // Auth: relay secret or admin token
+    const secret = process.env.DGT_RELAY_SECRET || process.env.ADMIN_PASSWORD || 'changeme';
+    const provided = req.headers['x-relay-secret'] || req.headers['x-admin-token'];
+    if (provided !== secret) {
+        return res.status(401).json({ error: 'Invalid relay secret' });
+    }
+    
+    const result = dgtBoard.setBoardState(req.body);
+    if (result.error) {
+        return res.status(400).json(result);
+    }
+    res.json(result);
+});
+
 module.exports = router;

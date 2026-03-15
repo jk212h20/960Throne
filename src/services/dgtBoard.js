@@ -477,6 +477,58 @@ function getState() {
 }
 
 /**
+ * Accept a raw board state push from a relay script (direct board reading).
+ * This bypasses the move-replay path entirely — just "here's what's on the board."
+ * 
+ * @param {Object} data - Board state from relay
+ * @param {string} data.fen - FEN string (position part only is fine, or full FEN)
+ * @param {Array}  data.board - Optional 8x8 array already formatted
+ * @param {Object} data.clock - Optional { white, black } in seconds
+ * @param {Object} data.players - Optional { white: { name }, black: { name } }
+ * @param {string} data.source - 'livechess' | 'serial' | 'fen' | 'manual'
+ */
+function setBoardState(data) {
+    let board = data.board || null;
+    
+    // If FEN provided but no board array, convert it
+    if (!board && data.fen) {
+        board = fenToBoard(data.fen);
+    }
+    
+    if (!board) {
+        return { error: 'No board or fen provided' };
+    }
+    
+    // Check if board actually changed (avoid unnecessary broadcasts)
+    const boardChanged = !currentState.board || 
+        JSON.stringify(board) !== JSON.stringify(currentState.board);
+    const clockChanged = data.clock && (!currentState.clock ||
+        data.clock.white !== currentState.clock.white ||
+        data.clock.black !== currentState.clock.black);
+    
+    if (boardChanged || clockChanged) {
+        currentState = {
+            connected: true,
+            fen: data.fen || null,
+            board,
+            clock: data.clock || currentState.clock,
+            moves: [],
+            moveCount: 0,
+            chess960Position: data.chess960Position || null,
+            lastMove: null, // no move tracking in direct mode
+            players: data.players || currentState.players || null,
+            result: data.result || null,
+            tournamentId: currentState.tournamentId,
+            error: null,
+            source: data.source || 'relay',
+        };
+        broadcast();
+    }
+    
+    return { success: true, changed: boardChanged || clockChanged };
+}
+
+/**
  * Format clock seconds to mm:ss
  */
 function formatClock(seconds) {
@@ -489,6 +541,7 @@ function formatClock(seconds) {
 module.exports = {
     init,
     setTournament,
+    setBoardState,
     getState,
     formatClock,
     stopPolling,
