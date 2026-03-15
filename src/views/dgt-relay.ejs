@@ -280,6 +280,7 @@
     function disconnect() {
         if (ws) { ws.close(); ws = null; }
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        if (eboardsPollTimer) { clearInterval(eboardsPollTimer); eboardsPollTimer = null; }
         connected = false;
         polling = false;
         feedId = null;
@@ -374,8 +375,8 @@
             return;
         }
         
-        // Response to eboards — list of connected boards
-        if (msg.id === 1 && msg.param) {
+        // Response to eboards — list of connected boards (id=1 for first, id>10 for polling)
+        if (msg.param && (msg.id === 1 || msg.id >= 10)) {
             let feeds = null;
             if (Array.isArray(msg.param) && msg.param.length > 0) {
                 feeds = msg.param;
@@ -384,13 +385,20 @@
             }
             
             if (feeds && feeds.length > 0) {
-                const serial = feeds[0].serialnr || feeds[0].id || feeds[0];
-                feedId = serial;
-                log('Board found: ' + serial + ' (v7)', 'success');
-                log('Sending: ' + JSON.stringify({ call: 'subscribe', id: 2, param: { serialnr: serial } }), 'info');
-                updateConnectionUI(true, 'Board found! Subscribing...');
-                // Try { serialnr: "52264" } — matching the field name from eboards response
-                wsSend({ call: 'subscribe', id: 2, param: { serialnr: serial } });
+                const board = feeds[0];
+                feedId = board.serialnr || board.id || board;
+                log('Board: ' + JSON.stringify(board).substring(0, 200) + ' (v8)', 'success');
+                updateConnectionUI(true, 'Board found! Polling for positions...');
+                
+                // Check if eboards already includes board state
+                const fen = board.fen || (board.board ? boardArrayToFen(board.board) : null);
+                if (fen) {
+                    log('Got FEN from eboards: ' + fen, 'success');
+                    handleBoardFen(fen);
+                }
+                
+                // Skip subscribe (buggy in 2.2.9), poll eboards every 1.5s instead
+                startEboardsPolling();
             } else {
                 log('No boards detected. Retrying in 5s...', 'error');
                 updateConnectionUI(true, 'LiveChess running but no board. Retrying...');
@@ -414,6 +422,22 @@
         
         // Log unhandled messages for debugging
         log('Unhandled msg: ' + JSON.stringify(msg).substring(0, 150), 'info');
+    }
+    
+    // ─── WebSocket eboards polling ───────────────────────
+    // Instead of subscribe (broken in 2.2.9), repeatedly call eboards
+    let eboardsPollTimer = null;
+    let eboardsPollId = 10;
+    
+    function startEboardsPolling() {
+        if (eboardsPollTimer) return;
+        log('Polling eboards via WebSocket every 1.5s...', 'info');
+        updateConnectionUI(true, '✅ Polling board positions (WebSocket)');
+        
+        eboardsPollTimer = setInterval(() => {
+            eboardsPollId++;
+            wsSend({ call: 'eboards', id: eboardsPollId, param: {} });
+        }, 1500);
     }
     
     // ─── HTTP Polling Fallback ───────────────────────────
