@@ -7,6 +7,14 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Live DGT Clock Display (Mar 15, 2026)
+- **Relay page** (`dgt-relay.ejs`): Extracts clock data from LiveChess eboards response (supports 4 DGT clock field formats: `clock` object, `whiteClockMs`/`blackClockMs`, `wtime`/`btime`, and `clock` string). Displays clock on relay page in a dedicated card. Includes clock in server push payload.
+- **Throne page** (`throne.ejs`): Dynamic clock display below the board with green active / gray inactive styling. Created via JS when DGT data arrives. CSS classes `.dgt-clock`, `.dgt-clock-active`, `.dgt-clock-inactive`.
+- **Admin page** (`admin.ejs`): Compact inline clock display in the active game section. Auto-shows when DGT clock data is received via Socket.io.
+- **Server-side**: Already handled — `dgtBoard.setBoardState()` accepts `clock` and includes it in broadcasts. No changes needed.
+- **Clock-only updates**: When board FEN hasn't changed but clock has, relay pushes a clock-only update to keep display current.
+- Status: **deployed to Railway** (commit 460b292)
+
 ### Position Verification System (Mar 15, 2026)
 - `chess960.js`: Added `positionToStartingFen(posNum)` — generates full FEN placement from position number
 - `dgtBoard.js`: `setExpectedPosition()`, `clearExpectedPosition()`, `checkPositionMatch()`, `boardToFenPlacement()`

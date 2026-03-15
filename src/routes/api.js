@@ -607,7 +607,7 @@ router.get('/admin/lightning-status', requireAdmin, async (req, res) => {
 });
 
 // ============================================================
-// DGT Board (LiveChessCloud)
+// DGT Board (Direct Relay)
 // ============================================================
 
 const dgtBoard = require('../services/dgtBoard');
@@ -617,15 +617,8 @@ router.get('/dgt/state', (req, res) => {
     res.json(dgtBoard.getState());
 });
 
-// Set DGT tournament ID (admin only)
-router.post('/admin/dgt/tournament', requireAdmin, (req, res) => {
-    const { tournamentId } = req.body;
-    const state = dgtBoard.setTournament(tournamentId || '');
-    res.json({ success: true, state });
-});
-
-// Push board state from relay script (direct board reading — no tournament needed)
-// Accepts FEN or raw board array. Authenticated with relay secret.
+// Push board state from relay script (direct board reading)
+// Accepts FEN or raw board array + optional clock. Authenticated with relay secret.
 router.post('/dgt/board-state', (req, res) => {
     // Auth: relay secret or admin token
     const secret = process.env.DGT_RELAY_SECRET || process.env.ADMIN_PASSWORD || 'changeme';

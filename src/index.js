@@ -37,7 +37,7 @@ async function start() {
     // Initialize game engine with Socket.io
     gameEngine.init(io);
 
-    // Initialize DGT board service (LiveChessCloud polling)
+    // Initialize DGT board service (direct relay mode)
     dgtBoard.init(io, db);
 
     // Middleware
