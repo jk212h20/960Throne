@@ -368,6 +368,12 @@
     }
     
     function handleLiveChessMsg(msg) {
+        // Handle error responses
+        if (msg.response === 'error') {
+            log('LiveChess error: ' + (msg.param?.message || JSON.stringify(msg.param)), 'error');
+            return;
+        }
+        
         // Response to eboards — list of connected boards
         if (msg.id === 1 && msg.param) {
             let feeds = null;
@@ -381,8 +387,8 @@
                 feedId = feeds[0].id || feeds[0].serialnr || feeds[0];
                 log('Board found: ' + feedId, 'success');
                 updateConnectionUI(true, 'Board found! Subscribing...');
-                // LiveChess 2.2.9 subscribe takes: { id: N, call: "subscribe", param: { feed: feedId } }
-                wsSend({ call: 'subscribe', id: 2, param: { feed: feedId } });
+                // LiveChess 2.2.9: subscribe takes the serial number as the single param
+                wsSend({ call: 'subscribe', id: 2, param: feedId });
             } else {
                 log('No boards detected. Retrying in 5s...', 'error');
                 updateConnectionUI(true, 'LiveChess running but no board. Retrying...');
