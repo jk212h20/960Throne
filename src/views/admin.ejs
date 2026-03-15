@@ -405,7 +405,8 @@
                     <img src="${qrImg.src}" alt="QR Code">
                     <h2>Scan to Play!</h2>
                     <p>King of the Hill Chess960</p>
-                </body>
+                <script src="/vscale.js"></script>
+</body>
                 </html>
             `);
             win.document.close();
@@ -530,5 +531,6 @@
         socket.on('reset_scheduled', () => setTimeout(() => location.reload(), 1000));
         socket.on('reset_cancelled', () => setTimeout(() => location.reload(), 1000));
     </script>
+<script src="/vscale.js"></script>
 </body>
 </html>
