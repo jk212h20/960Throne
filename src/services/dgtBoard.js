@@ -14,7 +14,6 @@
  *   { live, chess960, moves: ["e4 180+0", "e5 179+2", ...], clock: { white, black, run, time }, result }
  */
 
-const { Chess } = require('chess.js');
 const chess960 = require('./chess960');
 
 let io = null;
@@ -144,7 +143,7 @@ async function pollGame(tournamentId) {
         const newMoveCount = (gameData.moves || []).length;
         const movesChanged = newMoveCount !== currentState.moveCount || 
                             gameData.result !== currentState.result ||
-                            !currentState.fen;
+                            !currentState.board;
         
         if (movesChanged) {
             // Replay moves to get current position
@@ -192,37 +191,209 @@ async function pollGame(tournamentId) {
 }
 
 /**
- * Replay moves from a Chess960 starting position to get current FEN
+ * Simple Chess960-aware move replayer.
+ * Tracks pieces on an 8x8 grid and applies SAN moves without legality checking.
+ * This avoids chess.js's inability to handle Chess960 castling FEN.
  */
 function replayMoves(chess960Num, rawMoves) {
-    // Build starting FEN from Chess960 position number
-    const pieces = chess960.positionFromNumber(chess960Num || 518);
-    const backRank = pieces.join('').toLowerCase();
-    const whiteRank = pieces.join('');
-    const startFen = `${backRank}/pppppppp/8/8/8/8/PPPPPPPP/${whiteRank} w KQkq - 0 1`;
+    const posNum = chess960Num != null ? chess960Num : 518;
+    const pieces = chess960.positionFromNumber(posNum);
     
-    const chess = new Chess(startFen);
+    // board[rank][file] — rank 0 = rank 8 (top), rank 7 = rank 1 (bottom)
+    // Each cell: { piece: 'K'|'Q'|'R'|'B'|'N'|'P', color: 'w'|'b' } or null
+    const board = Array.from({ length: 8 }, () => Array(8).fill(null));
+    
+    // Set up Chess960 starting position
+    for (let f = 0; f < 8; f++) {
+        board[0][f] = { piece: pieces[f], color: 'b' };  // black back rank
+        board[1][f] = { piece: 'P', color: 'b' };        // black pawns
+        board[6][f] = { piece: 'P', color: 'w' };        // white pawns
+        board[7][f] = { piece: pieces[f], color: 'w' };  // white back rank
+    }
+    
+    // Track king and rook positions for castling
+    const kingFiles = { w: pieces.indexOf('K'), b: pieces.indexOf('K') };
+    const rookFilesOrig = { w: [], b: [] };
+    pieces.forEach((p, i) => { if (p === 'R') { rookFilesOrig.w.push(i); rookFilesOrig.b.push(i); } });
+    
+    let turn = 'w'; // w or b
     let lastMove = null;
+    const FILES = 'abcdefgh';
     
-    for (const raw of rawMoves) {
-        // Format: "e4 180+2" or "O-O 170+2" or just "e4"
-        const san = raw.split(' ')[0];
-        try {
-            const move = chess.move(san);
-            if (move) {
-                lastMove = { from: move.from, to: move.to };
+    function fileIdx(ch) { return FILES.indexOf(ch); }
+    function rankIdx(ch) { return 8 - parseInt(ch); } // '8'->0, '1'->7
+    
+    function findPiece(pieceType, color, toFile, toRank, disambigFile, disambigRank) {
+        // Find a piece of the given type and color that could move to (toRank, toFile)
+        // disambigFile/disambigRank narrow down which piece if multiple candidates
+        const candidates = [];
+        for (let r = 0; r < 8; r++) {
+            for (let f = 0; f < 8; f++) {
+                const sq = board[r][f];
+                if (sq && sq.piece === pieceType && sq.color === color) {
+                    if (disambigFile !== null && f !== disambigFile) continue;
+                    if (disambigRank !== null && r !== disambigRank) continue;
+                    candidates.push({ r, f });
+                }
             }
-        } catch (e) {
-            console.warn(`♟️  DGT: Failed to replay move "${san}":`, e.message);
-            break;
+        }
+        if (candidates.length === 1) return candidates[0];
+        
+        // Simple heuristic: pick the one that can reach the target
+        // For knights: L-shape; for bishops: diagonal; for rooks: straight; for queen: both
+        for (const c of candidates) {
+            if (canReach(pieceType, c.r, c.f, toRank, toFile)) return c;
+        }
+        return candidates[0] || null;
+    }
+    
+    function canReach(pieceType, fromR, fromF, toR, toF) {
+        const dr = toR - fromR, df = toF - fromF;
+        switch (pieceType) {
+            case 'N': return (Math.abs(dr) === 2 && Math.abs(df) === 1) || (Math.abs(dr) === 1 && Math.abs(df) === 2);
+            case 'B': return Math.abs(dr) === Math.abs(df) && dr !== 0;
+            case 'R': return (dr === 0 || df === 0) && (dr !== 0 || df !== 0);
+            case 'Q': return (Math.abs(dr) === Math.abs(df) || dr === 0 || df === 0) && (dr !== 0 || df !== 0);
+            case 'K': return Math.abs(dr) <= 1 && Math.abs(df) <= 1;
+            default: return true;
         }
     }
     
-    return {
-        fen: chess.fen(),
-        board: fenToBoard(chess.fen()),
-        lastMove,
-    };
+    for (const raw of rawMoves) {
+        const san = raw.split(' ')[0];
+        if (!san) continue;
+        
+        try {
+            // Castling
+            if (san === 'O-O' || san === 'O-O-O') {
+                const rank = turn === 'w' ? 7 : 0;
+                // Find king on this rank
+                let kf = null;
+                for (let f = 0; f < 8; f++) {
+                    if (board[rank][f] && board[rank][f].piece === 'K' && board[rank][f].color === turn) { kf = f; break; }
+                }
+                if (kf === null) { turn = turn === 'w' ? 'b' : 'w'; continue; }
+                
+                if (san === 'O-O') {
+                    // Kingside: find rook to the right of king
+                    let rf = null;
+                    for (let f = 7; f > kf; f--) {
+                        if (board[rank][f] && board[rank][f].piece === 'R' && board[rank][f].color === turn) { rf = f; break; }
+                    }
+                    if (rf !== null) {
+                        board[rank][kf] = null;
+                        board[rank][rf] = null;
+                        board[rank][6] = { piece: 'K', color: turn }; // g-file
+                        board[rank][5] = { piece: 'R', color: turn }; // f-file
+                        lastMove = { from: FILES[kf] + (8-rank), to: FILES[6] + (8-rank) };
+                    }
+                } else {
+                    // Queenside: find rook to the left of king
+                    let rf = null;
+                    for (let f = 0; f < kf; f++) {
+                        if (board[rank][f] && board[rank][f].piece === 'R' && board[rank][f].color === turn) { rf = f; break; }
+                    }
+                    if (rf !== null) {
+                        board[rank][kf] = null;
+                        board[rank][rf] = null;
+                        board[rank][2] = { piece: 'K', color: turn }; // c-file
+                        board[rank][3] = { piece: 'R', color: turn }; // d-file
+                        lastMove = { from: FILES[kf] + (8-rank), to: FILES[2] + (8-rank) };
+                    }
+                }
+                turn = turn === 'w' ? 'b' : 'w';
+                continue;
+            }
+            
+            // Strip check/mate/annotations
+            let m = san.replace(/[+#!?]+$/, '');
+            
+            // Promotion
+            let promotion = null;
+            if (m.includes('=')) {
+                promotion = m.split('=')[1][0];
+                m = m.split('=')[0];
+            }
+            
+            const isCapture = m.includes('x');
+            m = m.replace('x', '');
+            
+            // Parse destination square (last 2 chars)
+            const destSquare = m.slice(-2);
+            const toF = fileIdx(destSquare[0]);
+            const toR = rankIdx(destSquare[1]);
+            
+            const rest = m.slice(0, -2);
+            
+            if (rest === '' || (rest.length === 1 && rest[0] >= 'a' && rest[0] <= 'h')) {
+                // Pawn move
+                const fromFileHint = rest.length === 1 ? fileIdx(rest[0]) : null;
+                
+                if (fromFileHint !== null || isCapture) {
+                    // Pawn capture
+                    const ff = fromFileHint !== null ? fromFileHint : toF;
+                    const dir = turn === 'w' ? 1 : -1;
+                    const fromR = toR + dir;
+                    // En passant: if target square is empty and it's a diagonal pawn move
+                    if (!board[toR][toF] && ff !== toF) {
+                        board[fromR][toF] = null; // remove en passant captured pawn
+                    }
+                    board[toR][toF] = { piece: promotion || 'P', color: turn };
+                    board[fromR][ff] = null;
+                    lastMove = { from: FILES[ff] + (8-fromR), to: destSquare };
+                } else {
+                    // Pawn push
+                    const dir = turn === 'w' ? 1 : -1;
+                    if (board[toR + dir] && board[toR + dir][toF] && board[toR + dir][toF].piece === 'P' && board[toR + dir][toF].color === turn) {
+                        board[toR][toF] = { piece: promotion || 'P', color: turn };
+                        const fromR = toR + dir;
+                        board[fromR][toF] = null;
+                        lastMove = { from: FILES[toF] + (8-fromR), to: destSquare };
+                    } else if (board[toR + 2*dir] && board[toR + 2*dir][toF] && board[toR + 2*dir][toF].piece === 'P' && board[toR + 2*dir][toF].color === turn) {
+                        board[toR][toF] = { piece: promotion || 'P', color: turn };
+                        const fromR = toR + 2*dir;
+                        board[fromR][toF] = null;
+                        lastMove = { from: FILES[toF] + (8-fromR), to: destSquare };
+                    }
+                }
+            } else {
+                // Piece move: first char is piece type, optional disambiguation
+                const pieceType = rest[0];
+                let disambigFile = null, disambigRank = null;
+                const disambig = rest.slice(1);
+                if (disambig.length === 1) {
+                    if (disambig[0] >= 'a' && disambig[0] <= 'h') disambigFile = fileIdx(disambig[0]);
+                    else disambigRank = rankIdx(disambig[0]);
+                } else if (disambig.length === 2) {
+                    disambigFile = fileIdx(disambig[0]);
+                    disambigRank = rankIdx(disambig[1]);
+                }
+                
+                const from = findPiece(pieceType, turn, toF, toR, disambigFile, disambigRank);
+                if (from) {
+                    board[toR][toF] = { piece: pieceType, color: turn };
+                    board[from.r][from.f] = null;
+                    lastMove = { from: FILES[from.f] + (8-from.r), to: destSquare };
+                }
+            }
+        } catch (e) {
+            console.warn(`♟️  DGT: Failed to replay move "${san}":`, e.message);
+            // Continue anyway — show what we have
+        }
+        
+        turn = turn === 'w' ? 'b' : 'w';
+    }
+    
+    // Convert board to output format
+    const outputBoard = board.map((row, ri) => {
+        return row.map((sq, fi) => ({
+            piece: sq ? sq.piece : null,
+            color: sq ? sq.color : null,
+            square: FILES[fi] + (8 - ri),
+        }));
+    });
+    
+    return { fen: null, board: outputBoard, lastMove };
 }
 
 /**
@@ -283,7 +454,7 @@ function formatPlayerName(player) {
  */
 function broadcast() {
     if (io) {
-        io.emit('dgt_position', {
+        io.emit('dgt_board', {
             fen: currentState.fen,
             board: currentState.board,
             clock: currentState.clock,
