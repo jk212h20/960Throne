@@ -59,6 +59,12 @@
                     <div class="text-xs text-gray-500">Position #<%= state.game.chess960_position %></div>
                     <div id="admin-pos-verify" class="text-xs mt-1 px-2 py-1 rounded" style="display:none;"></div>
                     <div class="text-sm text-yellow-400 mt-1">⏱️ Started <span id="admin-game-elapsed">0:00</span> ago</div>
+                    <div id="admin-dgt-clock" class="flex items-center gap-3 mt-2 text-sm" style="display:none;">
+                        <span class="text-gray-400">DGT Clock:</span>
+                        <span class="font-mono font-bold text-white bg-gray-800 px-2 py-0.5 rounded" id="admin-clock-white">--:--</span>
+                        <span class="text-gray-500">-</span>
+                        <span class="font-mono font-bold text-white bg-gray-800 px-2 py-0.5 rounded" id="admin-clock-black">--:--</span>
+                    </div>
                     <% if (state.game.king_reported || state.game.challenger_reported) { %>
                     <div class="text-xs text-gray-500 mt-1">
                         <% if (state.game.king_reported) { %>King reported: <span class="text-white"><%= state.game.king_reported %></span> <% } %>
@@ -476,8 +482,26 @@
         })();
         <% } %>
 
-        // DGT position verification indicator
+        // DGT clock + position verification
+        function formatAdminClock(seconds) {
+            if (seconds == null) return '--:--';
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return m + ':' + String(s).padStart(2, '0');
+        }
+
         socket.on('dgt_board', (data) => {
+            // Update clock display
+            if (data.clock) {
+                const clockContainer = document.getElementById('admin-dgt-clock');
+                const whiteEl = document.getElementById('admin-clock-white');
+                const blackEl = document.getElementById('admin-clock-black');
+                if (clockContainer) clockContainer.style.display = 'flex';
+                if (whiteEl) whiteEl.textContent = formatAdminClock(data.clock.white);
+                if (blackEl) blackEl.textContent = formatAdminClock(data.clock.black);
+            }
+
+            // Position verification
             const el = document.getElementById('admin-pos-verify');
             if (!el) return;
             const pv = data.positionVerification;

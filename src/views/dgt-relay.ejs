@@ -75,6 +75,23 @@
                     </div>
                 </div>
 
+                <!-- Clock Display -->
+                <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+                    <h2 class="font-bold text-lg mb-3 flex items-center gap-2">⏱️ DGT Clock</h2>
+                    <div class="flex items-center justify-center gap-6">
+                        <div class="text-center">
+                            <div class="text-xs text-gray-500 mb-1">♔ White</div>
+                            <div class="text-3xl font-mono font-bold text-white bg-gray-800 rounded-lg px-4 py-2" id="relay-clock-white">--:--</div>
+                        </div>
+                        <div class="text-gray-600 text-lg">|</div>
+                        <div class="text-center">
+                            <div class="text-xs text-gray-500 mb-1">♚ Black</div>
+                            <div class="text-3xl font-mono font-bold text-white bg-gray-800 rounded-lg px-4 py-2" id="relay-clock-black">--:--</div>
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-600 text-center mt-2" id="clock-source">No clock data yet</div>
+                </div>
+
                 <!-- Server Push Status -->
                 <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
                     <h2 class="font-bold text-lg mb-3 flex items-center gap-2">
@@ -143,6 +160,7 @@
     let pushCount = 0;
     let changeCount = 0;
     let errorCount = 0;
+    let lastClock = null; // { white, black } in seconds
     
     // Piece map for FEN
     const FEN_PIECES = {
@@ -208,10 +226,14 @@
     renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
     
     // ─── Push to Server ──────────────────────────────────
-    async function pushToServer(fen) {
+    async function pushToServer(fen, clock) {
         pushCount++;
         document.getElementById('push-count').textContent = pushCount;
         document.getElementById('last-push').textContent = new Date().toLocaleTimeString();
+        
+        const payload = { fen, source: 'relay-page' };
+        if (clock) payload.clock = clock;
+        else if (lastClock) payload.clock = lastClock;
         
         try {
             const res = await fetch(SERVER_URL + '/api/dgt/board-state', {
@@ -220,7 +242,7 @@
                     'Content-Type': 'application/json',
                     'x-relay-secret': RELAY_SECRET,
                 },
-                body: JSON.stringify({ fen, source: 'relay-page' }),
+                body: JSON.stringify(payload),
             });
             const data = await res.json();
             
@@ -399,8 +421,19 @@
                 
                 // The board field IS the FEN position string (not a 64-char array)
                 const fen = board.fen || board.board;
+                
+                // Extract clock data from the board object
+                const clock = extractClockFromBoard(board);
+                if (clock) {
+                    lastClock = clock;
+                    updateRelayClockDisplay(clock);
+                }
+                
                 if (fen && typeof fen === 'string' && fen.includes('/')) {
-                    handleBoardFen(fen);
+                    handleBoardFen(fen, clock);
+                } else if (clock) {
+                    // Clock changed but FEN didn't — still push clock update
+                    pushClockToServer(clock);
                 }
                 
                 // Skip subscribe (buggy in 2.2.9), poll eboards every 1.5s instead
@@ -518,6 +551,55 @@
         pollTimer = setInterval(poll, 1500);
     }
     
+    // ─── Clock Helpers ───────────────────────────────────
+    
+    function formatClock(seconds) {
+        if (seconds == null) return '--:--';
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${String(s).padStart(2, '0')}`;
+    }
+    
+    function extractClockFromBoard(board) {
+        if (!board || typeof board !== 'object') return null;
+        // DGT LiveChess clock formats vary — try multiple field names
+        // Format 1: { clock: { white: 180, black: 180 } } — seconds as numbers
+        if (board.clock && typeof board.clock === 'object' && board.clock.white !== undefined) {
+            return { white: Number(board.clock.white), black: Number(board.clock.black) };
+        }
+        // Format 2: { whiteClockMs: 180000, blackClockMs: 180000 } — milliseconds
+        if (board.whiteClockMs !== undefined) {
+            return { white: Math.floor(Number(board.whiteClockMs) / 1000), black: Math.floor(Number(board.blackClockMs) / 1000) };
+        }
+        // Format 3: { wtime: 180, btime: 180 } — seconds
+        if (board.wtime !== undefined) {
+            return { white: Number(board.wtime), black: Number(board.btime) };
+        }
+        // Format 4: { clock: "03:00 / 03:00" } — string format
+        if (board.clock && typeof board.clock === 'string') {
+            const parts = board.clock.split('/').map(s => s.trim());
+            if (parts.length === 2) {
+                const parseMmSs = (str) => {
+                    const m = str.match(/(\d+):(\d+)/);
+                    return m ? parseInt(m[1]) * 60 + parseInt(m[2]) : null;
+                };
+                const w = parseMmSs(parts[0]);
+                const b = parseMmSs(parts[1]);
+                if (w !== null && b !== null) return { white: w, black: b };
+            }
+        }
+        return null;
+    }
+    
+    function updateRelayClockDisplay(clock) {
+        const whiteEl = document.getElementById('relay-clock-white');
+        const blackEl = document.getElementById('relay-clock-black');
+        const sourceEl = document.getElementById('clock-source');
+        if (whiteEl) whiteEl.textContent = formatClock(clock.white);
+        if (blackEl) blackEl.textContent = formatClock(clock.black);
+        if (sourceEl) sourceEl.textContent = 'Last update: ' + new Date().toLocaleTimeString();
+    }
+    
     // ─── Helpers ─────────────────────────────────────────
     
     function extractFenFromMsg(msg) {
@@ -534,14 +616,29 @@
         return null;
     }
     
-    function handleBoardFen(fen) {
+    function handleBoardFen(fen, clock) {
         const placement = fen.split(' ')[0];
         if (placement === lastFen) return;
         lastFen = placement;
         
         renderBoard(fen);
-        pushToServer(fen);
+        pushToServer(fen, clock);
         document.getElementById('fen-input').value = placement;
+    }
+    
+    // Push clock-only update (when FEN hasn't changed but clock has)
+    async function pushClockToServer(clock) {
+        if (!lastFen) return; // No board state yet — nothing to attach clock to
+        try {
+            await fetch(SERVER_URL + '/api/dgt/board-state', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-relay-secret': RELAY_SECRET,
+                },
+                body: JSON.stringify({ fen: lastFen, clock, source: 'relay-page' }),
+            });
+        } catch (err) { /* silent — clock-only updates are best-effort */ }
     }
     
     function boardArrayToFen(board) {
