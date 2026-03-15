@@ -7,6 +7,15 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### DGT LiveChessCloud Integration + Widget Piece Icons (Mar 14, 2026)
+- **Replaced piece SVGs with widget icons**: Extracted 12 piece SVGs from `btc-chess-widget(5).html` — classic outline style (white=filled with gradient, black=outline-only dark). Wrote to `public/pieces/`.
+- **New service `src/services/dgtBoard.js`**: Polls DGT LiveChessCloud API (`https://1.dgtlivecloud.com/api/`) for live tournament board state. Uses `chess.js` to replay moves from game PGN into an 8×8 board array. Emits `dgt_board` Socket.io events with board + clock data.
+- **API endpoints**: `GET /api/dgt/state` (public board state), `POST /api/admin/dgt/tournament` (set tournament ID)
+- **Throne views upgraded**: Both `throne.ejs` and `throne-live.ejs` now show full 8×8 boards (starting position from Chess960 when no DGT data, live DGT board when connected). Socket.io `dgt_board` handler updates pieces + highlights last move in real-time.
+- **DGT clocks**: Displayed below board on throne-live.ejs when clock data available
+- **Dependencies**: Added `chess.js` package
+- **Deployed to Railway**
+
 ### Game-Count Position Offset (Mar 11, 2026)
 - **Problem**: Multiple games within the same Bitcoin block got the same Chess960 position
 - **Fix**: `fetchBitcoinPosition()` now tracks `_gameCountInBlock` — each call offsets the base position by `(basePosition + gameCount) % 960`. Counter resets when block hash changes.
@@ -105,7 +114,8 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 | `src/services/database.js` | SQLite schema, all DB queries |
 | `src/services/gameEngine.js` | Game state machine, sat tracking |
 | `src/services/chess960.js` | Chess960 position generation |
-| `src/routes/api.js` | All REST API endpoints (auth, game, admin) |
+| `src/services/dgtBoard.js` | DGT LiveChessCloud integration (board polling, chess.js replay) |
+| `src/routes/api.js` | All REST API endpoints (auth, game, admin, DGT) |
 | `src/routes/pages.js` | Page rendering + auth flow routing |
 | `src/services/telegram.js` | Telegram bot polling + player notifications |
 | `src/views/timeline.ejs` | Event timeline page |
