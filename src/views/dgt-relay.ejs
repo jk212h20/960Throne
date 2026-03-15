@@ -390,10 +390,9 @@
                 log('Board: ' + JSON.stringify(board).substring(0, 200) + ' (v8)', 'success');
                 updateConnectionUI(true, 'Board found! Polling for positions...');
                 
-                // Check if eboards already includes board state
-                const fen = board.fen || (board.board ? boardArrayToFen(board.board) : null);
-                if (fen) {
-                    log('Got FEN from eboards: ' + fen, 'success');
+                // The board field IS the FEN position string (not a 64-char array)
+                const fen = board.fen || board.board;
+                if (fen && typeof fen === 'string' && fen.includes('/')) {
                     handleBoardFen(fen);
                 }
                 
