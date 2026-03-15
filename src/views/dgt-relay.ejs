@@ -387,8 +387,8 @@
                 feedId = feeds[0].id || feeds[0].serialnr || feeds[0];
                 log('Board found: ' + feedId, 'success');
                 updateConnectionUI(true, 'Board found! Subscribing...');
-                // LiveChess 2.2.9: subscribe takes the serial number as the single param
-                wsSend({ call: 'subscribe', id: 2, param: feedId });
+                // LiveChess 2.2.9: subscribe takes { id: serialnr }
+                wsSend({ call: 'subscribe', id: 2, param: { id: feedId } });
             } else {
                 log('No boards detected. Retrying in 5s...', 'error');
                 updateConnectionUI(true, 'LiveChess running but no board. Retrying...');
