@@ -606,4 +606,22 @@ router.get('/admin/lightning-status', requireAdmin, async (req, res) => {
     res.json(status);
 });
 
+// ============================================================
+// DGT Board (LiveChessCloud)
+// ============================================================
+
+const dgtBoard = require('../services/dgtBoard');
+
+// Get DGT board state (public — for live views)
+router.get('/dgt/state', (req, res) => {
+    res.json(dgtBoard.getState());
+});
+
+// Set DGT tournament ID (admin only)
+router.post('/admin/dgt/tournament', requireAdmin, (req, res) => {
+    const { tournamentId } = req.body;
+    const state = dgtBoard.setTournament(tournamentId || '');
+    res.json({ success: true, state });
+});
+
 module.exports = router;

@@ -13,6 +13,12 @@
         .color-box-black { display: inline-block; background: #1a1a1a; color: #fff; padding: 2px 10px; border-radius: 4px; border: 2px solid #555; }
         @keyframes satsGlow { 0%,100% { text-shadow: 0 0 10px #FFD700; } 50% { text-shadow: 0 0 30px #FFD700, 0 0 60px #FFD700; } }
         .sats-glow { animation: satsGlow 2s ease-in-out infinite; }
+        /* DGT 8×8 Board */
+        .dgt-board { display: grid; grid-template-columns: repeat(8, 1fr); gap: 0; aspect-ratio: 1; width: 480px; max-width: 60vh; border: 2px solid #444; border-radius: 4px; overflow: hidden; margin: 0 auto; }
+        .sq { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
+        .sq-light { background: #f0d9b5; }
+        .sq-dark { background: #b58863; }
+        .sq-highlight { background: #cdd26a !important; }
     </style>
 </head>
 <body class="h-screen bg-throne-darker flex flex-col">
@@ -88,28 +94,57 @@
                             <span class="<%= kc2 === 'white' ? 'color-box-black' : 'color-box-white' %> text-xl font-bold flex items-center gap-1"><%- include('partials/icon', { name: 'crossed-swords', size: 20, cls: '' }) %> <%= state.game.challenger_name %></span>
                         </div>
                     </div>
-                    <!-- Chess960 Board — shows king's pieces so challenger can mirror -->
+                    <!-- DGT Live Board / Chess960 Position -->
                     <div class="inline-block bg-throne-dark rounded-xl p-4 border border-gray-700">
                         <div class="text-sm text-gray-400 mb-2">Position #<%= state.game.chess960_position %></div>
-                        <%
-                          const pieces = state.game.position.pieces;
-                          const isKingWhite2 = kc2 === 'white';
-                          const orderedPieces2 = isKingWhite2 ? pieces : [...pieces].reverse();
-                          const fileLabels2 = isKingWhite2 ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
-                          const piecePrefix2 = isKingWhite2 ? 'w' : 'b';
-                        %>
-                        <div class="text-xs text-gray-500 mb-2"><%= kc2.charAt(0).toUpperCase() + kc2.slice(1) %>'s pieces — challenger mirrors</div>
-                        <div class="flex gap-1" id="chess-board">
-                            <% orderedPieces2.forEach((p, i) => { %>
-                            <div class="w-16 h-16 flex items-center justify-center rounded <%= i % 2 === 0 ? 'bg-amber-700' : 'bg-amber-100' %>">
-                                <img src="/pieces/<%= piecePrefix2 %><%= p %>.svg" class="piece-img" alt="<%= p %>">
-                            </div>
-                            <% }) %>
+                        <!-- Full 8x8 board (updated by DGT via Socket.io) -->
+                        <div id="dgt-board" class="dgt-board">
+                            <% if (dgt && dgt.board) { %>
+                                <% dgt.board.forEach((row, ri) => { %>
+                                    <% row.forEach((sq, fi) => { %>
+                                        <div class="sq <%= (ri + fi) % 2 === 0 ? 'sq-light' : 'sq-dark' %> <%= (dgt.lastMove && (sq.square === dgt.lastMove.from || sq.square === dgt.lastMove.to)) ? 'sq-highlight' : '' %>">
+                                            <% if (sq.piece) { %>
+                                                <img src="/pieces/<%= sq.color %><%= sq.piece %>.svg" class="piece-img" alt="<%= sq.piece %>">
+                                            <% } %>
+                                        </div>
+                                    <% }) %>
+                                <% }) %>
+                            <% } else { %>
+                                <%
+                                  const pieces = state.game.position.pieces;
+                                  const isKingWhite2 = kc2 === 'white';
+                                  const piecePrefix2 = isKingWhite2 ? 'w' : 'b';
+                                  const oppPrefix2 = isKingWhite2 ? 'b' : 'w';
+                                  // Build starting 8x8 from Chess960 back rank
+                                  const backRank = pieces;
+                                %>
+                                <% for (let ri = 0; ri < 8; ri++) { %>
+                                    <% for (let fi = 0; fi < 8; fi++) { %>
+                                        <div class="sq <%= (ri + fi) % 2 === 0 ? 'sq-light' : 'sq-dark' %>">
+                                            <% if (ri === 0) { %>
+                                                <img src="/pieces/<%= oppPrefix2 %><%= backRank[fi] %>.svg" class="piece-img" alt="<%= backRank[fi] %>">
+                                            <% } else if (ri === 1) { %>
+                                                <img src="/pieces/<%= oppPrefix2 %>P.svg" class="piece-img" alt="P">
+                                            <% } else if (ri === 6) { %>
+                                                <img src="/pieces/<%= piecePrefix2 %>P.svg" class="piece-img" alt="P">
+                                            <% } else if (ri === 7) { %>
+                                                <img src="/pieces/<%= piecePrefix2 %><%= backRank[fi] %>.svg" class="piece-img" alt="<%= backRank[fi] %>">
+                                            <% } %>
+                                        </div>
+                                    <% } %>
+                                <% } %>
+                            <% } %>
                         </div>
-                        <div class="flex gap-1 mt-1">
-                            <% fileLabels2.forEach((f, i) => { %>
-                            <div class="w-16 text-center text-xs text-gray-500"><%= f %></div>
-                            <% }) %>
+                        <!-- DGT Clocks -->
+                        <div id="dgt-clocks" class="flex justify-between mt-3 text-lg font-mono" style="<%= (dgt && dgt.clock) ? '' : 'display:none' %>">
+                            <div class="flex items-center gap-2">
+                                <span class="w-4 h-4 rounded-sm bg-white inline-block border border-gray-500"></span>
+                                <span id="dgt-clock-white"><%= (dgt && dgt.clock) ? Math.floor(dgt.clock.white/60)+':'+String(dgt.clock.white%60).padStart(2,'0') : '--:--' %></span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-4 h-4 rounded-sm bg-gray-800 inline-block border border-gray-500"></span>
+                                <span id="dgt-clock-black"><%= (dgt && dgt.clock) ? Math.floor(dgt.clock.black/60)+':'+String(dgt.clock.black%60).padStart(2,'0') : '--:--' %></span>
+                            </div>
                         </div>
                     </div>
                     <div class="text-sm text-gray-400 mt-3 font-mono" id="game-timer">
@@ -232,6 +267,39 @@
         socket.on('queue_updated', () => location.reload());
         socket.on('on_deck', () => location.reload());
         socket.on('player_removed_timeout', () => location.reload());
+
+        // DGT Board live updates
+        socket.on('dgt_board', (data) => {
+            const boardEl = document.getElementById('dgt-board');
+            const clocksEl = document.getElementById('dgt-clocks');
+            if (!boardEl || !data.board) return;
+
+            // Rebuild board
+            let html = '';
+            data.board.forEach((row, ri) => {
+                row.forEach((sq, fi) => {
+                    const light = (ri + fi) % 2 === 0 ? 'sq-light' : 'sq-dark';
+                    const hl = (data.lastMove && (sq.square === data.lastMove.from || sq.square === data.lastMove.to)) ? 'sq-highlight' : '';
+                    html += '<div class="sq ' + light + ' ' + hl + '">';
+                    if (sq.piece) {
+                        html += '<img src="/pieces/' + sq.color + sq.piece + '.svg" class="piece-img" alt="' + sq.piece + '">';
+                    }
+                    html += '</div>';
+                });
+            });
+            boardEl.innerHTML = html;
+
+            // Update clocks
+            if (data.clock && clocksEl) {
+                clocksEl.style.display = '';
+                const wm = Math.floor(data.clock.white / 60);
+                const ws = String(data.clock.white % 60).padStart(2, '0');
+                const bm = Math.floor(data.clock.black / 60);
+                const bs = String(data.clock.black % 60).padStart(2, '0');
+                document.getElementById('dgt-clock-white').textContent = wm + ':' + ws;
+                document.getElementById('dgt-clock-black').textContent = bm + ':' + bs;
+            }
+        });
     </script>
 </body>
 </html>

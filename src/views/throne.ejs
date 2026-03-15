@@ -12,6 +12,7 @@
         .piece-img { width: 85%; height: 85%; object-fit: contain; }
         .sq-light { background: #f0d9b5; }
         .sq-dark { background: #b58863; }
+        .sq-highlight { background: #cdd26a !important; }
         .color-box-white { display: inline-block; background: #fff; color: #1a1a1a; padding: 2px 10px; border-radius: 4px; border: 2px solid #fff; }
         .color-box-black { display: inline-block; background: #1a1a1a; color: #fff; padding: 2px 10px; border-radius: 4px; border: 2px solid #555; }
         @keyframes satsGlow { 0%,100% { text-shadow: 0 0 10px #FFD700; } 50% { text-shadow: 0 0 30px #FFD700, 0 0 60px #FFD700; } }
@@ -242,6 +243,43 @@
         socket.on('queue_updated', () => location.reload());
         socket.on('on_deck', () => location.reload());
         socket.on('player_removed_timeout', () => location.reload());
+
+        // DGT Board live updates
+        socket.on('dgt_board', (data) => {
+            const boardEl = document.getElementById('live-board');
+            if (!boardEl || !data.board) return;
+
+            // Find all board squares and update them
+            const squares = boardEl.querySelectorAll('.board-square');
+            if (squares.length !== 64) return; // Safety check
+
+            let idx = 0;
+            data.board.forEach((row, ri) => {
+                row.forEach((sq, fi) => {
+                    const el = squares[idx];
+                    if (!el) { idx++; return; }
+                    // Update highlight
+                    el.classList.remove('sq-highlight');
+                    if (data.lastMove && (sq.square === data.lastMove.from || sq.square === data.lastMove.to)) {
+                        el.classList.add('sq-highlight');
+                    }
+                    // Update piece
+                    const img = el.querySelector('img');
+                    if (sq.piece) {
+                        const src = '/pieces/' + sq.color + sq.piece + '.svg';
+                        if (img) {
+                            img.src = src;
+                            img.alt = sq.piece;
+                        } else {
+                            el.innerHTML = '<img src="' + src + '" class="piece-img" alt="' + sq.piece + '">';
+                        }
+                    } else {
+                        if (img) img.remove();
+                    }
+                    idx++;
+                });
+            });
+        });
     </script>
 </body>
 </html>

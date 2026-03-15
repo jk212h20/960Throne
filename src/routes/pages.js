@@ -8,6 +8,7 @@ const router = express.Router();
 const db = require('../services/database');
 const gameEngine = require('../services/gameEngine');
 const chess960 = require('../services/chess960');
+const dgtBoard = require('../services/dgtBoard');
 
 // Middleware to attach player to all page renders
 function attachPlayer(req, res, next) {
@@ -84,13 +85,15 @@ router.get('/throne', (req, res) => {
         return res.render('admin-login', { returnTo: '/throne' });
     }
     const state = gameEngine.getThoneState();
-    res.render('throne', { state });
+    const dgt = dgtBoard.getState();
+    res.render('throne', { state, dgt });
 });
 
 // Live — Public web version of throne (no QR code/venue code)
 router.get('/live', (req, res) => {
     const state = gameEngine.getThoneState();
-    res.render('throne-live', { state });
+    const dgt = dgtBoard.getState();
+    res.render('throne-live', { state, dgt });
 });
 
 // Game — Active game view (for players in the current game)

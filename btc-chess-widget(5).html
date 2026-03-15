@@ -1,0 +1,1196 @@
+<html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitcoin Chess960 Position</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    .btc-chess-widget {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      border-radius: 12px;
+    }
+
+    .widget-header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .widget-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0 0 10px 0;
+      color: #f7931a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .title-icon {
+      height: 32px;
+      width: auto;
+    }
+
+    .mode-tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      background: #2a2a2a;
+      padding: 4px;
+      border-radius: 8px;
+    }
+
+    .mode-tab {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      background: transparent;
+      color: #888;
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .mode-tab.active {
+      background: #f7931a;
+      color: #1a1a1a;
+    }
+
+    .mode-tab:hover:not(.active) {
+      background: #333;
+      color: #fff;
+    }
+
+    .mode-content {
+      display: none;
+      margin-bottom: 20px;
+    }
+
+    .mode-content.active {
+      display: block;
+    }
+
+    .override-controls {
+      background: #2a2a2a;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .input-group {
+      margin-bottom: 15px;
+    }
+
+    .input-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #f7931a;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .input-group input {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #444;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .input-group .btn-enter {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: #f7931a;
+      color: #1a1a1a;
+      white-space: nowrap;
+    }
+
+    .input-group .btn-enter:hover {
+      background: #ff9f2e;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: #f7931a;
+    }
+
+    .input-group input::placeholder {
+      color: #666;
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 15px;
+    }
+
+    .radio-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .radio-option input[type="radio"] {
+      width: auto;
+      cursor: pointer;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background: #f7931a;
+      color: #1a1a1a;
+    }
+
+    .btn-primary:hover {
+      background: #ff9f2e;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .loading-indicator {
+      text-align: center;
+      padding: 20px;
+      color: #888;
+    }
+
+    .chessboard-container {
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .chessboard {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 0;
+      aspect-ratio: 1;
+      border: 2px solid #444;
+      border-radius: 4px;
+      overflow: hidden;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    .square {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .square.light {
+      background: #f0d9b5;
+    }
+
+    .square.dark {
+      background: #b58863;
+    }
+
+    .piece-img {
+      width: 85%;
+      height: 85%;
+      object-fit: contain;
+    }
+
+    .position-info {
+      background: #2a2a2a;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #333;
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .info-label {
+      font-size: 13px;
+      color: #888;
+      font-weight: 600;
+    }
+
+    .info-value {
+      font-size: 14px;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      word-break: break-all;
+    }
+
+    .position-number,
+    .block-height-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #f7931a;
+    }
+
+    .back-rank {
+      font-size: 20px;
+      font-weight: 700;
+      color: #f7931a;
+      letter-spacing: 4px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .hash-link {
+      color: #4a9eff;
+      text-decoration: none;
+    }
+
+    .hash-link:hover {
+      text-decoration: underline;
+    }
+
+    .message-container {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      width: 90%;
+      max-width: 500px;
+      pointer-events: none;
+    }
+
+    .error-message {
+      background: #d32f2f;
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      pointer-events: auto;
+      animation: slideDown 0.3s ease;
+    }
+
+    .success-message {
+      background: #388e3c;
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      pointer-events: auto;
+      animation: slideDown 0.3s ease;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .widget-footer {
+      text-align: center;
+      padding: 12px 0 0 0;
+      border-top: 1px solid #333;
+      font-size: 13px;
+    }
+
+    .footer-link {
+      color: #f7931a;
+      text-decoration: none;
+      margin: 0 12px;
+      cursor: pointer;
+    }
+
+    .footer-link:hover {
+      text-decoration: underline;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: #1a1a1a;
+      border: 2px solid #f7931a;
+      border-radius: 12px;
+      max-width: 90%;
+      max-height: 90%;
+      overflow-y: auto;
+      padding: 24px;
+      position: relative;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #333;
+    }
+
+    .modal-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #f7931a;
+    }
+
+    .modal-close {
+      background: #444;
+      border: none;
+      color: #e0e0e0;
+      font-size: 24px;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-close:hover {
+      background: #555;
+    }
+
+    .modal-body {
+      color: #e0e0e0;
+      line-height: 1.6;
+    }
+
+    .modal-body h3 {
+      color: #f7931a;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    .modal-body p {
+      margin-bottom: 12px;
+    }
+
+    .modal-body ul {
+      margin-left: 20px;
+      margin-bottom: 12px;
+    }
+
+    .modal-body code {
+      background: #2a2a2a;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      color: #f7931a;
+    }
+
+    .code-block {
+      background: #2a2a2a;
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 12px 0;
+      position: relative;
+    }
+
+    .code-block pre {
+      margin: 0;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .copy-button {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: #f7931a;
+      color: #1a1a1a;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .copy-button:hover {
+      background: #ff9f2e;
+    }
+
+    @media (max-width: 640px) {
+      .btc-chess-widget {
+        padding: 15px;
+      }
+
+      .widget-title {
+        font-size: 20px;
+      }
+
+      .mode-tab {
+        font-size: 12px;
+        padding: 8px;
+      }
+
+      .radio-group {
+        gap: 8px;
+      }
+
+      .radio-option {
+        font-size: 13px;
+      }
+
+      .radio-option input[type="radio"] {
+        transform: scale(0.9);
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Messages (fixed overlay) -->
+  <div id="messageContainer" class="message-container"></div>
+
+  <div class="btc-chess-widget">
+    <div class="widget-header">
+      <h1 class="widget-title">
+        <img src="public/OrangeKing.png" alt="King" class="title-icon" onerror="this.style.display='none'">
+        Bitcoin Chess960 Position
+      </h1>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+      Loading...
+    </div>
+
+    <!-- Chessboard -->
+    <div class="chessboard-container">
+      <div class="chessboard" id="chessboard"><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 296.93 328.37'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}.cls-1{stroke-linejoin:round;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_rook_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M7,321.37H289.93V289.93H7Z'/&gt;&lt;path class='cls-1' d='M38.44,289.93V248H258.5v41.92Z'/&gt;&lt;path class='cls-1' d='M28,59.39V7H69.87V28h52.39V7h52.39V28h52.39V7H269V59.39'/&gt;&lt;path class='cls-1' d='M237.54,221.82,253.26,248H43.68l15.72-26.2'/&gt;&lt;path class='cls-2' d='M237.54,90.83V217.51H59.39V90.83'/&gt;&lt;path class='cls-1' d='M269,59.39,237.54,90.83H59.39L28,59.39'/&gt;&lt;path class='cls-2' d='M28,59.39H269'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="r"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 309.81 346.95'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2,.cls-3,.cls-4,.cls-5{stroke:%23e6e6e6;stroke-linecap:round;}.cls-1,.cls-2,.cls-3,.cls-4{stroke-linejoin:round;}.cls-1,.cls-5{stroke-width:14px;}.cls-2{stroke-width:13.25px;}.cls-3,.cls-4{fill:%23e6e6e6;}.cls-3{stroke-width:5px;}.cls-4{stroke-width:8px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_knight_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M148.85,40.06c15.28,1.46,15.64.12,29,4.22C261,69.74,307,150.44,302.51,339.95h-241c0-94.31,124.8-68.11,103.84-220.06'/&gt;&lt;path class='cls-2' d='M102.69,51.39c2.65-12.69,7.79-27.94,15-38.65,1.5-2.25,3.34-4.6,5.8-5.11S128,8.5,129.87,10c9.25,7.32,15.66,18.62,17.68,31.13'/&gt;&lt;path class='cls-1' d='M174.86,157.33c-11.75,13.12-25.34,24.55-39.6,34.83-17.39,12.53-34.63,23.47-48.89,40.07a96.93,96.93,0,0,1-14.74,13.7c-3.74,2.76-12.24,4.6-16.83,2.17-3.63-1.93-9-6.56-12.07-9s-6.1-1.09-9.78-1c-7.75.17-7.84-.74-13.9-6.07-19-16.74-13-48.16.49-64.81,8.35-10.31,22.36-33.39,36.73-55.5,3.31-5.08,4.37-11.14,5.6-17,1.3-6.14,4.19-10.29,8.42-14.95,13.51-14.86,57-37.93,66.06-41.47,2.58-1,4.16-1.33,5.41-3.77a64.24,64.24,0,0,1,5-8c5.72-8,13-15.12,21.78-19.62,10.46.61,10.29,38.1,10.29,38.1'/&gt;&lt;path class='cls-1' d='M39.88,236.64a101.51,101.51,0,0,0,17.2-25.56'/&gt;&lt;path class='cls-3' d='M37.17,204.3a5.24,5.24,0,1,1-4.93-5.53A5.24,5.24,0,0,1,37.17,204.3Z'/&gt;&lt;path class='cls-4' d='M102.86,99c-5.39,6.8-11.6,10.86-13.87,9.07s.26-8.77,5.65-15.57,11.6-10.86,13.87-9.07S108.25,92.18,102.86,99Z'/&gt;&lt;path class='cls-5' d='M181.38,82.16s-3.68-2,3.12,1.44c26.37,13.44,89.89,56.25,81.94,232.22'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="n"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 359.81 363.11'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}.cls-1{stroke-linejoin:round;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_bishop_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M38.44,326.61c35.52-10.16,105.94,4.51,141.47-21,35.52,25.46,105.94,10.79,141.47,21a83,83,0,0,1,31.44,21c-7.13,10.16-17.29,10.37-31.44,5.24-35.52-10.16-105.94,4.82-141.47-10.48-35.52,15.3-105.94.31-141.47,10.48-14.19,5.13-24.34,4.93-31.44-5.24C21.19,327.24,38.44,326.61,38.44,326.61Z'/&gt;&lt;path class='cls-1' d='M101.31,284.69c26.2,26.2,131,26.2,157.18,0a39.44,39.44,0,0,0,2.33-12.42c0-6.21-1.88-12.29-3.58-18.2A49.78,49.78,0,0,0,251,240.14a64.27,64.27,0,0,0-16-16.52c-.34-.24-2.21-1.93-2.67-1.8,57.63-15.72,62.87-120.51-52.39-162.42-115.27,41.92-110,146.71-52.39,162.42-.79-.22-4,2.76-4.53,3.2a67.35,67.35,0,0,0-10.19,9.79C102,247.67,95.91,268.5,101.31,284.69Z'/&gt;&lt;path class='cls-1' d='M206.1,33.2A26.2,26.2,0,1,1,179.9,7,26.2,26.2,0,0,1,206.1,33.2Z'/&gt;&lt;path class='cls-2' d='M127.51,221.82H232.3m-131,41.92H258.5M179.9,111.79v52.39M153.71,138H206.1'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="b"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 384.66 388.26'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}.cls-2{stroke-linejoin:round;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_king_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M192.67,85.17V22.48'/&gt;&lt;polygon class='cls-1' points='193.37 132.5 190.37 132.5 177.2 127.33 177.2 70.89 154.58 70.73 147.18 63.28 147.18 48.19 155.71 39.61 177.2 39.48 177.2 21.17 187.37 7 197.37 7 208.54 21.17 208.54 39.67 229.96 40.13 238.56 47.9 238.56 64.13 228.02 70.89 208.54 71.54 208.54 127.33 196.37 132.5 193.37 132.5'/&gt;&lt;path class='cls-1' d='M192.67,241.06s50.11-83.52,33.41-116.93c0,0-11.14-27.84-33.41-27.84s-33.41,27.84-33.41,27.84c-16.7,33.41,33.41,116.93,33.41,116.93'/&gt;&lt;path class='cls-2' d='M70.18,352c61.25,39,172.61,39,233.85,0v-78S404.25,224,370.84,157.15c-44.54-72.38-150.33-39-178.17,44.54v0C153.69,118.17,47.9,84.76,14.5,157.15-18.91,224,70.18,268.51,70.18,268.51Z'/&gt;&lt;path class='cls-2' d='M70.18,274.07c61.25-33.41,172.61-33.41,233.85,0'/&gt;&lt;path class='cls-2' d='M70.18,313c61.25-33.41,172.61-33.41,233.85,0'/&gt;&lt;path class='cls-2' d='M70.18,352c61.25-33.41,172.61-33.41,233.85,0'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="k"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 309.81 346.95'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2,.cls-3,.cls-4,.cls-5{stroke:%23e6e6e6;stroke-linecap:round;}.cls-1,.cls-2,.cls-3,.cls-4{stroke-linejoin:round;}.cls-1,.cls-5{stroke-width:14px;}.cls-2{stroke-width:13.25px;}.cls-3,.cls-4{fill:%23e6e6e6;}.cls-3{stroke-width:5px;}.cls-4{stroke-width:8px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_knight_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M148.85,40.06c15.28,1.46,15.64.12,29,4.22C261,69.74,307,150.44,302.51,339.95h-241c0-94.31,124.8-68.11,103.84-220.06'/&gt;&lt;path class='cls-2' d='M102.69,51.39c2.65-12.69,7.79-27.94,15-38.65,1.5-2.25,3.34-4.6,5.8-5.11S128,8.5,129.87,10c9.25,7.32,15.66,18.62,17.68,31.13'/&gt;&lt;path class='cls-1' d='M174.86,157.33c-11.75,13.12-25.34,24.55-39.6,34.83-17.39,12.53-34.63,23.47-48.89,40.07a96.93,96.93,0,0,1-14.74,13.7c-3.74,2.76-12.24,4.6-16.83,2.17-3.63-1.93-9-6.56-12.07-9s-6.1-1.09-9.78-1c-7.75.17-7.84-.74-13.9-6.07-19-16.74-13-48.16.49-64.81,8.35-10.31,22.36-33.39,36.73-55.5,3.31-5.08,4.37-11.14,5.6-17,1.3-6.14,4.19-10.29,8.42-14.95,13.51-14.86,57-37.93,66.06-41.47,2.58-1,4.16-1.33,5.41-3.77a64.24,64.24,0,0,1,5-8c5.72-8,13-15.12,21.78-19.62,10.46.61,10.29,38.1,10.29,38.1'/&gt;&lt;path class='cls-1' d='M39.88,236.64a101.51,101.51,0,0,0,17.2-25.56'/&gt;&lt;path class='cls-3' d='M37.17,204.3a5.24,5.24,0,1,1-4.93-5.53A5.24,5.24,0,0,1,37.17,204.3Z'/&gt;&lt;path class='cls-4' d='M102.86,99c-5.39,6.8-11.6,10.86-13.87,9.07s.26-8.77,5.65-15.57,11.6-10.86,13.87-9.07S108.25,92.18,102.86,99Z'/&gt;&lt;path class='cls-5' d='M181.38,82.16s-3.68-2,3.12,1.44c26.37,13.44,89.89,56.25,81.94,232.22'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="n"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 359.81 363.11'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}.cls-1{stroke-linejoin:round;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_bishop_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M38.44,326.61c35.52-10.16,105.94,4.51,141.47-21,35.52,25.46,105.94,10.79,141.47,21a83,83,0,0,1,31.44,21c-7.13,10.16-17.29,10.37-31.44,5.24-35.52-10.16-105.94,4.82-141.47-10.48-35.52,15.3-105.94.31-141.47,10.48-14.19,5.13-24.34,4.93-31.44-5.24C21.19,327.24,38.44,326.61,38.44,326.61Z'/&gt;&lt;path class='cls-1' d='M101.31,284.69c26.2,26.2,131,26.2,157.18,0a39.44,39.44,0,0,0,2.33-12.42c0-6.21-1.88-12.29-3.58-18.2A49.78,49.78,0,0,0,251,240.14a64.27,64.27,0,0,0-16-16.52c-.34-.24-2.21-1.93-2.67-1.8,57.63-15.72,62.87-120.51-52.39-162.42-115.27,41.92-110,146.71-52.39,162.42-.79-.22-4,2.76-4.53,3.2a67.35,67.35,0,0,0-10.19,9.79C102,247.67,95.91,268.5,101.31,284.69Z'/&gt;&lt;path class='cls-1' d='M206.1,33.2A26.2,26.2,0,1,1,179.9,7,26.2,26.2,0,0,1,206.1,33.2Z'/&gt;&lt;path class='cls-2' d='M127.51,221.82H232.3m-131,41.92H258.5M179.9,111.79v52.39M153.71,138H206.1'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="b"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 381.71 347.65'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{stroke:%23e6e6e6;stroke-linecap:round;stroke-linejoin:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_queen_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M49.39,201.81c89.07-15.72,220.06-15.72,282.93,0l21-125.75L279.93,191.33V44.62L222.29,186.09,190.85,28.9,159.42,186.09,101.78,39.38V191.33L28.43,76.06Z'/&gt;&lt;path class='cls-1' d='M49.39,201.81c0,21,15.72,21,26.2,41.92,10.48,15.72,10.48,10.48,5.24,36.68-15.72,10.48-10.48,52.39-10.48,52.39,68.11,10.48,172.9,10.48,241,0,0,0,5.24-41.92-10.48-52.39-5.24-26.2-5.24-21,5.24-36.68,10.48-21,26.2-21,26.2-41.92C243.25,186.09,138.46,186.09,49.39,201.81Z'/&gt;&lt;path class='cls-1' d='M75.59,243.72c36.68-10.48,193.86-10.48,230.54,0'/&gt;&lt;path class='cls-1' d='M80.83,280.4c62.87-10.48,157.18-10.48,220.06,0'/&gt;&lt;path class='cls-1' d='M48.92,75.11a21,21,0,1,1-21-21A21,21,0,0,1,48.92,75.11Z'/&gt;&lt;path class='cls-1' d='M211.81,28a21,21,0,1,1-21-21A21,21,0,0,1,211.81,28Z'/&gt;&lt;path class='cls-1' d='M374.71,75.11a21,21,0,1,1-21-21A21,21,0,0,1,374.71,75.11Z'/&gt;&lt;path class='cls-1' d='M122.74,38.44a21,21,0,1,1-21-21A21,21,0,0,1,122.74,38.44Z'/&gt;&lt;path class='cls-1' d='M300.88,43.68a21,21,0,1,1-21-21A21,21,0,0,1,300.88,43.68Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="q"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 296.93 328.37'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}.cls-1{stroke-linejoin:round;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_rook_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M7,321.37H289.93V289.93H7Z'/&gt;&lt;path class='cls-1' d='M38.44,289.93V248H258.5v41.92Z'/&gt;&lt;path class='cls-1' d='M28,59.39V7H69.87V28h52.39V7h52.39V28h52.39V7H269V59.39'/&gt;&lt;path class='cls-1' d='M237.54,221.82,253.26,248H43.68l15.72-26.2'/&gt;&lt;path class='cls-2' d='M237.54,90.83V217.51H59.39V90.83'/&gt;&lt;path class='cls-1' d='M269,59.39,237.54,90.83H59.39L28,59.39'/&gt;&lt;path class='cls-2' d='M28,59.39H269'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="r"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="p"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="p"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="p"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="p"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="p"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="p"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="p"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;b_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="p"></div><div class="square light"></div><div class="square dark"></div><div class="square light"></div><div class="square dark"></div><div class="square light"></div><div class="square dark"></div><div class="square light"></div><div class="square dark"></div><div class="square dark"></div><div class="square light"></div><div class="square dark"></div><div class="square light"></div><div class="square dark"></div><div class="square light"></div><div class="square dark"></div><div class="square light"></div><div class="square light"></div><div class="square dark"></div><div class="square light"></div><div class="square dark"></div><div class="square light"></div><div class="square dark"></div><div class="square light"></div><div class="square dark"></div><div class="square dark"></div><div class="square light"></div><div class="square dark"></div><div class="square light"></div><div class="square dark"></div><div class="square light"></div><div class="square dark"></div><div class="square light"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{fill:%23e6e6e6;stroke:%23000;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="P"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{fill:%23e6e6e6;stroke:%23000;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="P"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{fill:%23e6e6e6;stroke:%23000;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="P"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{fill:%23e6e6e6;stroke:%23000;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="P"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{fill:%23e6e6e6;stroke:%23000;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="P"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{fill:%23e6e6e6;stroke:%23000;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="P"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{fill:%23e6e6e6;stroke:%23000;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="P"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'&gt;&lt;defs&gt;&lt;style&gt;.cls-1{fill:%23e6e6e6;stroke:%23000;stroke-linecap:round;stroke-width:14px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_pawn_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="P"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 296.93 328.37'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2,.cls-3,.cls-4{fill:%23e6e6e6;stroke:%23000;stroke-width:14px;}.cls-1,.cls-2{stroke-linejoin:round;}.cls-2,.cls-4{stroke-linecap:round;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_rook_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M7,321.37H289.93V289.93H7Z'/&gt;&lt;path class='cls-1' d='M38.44,289.93V248H258.5v41.92Z'/&gt;&lt;path class='cls-1' d='M28,59.39V7H69.87V28h52.39V7h52.39V28h52.39V7H269V59.39'/&gt;&lt;path class='cls-2' d='M237.54,221.82,253.26,248H43.68l15.72-26.2'/&gt;&lt;path class='cls-3' d='M237.54,90.83V217.51H59.39V90.83'/&gt;&lt;path class='cls-2' d='M269,59.39,237.54,90.83H59.39L28,59.39'/&gt;&lt;path class='cls-4' d='M28,59.39H269'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="R"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 309.81 346.95'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2,.cls-5{fill:%23e6e6e6;}.cls-1,.cls-2,.cls-3,.cls-4,.cls-5{stroke:%23000;stroke-linecap:round;}.cls-1,.cls-2,.cls-3,.cls-4{stroke-linejoin:round;}.cls-1,.cls-5{stroke-width:14px;}.cls-2{stroke-width:13.25px;}.cls-3{stroke-width:5px;}.cls-4{stroke-width:8px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_knight_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M148.85,40.06c15.28,1.46,15.64.12,29,4.22C261,69.74,307,150.44,302.51,339.95h-241c0-94.31,124.8-68.11,103.84-220.06'/&gt;&lt;path class='cls-2' d='M102.69,51.39c2.65-12.69,7.79-27.94,15-38.65,1.5-2.25,3.34-4.6,5.8-5.11S128,8.5,129.87,10c9.25,7.32,15.66,18.62,17.68,31.13'/&gt;&lt;path class='cls-1' d='M174.86,157.33c-11.75,13.12-25.34,24.55-39.6,34.83-17.39,12.53-34.63,23.47-48.89,40.07a96.93,96.93,0,0,1-14.74,13.7c-3.74,2.76-12.24,4.6-16.83,2.17-3.63-1.93-9-6.56-12.07-9s-6.1-1.09-9.78-1c-7.75.17-7.84-.74-13.9-6.07-19-16.74-13-48.16.49-64.81,8.35-10.31,22.36-33.39,36.73-55.5,3.31-5.08,4.37-11.14,5.6-17,1.3-6.14,4.19-10.29,8.42-14.95,13.51-14.86,57-37.93,66.06-41.47,2.58-1,4.16-1.33,5.41-3.77a64.24,64.24,0,0,1,5-8c5.72-8,13-15.12,21.78-19.62,10.46.61,10.29,38.1,10.29,38.1'/&gt;&lt;path class='cls-1' d='M39.88,236.64a101.51,101.51,0,0,0,17.2-25.56'/&gt;&lt;path class='cls-3' d='M37.17,204.3a5.24,5.24,0,1,1-4.93-5.53A5.24,5.24,0,0,1,37.17,204.3Z'/&gt;&lt;path class='cls-4' d='M102.86,99c-5.39,6.8-11.6,10.86-13.87,9.07s.26-8.77,5.65-15.57,11.6-10.86,13.87-9.07S108.25,92.18,102.86,99Z'/&gt;&lt;path class='cls-5' d='M181.38,82.16s-3.68-2,3.12,1.44c26.37,13.44,89.89,56.25,81.94,232.22'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="N"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 359.81 363.11'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2{fill:%23e6e6e6;stroke:%23000;stroke-width:14px;}.cls-1{stroke-linejoin:round;}.cls-2{stroke-linecap:round;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_bishop_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M38.44,326.61c35.52-10.16,105.94,4.51,141.47-21,35.52,25.46,105.94,10.79,141.47,21a83,83,0,0,1,31.44,21c-7.13,10.16-17.29,10.37-31.44,5.24-35.52-10.16-105.94,4.82-141.47-10.48-35.52,15.3-105.94.31-141.47,10.48-14.19,5.13-24.34,4.93-31.44-5.24C21.19,327.24,38.44,326.61,38.44,326.61Z'/&gt;&lt;path class='cls-1' d='M101.31,284.69c26.2,26.2,131,26.2,157.18,0,4.77-14.31.2-33.55-8.29-45.73a60.7,60.7,0,0,0-17.91-17.14c57.63-15.72,62.87-120.51-52.39-162.42-115.27,41.92-110,146.71-52.39,162.42-.77-.21-3.85,2.67-4.39,3.1a67.55,67.55,0,0,0-10,9.49C102.2,247.2,95.91,268.48,101.31,284.69Z'/&gt;&lt;path class='cls-1' d='M206.1,33.2A26.2,26.2,0,1,1,179.9,7,26.2,26.2,0,0,1,206.1,33.2Z'/&gt;&lt;path class='cls-2' d='M127.51,221.82H232.3m-131,41.92H258.5M179.9,111.79v52.39M153.71,138H206.1'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="B"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 384.66 388.26'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2{fill:%23e6e6e6;stroke:%23000;stroke-linecap:round;stroke-width:14px;}.cls-2{stroke-linejoin:round;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_king_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M192.67,85.17V22.48'/&gt;&lt;polygon class='cls-1' points='193.37 132.5 190.37 132.5 177.2 127.33 177.2 70.89 154.58 70.73 147.18 63.28 147.18 48.19 155.71 39.61 177.2 39.48 177.2 21.17 187.37 7 197.37 7 208.54 21.17 208.54 39.67 229.96 40.13 238.56 47.9 238.56 64.13 228.02 70.89 208.54 71.54 208.54 127.33 196.37 132.5 193.37 132.5'/&gt;&lt;path class='cls-1' d='M192.67,241.06s50.11-83.52,33.41-116.93c0,0-11.14-27.84-33.41-27.84s-33.41,27.84-33.41,27.84c-16.7,33.41,33.41,116.93,33.41,116.93'/&gt;&lt;path class='cls-2' d='M70.18,352c61.25,39,172.61,39,233.85,0v-78S404.25,224,370.84,157.15c-44.54-72.38-150.33-39-178.17,44.54v0C153.69,118.17,47.9,84.76,14.5,157.15-18.91,224,70.18,268.51,70.18,268.51Z'/&gt;&lt;path class='cls-2' d='M70.18,274.07c61.25-33.41,172.61-33.41,233.85,0'/&gt;&lt;path class='cls-2' d='M70.18,313c61.25-33.41,172.61-33.41,233.85,0'/&gt;&lt;path class='cls-2' d='M70.18,352c61.25-33.41,172.61-33.41,233.85,0'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="K"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 309.81 346.95'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2,.cls-5{fill:%23e6e6e6;}.cls-1,.cls-2,.cls-3,.cls-4,.cls-5{stroke:%23000;stroke-linecap:round;}.cls-1,.cls-2,.cls-3,.cls-4{stroke-linejoin:round;}.cls-1,.cls-5{stroke-width:14px;}.cls-2{stroke-width:13.25px;}.cls-3{stroke-width:5px;}.cls-4{stroke-width:8px;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_knight_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M148.85,40.06c15.28,1.46,15.64.12,29,4.22C261,69.74,307,150.44,302.51,339.95h-241c0-94.31,124.8-68.11,103.84-220.06'/&gt;&lt;path class='cls-2' d='M102.69,51.39c2.65-12.69,7.79-27.94,15-38.65,1.5-2.25,3.34-4.6,5.8-5.11S128,8.5,129.87,10c9.25,7.32,15.66,18.62,17.68,31.13'/&gt;&lt;path class='cls-1' d='M174.86,157.33c-11.75,13.12-25.34,24.55-39.6,34.83-17.39,12.53-34.63,23.47-48.89,40.07a96.93,96.93,0,0,1-14.74,13.7c-3.74,2.76-12.24,4.6-16.83,2.17-3.63-1.93-9-6.56-12.07-9s-6.1-1.09-9.78-1c-7.75.17-7.84-.74-13.9-6.07-19-16.74-13-48.16.49-64.81,8.35-10.31,22.36-33.39,36.73-55.5,3.31-5.08,4.37-11.14,5.6-17,1.3-6.14,4.19-10.29,8.42-14.95,13.51-14.86,57-37.93,66.06-41.47,2.58-1,4.16-1.33,5.41-3.77a64.24,64.24,0,0,1,5-8c5.72-8,13-15.12,21.78-19.62,10.46.61,10.29,38.1,10.29,38.1'/&gt;&lt;path class='cls-1' d='M39.88,236.64a101.51,101.51,0,0,0,17.2-25.56'/&gt;&lt;path class='cls-3' d='M37.17,204.3a5.24,5.24,0,1,1-4.93-5.53A5.24,5.24,0,0,1,37.17,204.3Z'/&gt;&lt;path class='cls-4' d='M102.86,99c-5.39,6.8-11.6,10.86-13.87,9.07s.26-8.77,5.65-15.57,11.6-10.86,13.87-9.07S108.25,92.18,102.86,99Z'/&gt;&lt;path class='cls-5' d='M181.38,82.16s-3.68-2,3.12,1.44c26.37,13.44,89.89,56.25,81.94,232.22'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="N"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 359.81 363.11'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2{fill:%23e6e6e6;stroke:%23000;stroke-width:14px;}.cls-1{stroke-linejoin:round;}.cls-2{stroke-linecap:round;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_bishop_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M38.44,326.61c35.52-10.16,105.94,4.51,141.47-21,35.52,25.46,105.94,10.79,141.47,21a83,83,0,0,1,31.44,21c-7.13,10.16-17.29,10.37-31.44,5.24-35.52-10.16-105.94,4.82-141.47-10.48-35.52,15.3-105.94.31-141.47,10.48-14.19,5.13-24.34,4.93-31.44-5.24C21.19,327.24,38.44,326.61,38.44,326.61Z'/&gt;&lt;path class='cls-1' d='M101.31,284.69c26.2,26.2,131,26.2,157.18,0,4.77-14.31.2-33.55-8.29-45.73a60.7,60.7,0,0,0-17.91-17.14c57.63-15.72,62.87-120.51-52.39-162.42-115.27,41.92-110,146.71-52.39,162.42-.77-.21-3.85,2.67-4.39,3.1a67.55,67.55,0,0,0-10,9.49C102.2,247.2,95.91,268.48,101.31,284.69Z'/&gt;&lt;path class='cls-1' d='M206.1,33.2A26.2,26.2,0,1,1,179.9,7,26.2,26.2,0,0,1,206.1,33.2Z'/&gt;&lt;path class='cls-2' d='M127.51,221.82H232.3m-131,41.92H258.5M179.9,111.79v52.39M153.71,138H206.1'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="B"></div><div class="square dark"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 381.71 347.65'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2{fill:%23e6e6e6;stroke:%23000;stroke-linejoin:round;stroke-width:14px;}.cls-2{stroke-linecap:round;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_queen_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M49.39,201.81c89.07-15.72,220.06-15.72,282.93,0l21-125.75L279.93,191.33V44.62L222.29,186.09,190.85,28.9,159.42,186.09,101.78,39.38V191.33L28.43,76.06Z'/&gt;&lt;path class='cls-1' d='M49.39,201.81c0,21,15.72,21,26.2,41.92,10.48,15.72,10.48,10.48,5.24,36.68-15.72,10.48-10.48,52.39-10.48,52.39,68.11,10.48,172.9,10.48,241,0,0,0,5.24-41.92-10.48-52.39-5.24-26.2-5.24-21,5.24-36.68,10.48-21,26.2-21,26.2-41.92C243.25,186.09,138.46,186.09,49.39,201.81Z'/&gt;&lt;path class='cls-2' d='M75.59,243.72c36.68-10.48,193.86-10.48,230.54,0'/&gt;&lt;path class='cls-2' d='M80.83,280.4c62.87-10.48,157.18-10.48,220.06,0'/&gt;&lt;path class='cls-2' d='M48.92,75.11a21,21,0,1,1-21-21A21,21,0,0,1,48.92,75.11Z'/&gt;&lt;path class='cls-2' d='M211.81,28a21,21,0,1,1-21-21A21,21,0,0,1,211.81,28Z'/&gt;&lt;path class='cls-2' d='M374.71,75.11a21,21,0,1,1-21-21A21,21,0,0,1,374.71,75.11Z'/&gt;&lt;path class='cls-2' d='M122.74,38.44a21,21,0,1,1-21-21A21,21,0,0,1,122.74,38.44Z'/&gt;&lt;path class='cls-2' d='M300.88,43.68a21,21,0,1,1-21-21A21,21,0,0,1,300.88,43.68Z'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="Q"></div><div class="square light"><img src="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 296.93 328.37'&gt;&lt;defs&gt;&lt;style&gt;.cls-1,.cls-2,.cls-3,.cls-4{fill:%23e6e6e6;stroke:%23000;stroke-width:14px;}.cls-1,.cls-2{stroke-linejoin:round;}.cls-2,.cls-4{stroke-linecap:round;}&lt;/style&gt;&lt;/defs&gt;&lt;title&gt;w_rook_svg_NoShadow&lt;/title&gt;&lt;g id='Layer_2' data-name='Layer 2'&gt;&lt;g id='Layer_1-2' data-name='Layer 1'&gt;&lt;path class='cls-1' d='M7,321.37H289.93V289.93H7Z'/&gt;&lt;path class='cls-1' d='M38.44,289.93V248H258.5v41.92Z'/&gt;&lt;path class='cls-1' d='M28,59.39V7H69.87V28h52.39V7h52.39V28h52.39V7H269V59.39'/&gt;&lt;path class='cls-2' d='M237.54,221.82,253.26,248H43.68l15.72-26.2'/&gt;&lt;path class='cls-3' d='M237.54,90.83V217.51H59.39V90.83'/&gt;&lt;path class='cls-2' d='M269,59.39,237.54,90.83H59.39L28,59.39'/&gt;&lt;path class='cls-4' d='M28,59.39H269'/&gt;&lt;/g&gt;&lt;/g&gt;&lt;/svg&gt;" class="piece-img" alt="R"></div></div>
+    </div>
+
+    <!-- Mode Tabs -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" onclick="switchToLiveAndRefresh()">🔄 Live Bitcoin Block</button>
+      <button class="mode-tab" onclick="switchMode('override')">Manual Entry</button>
+    </div>
+
+    <!-- Live Mode -->
+    <div id="liveMode" class="mode-content active">
+      <!-- No content needed - tab button refreshes -->
+    </div>
+
+    <!-- Override Mode -->
+    <div id="overrideMode" class="mode-content">
+      <div class="override-controls">
+        <div class="radio-group">
+          <label class="radio-option">
+            <input type="radio" name="overrideType" value="height" checked="" onchange="updateOverrideInputs()">
+            <span>Block Height</span>
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="overrideType" value="text" onchange="updateOverrideInputs()">
+            <span>Text/Data</span>
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="overrideType" value="position" onchange="updateOverrideInputs()">
+            <span>Position #</span>
+          </label>
+        </div>
+
+        <div id="heightInput" class="input-group" style="display: block;">
+          <label for="blockHeightInput">Enter Block Height</label>
+          <div class="input-row">
+            <input type="number" id="blockHeightInput" min="0" placeholder="870000">
+            <button class="btn-enter" onclick="loadOverridePosition()">Enter</button>
+          </div>
+        </div>
+
+        <div id="textInput" class="input-group" style="display: none;">
+          <label for="textDataInput">Enter Any Text/Data</label>
+          <div class="input-row">
+            <input type="text" id="textDataInput" placeholder="Hello World">
+            <button class="btn-enter" onclick="loadOverridePosition()">Enter</button>
+          </div>
+        </div>
+
+        <div id="positionInput" class="input-group" style="display: none;">
+          <label for="positionNumberInput">Enter Position Number (0-959)</label>
+          <div class="input-row">
+            <input type="number" id="positionNumberInput" min="0" max="959" placeholder="518 (standard chess)">
+            <button class="btn-enter" onclick="loadOverridePosition()">Enter</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Position Information -->
+    <div class="position-info" id="positionInfo">
+      <div class="info-row" id="blockHeightRow" style="display: flex;">
+        <span class="info-label">Block Height</span>
+        <span class="info-value block-height-value" id="blockHeight">922,228</span>
+      </div>
+      <div class="info-row" id="blockHashRow" style="display: flex;">
+        <span class="info-label">Block Hash</span>
+        <span class="info-value">
+          <a href="https://mempool.space/block/00000000000000000001c3204ed34597a6a2b54b6a148bfb0544243c82a0795f" id="blockHashLink" class="hash-link" target="_blank">
+            <span id="blockHash">00000000...82a0795f</span>
+          </a>
+        </span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Position Number</span>
+        <span class="info-value position-number" id="positionNumber">550</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Back Rank</span>
+        <span class="info-value back-rank" id="backRank">RNBKNBQR</span>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="widget-footer">
+      <a class="footer-link" onclick="openDownloadModal()">📥 Download Widget</a>
+      <a class="footer-link" onclick="openAboutModal()">ℹ️ About Widget</a>
+    </div>
+  </div>
+
+  <!-- Download Modal -->
+  <div id="downloadModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">Download Widget</h2>
+        <button class="modal-close" onclick="closeModal('downloadModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <p>Copy the code below to use this widget on your website:</p>
+        <div class="code-block">
+          <button class="copy-button" onclick="copyWidgetCode()">Copy</button>
+          <pre id="widgetCode">&lt;!-- Bitcoin Chess960 Widget --&gt;
+&lt;iframe 
+  src="btc-chess-widget.html" 
+  width="100%" 
+  height="800px"
+  style="border: none; border-radius: 12px;"
+&gt;&lt;/iframe&gt;</pre>
+        </div>
+        <p><strong>Or download the standalone HTML file:</strong></p>
+        <button class="btn btn-primary" onclick="downloadWidget()" style="width: 100%; margin-top: 12px;">
+          Download btc-chess-widget.html
+        </button>
+        <p style="margin-top: 16px; font-size: 12px; color: #888;">
+          <strong>✅ This is a completely standalone file!</strong> All chess pieces are embedded - no external files needed.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- About Modal -->
+  <div id="aboutModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">About This Widget</h2>
+        <button class="modal-close" onclick="closeModal('aboutModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <h3>🎯 What Is This?</h3>
+        <p>This widget displays Freestyle (Chess960) starting positions derived from Bitcoin block hashes. It combines cryptographic randomness from the Bitcoin blockchain with the creativity of Chess960.</p>
+
+        <h3>⚙️ How It Works</h3>
+        <p><strong>Live Mode:</strong></p>
+        <ul>
+          <li>Fetches the latest Bitcoin block hash from the blockchain</li>
+          <li>Converts the hash to a number using <code>hash % 960</code></li>
+          <li>Generates the corresponding Chess960 position (0-959)</li>
+          <li>Auto-updates every 30 seconds to check for new blocks</li>
+        </ul>
+
+        <p><strong>Manual Override Modes:</strong></p>
+        <ul>
+          <li><strong>Block Height:</strong> Enter a block number (e.g., 870000) to fetch its hash from the blockchain</li>
+          <li><strong>Text/Data:</strong> Enter any text or string. All strings (including block hashes) are converted to numbers using character codes, then mod 960 is applied to get the Chess960 position.</li>
+          <li><strong>Position #:</strong> Direct entry of any Chess960 position (0-959)</li>
+        </ul>
+
+        <h3>🔐 The Bitcoin Connection</h3>
+        <p><strong>What is a Block Hash?</strong></p>
+        <p>A Bitcoin block hash is the double SHA-256 cryptographic hash of the block header. The header contains:</p>
+        <ul>
+          <li>Version number</li>
+          <li>Previous block's hash (linking blocks together)</li>
+          <li>Merkle root (hash of all transactions in the block)</li>
+          <li>Timestamp</li>
+          <li>Difficulty target</li>
+          <li>Nonce (random number miners adjust)</li>
+        </ul>
+        <p>Miners compute billions of hashes per second, changing the nonce each time, until they find a hash that meets Bitcoin's difficulty requirement (starts with enough zeros). This hash is:</p>
+        <ul>
+          <li><strong>Unpredictable:</strong> Can't be known before mining completes</li>
+          <li><strong>Immutable:</strong> Can't be changed without re-mining</li>
+          <li><strong>Unique:</strong> Each block has exactly one valid hash</li>
+          <li><strong>Public:</strong> Transparent and verifiable by anyone</li>
+        </ul>
+        <p>This makes block hashes perfect for generating provably fair Chess960 positions. The position number is calculated by converting the hash string to a number using character codes, then applying mod 960.</p>
+
+        <h3>♟️ Chess960 Explained</h3>
+        <p>Chess960 (also called Fischer Random Chess) has 960 possible starting positions following these rules:</p>
+        <ul>
+          <li>Bishops must be on opposite-colored squares</li>
+          <li>King must be between the two rooks</li>
+          <li>Position 518 is standard chess</li>
+        </ul>
+
+        <h3>🔧 Technical Details</h3>
+        <p><strong>Data Source:</strong> Mempool.space API</p>
+        <p><strong>Hashing:</strong> Web Crypto API (SHA-256)</p>
+        <p><strong>Built with:</strong> Vanilla JavaScript, no dependencies</p>
+        <p><strong>Board Rendering:</strong> CSS Grid with SVG pieces</p>
+
+        <h3>📝 Use Cases</h3>
+        <ul>
+          <li>Generate provably fair starting positions for tournaments</li>
+          <li>Explore different Chess960 positions based on historical blocks</li>
+          <li>Have fun converting text into chess positions!</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Chess piece SVGs embedded as data URIs (no external files needed!)
+    const PIECE_IMAGES = {
+      'K': `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 384.66 388.26'><defs><style>.cls-1,.cls-2{fill:%23e6e6e6;stroke:%23000;stroke-linecap:round;stroke-width:14px;}.cls-2{stroke-linejoin:round;}</style></defs><title>w_king_svg_NoShadow</title><g id='Layer_2' data-name='Layer 2'><g id='Layer_1-2' data-name='Layer 1'><path class='cls-1' d='M192.67,85.17V22.48'/><polygon class='cls-1' points='193.37 132.5 190.37 132.5 177.2 127.33 177.2 70.89 154.58 70.73 147.18 63.28 147.18 48.19 155.71 39.61 177.2 39.48 177.2 21.17 187.37 7 197.37 7 208.54 21.17 208.54 39.67 229.96 40.13 238.56 47.9 238.56 64.13 228.02 70.89 208.54 71.54 208.54 127.33 196.37 132.5 193.37 132.5'/><path class='cls-1' d='M192.67,241.06s50.11-83.52,33.41-116.93c0,0-11.14-27.84-33.41-27.84s-33.41,27.84-33.41,27.84c-16.7,33.41,33.41,116.93,33.41,116.93'/><path class='cls-2' d='M70.18,352c61.25,39,172.61,39,233.85,0v-78S404.25,224,370.84,157.15c-44.54-72.38-150.33-39-178.17,44.54v0C153.69,118.17,47.9,84.76,14.5,157.15-18.91,224,70.18,268.51,70.18,268.51Z'/><path class='cls-2' d='M70.18,274.07c61.25-33.41,172.61-33.41,233.85,0'/><path class='cls-2' d='M70.18,313c61.25-33.41,172.61-33.41,233.85,0'/><path class='cls-2' d='M70.18,352c61.25-33.41,172.61-33.41,233.85,0'/></g></g></svg>`,
+      'Q': `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 381.71 347.65'><defs><style>.cls-1,.cls-2{fill:%23e6e6e6;stroke:%23000;stroke-linejoin:round;stroke-width:14px;}.cls-2{stroke-linecap:round;}</style></defs><title>w_queen_svg_NoShadow</title><g id='Layer_2' data-name='Layer 2'><g id='Layer_1-2' data-name='Layer 1'><path class='cls-1' d='M49.39,201.81c89.07-15.72,220.06-15.72,282.93,0l21-125.75L279.93,191.33V44.62L222.29,186.09,190.85,28.9,159.42,186.09,101.78,39.38V191.33L28.43,76.06Z'/><path class='cls-1' d='M49.39,201.81c0,21,15.72,21,26.2,41.92,10.48,15.72,10.48,10.48,5.24,36.68-15.72,10.48-10.48,52.39-10.48,52.39,68.11,10.48,172.9,10.48,241,0,0,0,5.24-41.92-10.48-52.39-5.24-26.2-5.24-21,5.24-36.68,10.48-21,26.2-21,26.2-41.92C243.25,186.09,138.46,186.09,49.39,201.81Z'/><path class='cls-2' d='M75.59,243.72c36.68-10.48,193.86-10.48,230.54,0'/><path class='cls-2' d='M80.83,280.4c62.87-10.48,157.18-10.48,220.06,0'/><path class='cls-2' d='M48.92,75.11a21,21,0,1,1-21-21A21,21,0,0,1,48.92,75.11Z'/><path class='cls-2' d='M211.81,28a21,21,0,1,1-21-21A21,21,0,0,1,211.81,28Z'/><path class='cls-2' d='M374.71,75.11a21,21,0,1,1-21-21A21,21,0,0,1,374.71,75.11Z'/><path class='cls-2' d='M122.74,38.44a21,21,0,1,1-21-21A21,21,0,0,1,122.74,38.44Z'/><path class='cls-2' d='M300.88,43.68a21,21,0,1,1-21-21A21,21,0,0,1,300.88,43.68Z'/></g></g></svg>`,
+      'R': `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 296.93 328.37'><defs><style>.cls-1,.cls-2,.cls-3,.cls-4{fill:%23e6e6e6;stroke:%23000;stroke-width:14px;}.cls-1,.cls-2{stroke-linejoin:round;}.cls-2,.cls-4{stroke-linecap:round;}</style></defs><title>w_rook_svg_NoShadow</title><g id='Layer_2' data-name='Layer 2'><g id='Layer_1-2' data-name='Layer 1'><path class='cls-1' d='M7,321.37H289.93V289.93H7Z'/><path class='cls-1' d='M38.44,289.93V248H258.5v41.92Z'/><path class='cls-1' d='M28,59.39V7H69.87V28h52.39V7h52.39V28h52.39V7H269V59.39'/><path class='cls-2' d='M237.54,221.82,253.26,248H43.68l15.72-26.2'/><path class='cls-3' d='M237.54,90.83V217.51H59.39V90.83'/><path class='cls-2' d='M269,59.39,237.54,90.83H59.39L28,59.39'/><path class='cls-4' d='M28,59.39H269'/></g></g></svg>`,
+      'B': `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 359.81 363.11'><defs><style>.cls-1,.cls-2{fill:%23e6e6e6;stroke:%23000;stroke-width:14px;}.cls-1{stroke-linejoin:round;}.cls-2{stroke-linecap:round;}</style></defs><title>w_bishop_svg_NoShadow</title><g id='Layer_2' data-name='Layer 2'><g id='Layer_1-2' data-name='Layer 1'><path class='cls-1' d='M38.44,326.61c35.52-10.16,105.94,4.51,141.47-21,35.52,25.46,105.94,10.79,141.47,21a83,83,0,0,1,31.44,21c-7.13,10.16-17.29,10.37-31.44,5.24-35.52-10.16-105.94,4.82-141.47-10.48-35.52,15.3-105.94.31-141.47,10.48-14.19,5.13-24.34,4.93-31.44-5.24C21.19,327.24,38.44,326.61,38.44,326.61Z'/><path class='cls-1' d='M101.31,284.69c26.2,26.2,131,26.2,157.18,0,4.77-14.31.2-33.55-8.29-45.73a60.7,60.7,0,0,0-17.91-17.14c57.63-15.72,62.87-120.51-52.39-162.42-115.27,41.92-110,146.71-52.39,162.42-.77-.21-3.85,2.67-4.39,3.1a67.55,67.55,0,0,0-10,9.49C102.2,247.2,95.91,268.48,101.31,284.69Z'/><path class='cls-1' d='M206.1,33.2A26.2,26.2,0,1,1,179.9,7,26.2,26.2,0,0,1,206.1,33.2Z'/><path class='cls-2' d='M127.51,221.82H232.3m-131,41.92H258.5M179.9,111.79v52.39M153.71,138H206.1'/></g></g></svg>`,
+      'N': `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 309.81 346.95'><defs><style>.cls-1,.cls-2,.cls-5{fill:%23e6e6e6;}.cls-1,.cls-2,.cls-3,.cls-4,.cls-5{stroke:%23000;stroke-linecap:round;}.cls-1,.cls-2,.cls-3,.cls-4{stroke-linejoin:round;}.cls-1,.cls-5{stroke-width:14px;}.cls-2{stroke-width:13.25px;}.cls-3{stroke-width:5px;}.cls-4{stroke-width:8px;}</style></defs><title>w_knight_svg_NoShadow</title><g id='Layer_2' data-name='Layer 2'><g id='Layer_1-2' data-name='Layer 1'><path class='cls-1' d='M148.85,40.06c15.28,1.46,15.64.12,29,4.22C261,69.74,307,150.44,302.51,339.95h-241c0-94.31,124.8-68.11,103.84-220.06'/><path class='cls-2' d='M102.69,51.39c2.65-12.69,7.79-27.94,15-38.65,1.5-2.25,3.34-4.6,5.8-5.11S128,8.5,129.87,10c9.25,7.32,15.66,18.62,17.68,31.13'/><path class='cls-1' d='M174.86,157.33c-11.75,13.12-25.34,24.55-39.6,34.83-17.39,12.53-34.63,23.47-48.89,40.07a96.93,96.93,0,0,1-14.74,13.7c-3.74,2.76-12.24,4.6-16.83,2.17-3.63-1.93-9-6.56-12.07-9s-6.1-1.09-9.78-1c-7.75.17-7.84-.74-13.9-6.07-19-16.74-13-48.16.49-64.81,8.35-10.31,22.36-33.39,36.73-55.5,3.31-5.08,4.37-11.14,5.6-17,1.3-6.14,4.19-10.29,8.42-14.95,13.51-14.86,57-37.93,66.06-41.47,2.58-1,4.16-1.33,5.41-3.77a64.24,64.24,0,0,1,5-8c5.72-8,13-15.12,21.78-19.62,10.46.61,10.29,38.1,10.29,38.1'/><path class='cls-1' d='M39.88,236.64a101.51,101.51,0,0,0,17.2-25.56'/><path class='cls-3' d='M37.17,204.3a5.24,5.24,0,1,1-4.93-5.53A5.24,5.24,0,0,1,37.17,204.3Z'/><path class='cls-4' d='M102.86,99c-5.39,6.8-11.6,10.86-13.87,9.07s.26-8.77,5.65-15.57,11.6-10.86,13.87-9.07S108.25,92.18,102.86,99Z'/><path class='cls-5' d='M181.38,82.16s-3.68-2,3.12,1.44c26.37,13.44,89.89,56.25,81.94,232.22'/></g></g></svg>`,
+      'P': `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'><defs><style>.cls-1{fill:%23e6e6e6;stroke:%23000;stroke-linecap:round;stroke-width:14px;}</style></defs><title>w_pawn_svg_NoShadow</title><g id='Layer_2' data-name='Layer 2'><g id='Layer_1-2' data-name='Layer 1'><path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/></g></g></svg>`,
+      'k': `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 384.66 388.26'><defs><style>.cls-1,.cls-2{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}.cls-2{stroke-linejoin:round;}</style></defs><title>b_king_svg_NoShadow</title><g id='Layer_2' data-name='Layer 2'><g id='Layer_1-2' data-name='Layer 1'><path class='cls-1' d='M192.67,85.17V22.48'/><polygon class='cls-1' points='193.37 132.5 190.37 132.5 177.2 127.33 177.2 70.89 154.58 70.73 147.18 63.28 147.18 48.19 155.71 39.61 177.2 39.48 177.2 21.17 187.37 7 197.37 7 208.54 21.17 208.54 39.67 229.96 40.13 238.56 47.9 238.56 64.13 228.02 70.89 208.54 71.54 208.54 127.33 196.37 132.5 193.37 132.5'/><path class='cls-1' d='M192.67,241.06s50.11-83.52,33.41-116.93c0,0-11.14-27.84-33.41-27.84s-33.41,27.84-33.41,27.84c-16.7,33.41,33.41,116.93,33.41,116.93'/><path class='cls-2' d='M70.18,352c61.25,39,172.61,39,233.85,0v-78S404.25,224,370.84,157.15c-44.54-72.38-150.33-39-178.17,44.54v0C153.69,118.17,47.9,84.76,14.5,157.15-18.91,224,70.18,268.51,70.18,268.51Z'/><path class='cls-2' d='M70.18,274.07c61.25-33.41,172.61-33.41,233.85,0'/><path class='cls-2' d='M70.18,313c61.25-33.41,172.61-33.41,233.85,0'/><path class='cls-2' d='M70.18,352c61.25-33.41,172.61-33.41,233.85,0'/></g></g></svg>`,
+      'q': `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 381.71 347.65'><defs><style>.cls-1{stroke:%23e6e6e6;stroke-linecap:round;stroke-linejoin:round;stroke-width:14px;}</style></defs><title>b_queen_svg_NoShadow</title><g id='Layer_2' data-name='Layer 2'><g id='Layer_1-2' data-name='Layer 1'><path class='cls-1' d='M49.39,201.81c89.07-15.72,220.06-15.72,282.93,0l21-125.75L279.93,191.33V44.62L222.29,186.09,190.85,28.9,159.42,186.09,101.78,39.38V191.33L28.43,76.06Z'/><path class='cls-1' d='M49.39,201.81c0,21,15.72,21,26.2,41.92,10.48,15.72,10.48,10.48,5.24,36.68-15.72,10.48-10.48,52.39-10.48,52.39,68.11,10.48,172.9,10.48,241,0,0,0,5.24-41.92-10.48-52.39-5.24-26.2-5.24-21,5.24-36.68,10.48-21,26.2-21,26.2-41.92C243.25,186.09,138.46,186.09,49.39,201.81Z'/><path class='cls-1' d='M75.59,243.72c36.68-10.48,193.86-10.48,230.54,0'/><path class='cls-1' d='M80.83,280.4c62.87-10.48,157.18-10.48,220.06,0'/><path class='cls-1' d='M48.92,75.11a21,21,0,1,1-21-21A21,21,0,0,1,48.92,75.11Z'/><path class='cls-1' d='M211.81,28a21,21,0,1,1-21-21A21,21,0,0,1,211.81,28Z'/><path class='cls-1' d='M374.71,75.11a21,21,0,1,1-21-21A21,21,0,0,1,374.71,75.11Z'/><path class='cls-1' d='M122.74,38.44a21,21,0,1,1-21-21A21,21,0,0,1,122.74,38.44Z'/><path class='cls-1' d='M300.88,43.68a21,21,0,1,1-21-21A21,21,0,0,1,300.88,43.68Z'/></g></g></svg>`,
+      'r': `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 296.93 328.37'><defs><style>.cls-1,.cls-2{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}.cls-1{stroke-linejoin:round;}</style></defs><title>b_rook_svg_NoShadow</title><g id='Layer_2' data-name='Layer 2'><g id='Layer_1-2' data-name='Layer 1'><path class='cls-1' d='M7,321.37H289.93V289.93H7Z'/><path class='cls-1' d='M38.44,289.93V248H258.5v41.92Z'/><path class='cls-1' d='M28,59.39V7H69.87V28h52.39V7h52.39V28h52.39V7H269V59.39'/><path class='cls-1' d='M237.54,221.82,253.26,248H43.68l15.72-26.2'/><path class='cls-2' d='M237.54,90.83V217.51H59.39V90.83'/><path class='cls-1' d='M269,59.39,237.54,90.83H59.39L28,59.39'/><path class='cls-2' d='M28,59.39H269'/></g></g></svg>`,
+      'b': `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 359.81 363.11'><defs><style>.cls-1,.cls-2{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}.cls-1{stroke-linejoin:round;}</style></defs><title>b_bishop_svg_NoShadow</title><g id='Layer_2' data-name='Layer 2'><g id='Layer_1-2' data-name='Layer 1'><path class='cls-1' d='M38.44,326.61c35.52-10.16,105.94,4.51,141.47-21,35.52,25.46,105.94,10.79,141.47,21a83,83,0,0,1,31.44,21c-7.13,10.16-17.29,10.37-31.44,5.24-35.52-10.16-105.94,4.82-141.47-10.48-35.52,15.3-105.94.31-141.47,10.48-14.19,5.13-24.34,4.93-31.44-5.24C21.19,327.24,38.44,326.61,38.44,326.61Z'/><path class='cls-1' d='M101.31,284.69c26.2,26.2,131,26.2,157.18,0a39.44,39.44,0,0,0,2.33-12.42c0-6.21-1.88-12.29-3.58-18.2A49.78,49.78,0,0,0,251,240.14a64.27,64.27,0,0,0-16-16.52c-.34-.24-2.21-1.93-2.67-1.8,57.63-15.72,62.87-120.51-52.39-162.42-115.27,41.92-110,146.71-52.39,162.42-.79-.22-4,2.76-4.53,3.2a67.35,67.35,0,0,0-10.19,9.79C102,247.67,95.91,268.5,101.31,284.69Z'/><path class='cls-1' d='M206.1,33.2A26.2,26.2,0,1,1,179.9,7,26.2,26.2,0,0,1,206.1,33.2Z'/><path class='cls-2' d='M127.51,221.82H232.3m-131,41.92H258.5M179.9,111.79v52.39M153.71,138H206.1'/></g></g></svg>`,
+      'n': `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 309.81 346.95'><defs><style>.cls-1,.cls-2,.cls-3,.cls-4,.cls-5{stroke:%23e6e6e6;stroke-linecap:round;}.cls-1,.cls-2,.cls-3,.cls-4{stroke-linejoin:round;}.cls-1,.cls-5{stroke-width:14px;}.cls-2{stroke-width:13.25px;}.cls-3,.cls-4{fill:%23e6e6e6;}.cls-3{stroke-width:5px;}.cls-4{stroke-width:8px;}</style></defs><title>b_knight_svg_NoShadow</title><g id='Layer_2' data-name='Layer 2'><g id='Layer_1-2' data-name='Layer 1'><path class='cls-1' d='M148.85,40.06c15.28,1.46,15.64.12,29,4.22C261,69.74,307,150.44,302.51,339.95h-241c0-94.31,124.8-68.11,103.84-220.06'/><path class='cls-2' d='M102.69,51.39c2.65-12.69,7.79-27.94,15-38.65,1.5-2.25,3.34-4.6,5.8-5.11S128,8.5,129.87,10c9.25,7.32,15.66,18.62,17.68,31.13'/><path class='cls-1' d='M174.86,157.33c-11.75,13.12-25.34,24.55-39.6,34.83-17.39,12.53-34.63,23.47-48.89,40.07a96.93,96.93,0,0,1-14.74,13.7c-3.74,2.76-12.24,4.6-16.83,2.17-3.63-1.93-9-6.56-12.07-9s-6.1-1.09-9.78-1c-7.75.17-7.84-.74-13.9-6.07-19-16.74-13-48.16.49-64.81,8.35-10.31,22.36-33.39,36.73-55.5,3.31-5.08,4.37-11.14,5.6-17,1.3-6.14,4.19-10.29,8.42-14.95,13.51-14.86,57-37.93,66.06-41.47,2.58-1,4.16-1.33,5.41-3.77a64.24,64.24,0,0,1,5-8c5.72-8,13-15.12,21.78-19.62,10.46.61,10.29,38.1,10.29,38.1'/><path class='cls-1' d='M39.88,236.64a101.51,101.51,0,0,0,17.2-25.56'/><path class='cls-3' d='M37.17,204.3a5.24,5.24,0,1,1-4.93-5.53A5.24,5.24,0,0,1,37.17,204.3Z'/><path class='cls-4' d='M102.86,99c-5.39,6.8-11.6,10.86-13.87,9.07s.26-8.77,5.65-15.57,11.6-10.86,13.87-9.07S108.25,92.18,102.86,99Z'/><path class='cls-5' d='M181.38,82.16s-3.68-2,3.12,1.44c26.37,13.44,89.89,56.25,81.94,232.22'/></g></g></svg>`,
+      'p': `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 237.73 292.27'><defs><style>.cls-1{stroke:%23e6e6e6;stroke-linecap:round;stroke-width:14px;}</style></defs><title>b_pawn_svg_NoShadow</title><g id='Layer_2' data-name='Layer 2'><g id='Layer_1-2' data-name='Layer 1'><path class='cls-1' d='M118.86,7C97.37,7,80,23.33,80,43.49a35.13,35.13,0,0,0,7.59,21.71c-19,10.22-31.91,29.29-31.91,51.27,0,18.52,9.14,35,23.44,45.89C49.9,172,7,213,7,285.27H230.73c0-72.26-42.9-113.22-72.08-122.9,14.3-10.86,23.44-27.37,23.44-45.89,0-22-12.94-41.06-31.91-51.27a35.13,35.13,0,0,0,7.59-21.71C157.77,23.33,140.36,7,118.86,7Z'/></g></g></svg>`
+    };
+
+    // State
+    let currentMode = 'live';
+    let currentData = null;
+    let pollingInterval = null;
+    let lastBlockHeight = null;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadLivePosition();
+      startAutoPolling();
+    });
+
+    // Auto-polling for new blocks (only in live mode)
+    function startAutoPolling() {
+      // Clear any existing interval
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+
+      // Check for new blocks every 30 seconds
+      pollingInterval = setInterval(() => {
+        if (currentMode === 'live') {
+          checkForNewBlock();
+        }
+      }, 30000); // 30 seconds
+    }
+
+    // Check if a new block is available
+    async function checkForNewBlock() {
+      try {
+        const hashResponse = await fetch('https://mempool.space/api/blocks/tip/hash');
+        if (!hashResponse.ok) return;
+        const hash = await hashResponse.text();
+
+        const blockResponse = await fetch(`https://mempool.space/api/block/${hash}`);
+        if (!blockResponse.ok) return;
+        const blockData = await blockResponse.json();
+
+        // If we have a new block, update silently
+        if (lastBlockHeight !== null && blockData.height > lastBlockHeight) {
+          displayPosition(hash, blockData.height);
+        }
+
+        lastBlockHeight = blockData.height;
+      } catch (error) {
+        console.error('Error checking for new block:', error);
+        // Fail silently - don't disrupt the user experience
+      }
+    }
+
+    // Mode Switching
+    function switchMode(mode) {
+      currentMode = mode;
+      
+      // Update tabs
+      document.querySelectorAll('.mode-tab').forEach(tab => tab.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      // Update content
+      document.querySelectorAll('.mode-content').forEach(content => content.classList.remove('active'));
+      document.getElementById(mode === 'live' ? 'liveMode' : 'overrideMode').classList.add('active');
+      
+      // When switching to manual mode, prefill with current data
+      if (mode === 'override' && currentData) {
+        // Default to block height and fill it with current block height
+        document.querySelector('input[name="overrideType"][value="height"]').checked = true;
+        updateOverrideInputs();
+        
+        if (currentData.blockHeight) {
+          document.getElementById('blockHeightInput').value = currentData.blockHeight;
+        }
+        
+        // Also populate the other fields
+        if (currentData.blockHash) {
+          document.getElementById('textDataInput').value = currentData.blockHash;
+        }
+        
+        if (currentData.positionNumber !== null && currentData.positionNumber !== undefined) {
+          document.getElementById('positionNumberInput').value = currentData.positionNumber;
+        }
+      }
+      
+      clearMessage();
+    }
+
+    // Switch to Live mode and refresh
+    function switchToLiveAndRefresh() {
+      switchMode('live');
+      loadLivePosition(true); // Show success message when manually refreshing
+    }
+
+    // Override Input Toggle
+    function updateOverrideInputs() {
+      const type = document.querySelector('input[name="overrideType"]:checked').value;
+      document.getElementById('heightInput').style.display = type === 'height' ? 'block' : 'none';
+      document.getElementById('textInput').style.display = type === 'text' ? 'block' : 'none';
+      document.getElementById('positionInput').style.display = type === 'position' ? 'block' : 'none';
+    }
+    
+    // Add event listener to text input to hide block info when edited
+    document.addEventListener('DOMContentLoaded', () => {
+      const textInput = document.getElementById('textDataInput');
+      textInput.addEventListener('input', () => {
+        // If user edits the text field and it's different from the original hash, hide block info
+        if (currentData && currentData.blockHash && textInput.value !== currentData.blockHash) {
+          const blockHeightRow = document.getElementById('blockHeightRow');
+          const blockHashRow = document.getElementById('blockHashRow');
+          blockHeightRow.style.display = 'none';
+          blockHashRow.style.display = 'none';
+        }
+      });
+    });
+
+    // Fetch Latest Bitcoin Block
+    async function loadLivePosition(showSuccessMessage = false) {
+      showLoading(true);
+      clearMessage();
+
+      try {
+        // Fetch latest block hash from Mempool.space
+        const hashResponse = await fetch('https://mempool.space/api/blocks/tip/hash');
+        if (!hashResponse.ok) throw new Error('Failed to fetch block hash');
+        const hash = await hashResponse.text();
+
+        // Fetch block details
+        const blockResponse = await fetch(`https://mempool.space/api/block/${hash}`);
+        if (!blockResponse.ok) throw new Error('Failed to fetch block details');
+        const blockData = await blockResponse.json();
+
+        // Calculate position and display
+        displayPosition(hash, blockData.height);
+      } catch (error) {
+        console.error('Error fetching block:', error);
+        showMessage('Failed to fetch Bitcoin block data. Please try again.', 'error');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // Load Override Position
+    async function loadOverridePosition() {
+      clearMessage();
+      const type = document.querySelector('input[name="overrideType"]:checked').value;
+
+      if (type === 'hash') {
+        const hash = document.getElementById('blockHashInput').value.trim();
+        if (!isValidBlockHash(hash)) {
+          showMessage('Please enter a valid 64-character hex block hash', 'error');
+          return;
+        }
+        displayPosition(hash, null);
+      } else if (type === 'height') {
+        const height = parseInt(document.getElementById('blockHeightInput').value);
+        if (isNaN(height) || height < 0) {
+          showMessage('Please enter a valid block height', 'error');
+          return;
+        }
+        showLoading(true);
+        try {
+          // Fetch block hash for this height
+          const hashResponse = await fetch(`https://mempool.space/api/block-height/${height}`);
+          if (!hashResponse.ok) throw new Error('Block not found');
+          const hash = await hashResponse.text();
+          
+          displayPosition(hash, height);
+        } catch (error) {
+          showMessage('Failed to fetch block at that height. Please check the block number.', 'error');
+        } finally {
+          showLoading(false);
+        }
+      } else if (type === 'text') {
+        const text = document.getElementById('textDataInput').value.trim();
+        if (!text) {
+          showMessage('Please enter some text/data', 'error');
+          return;
+        }
+        
+        // Convert string to position using character codes (same method for all strings)
+        const positionNumber = stringToChess960Number(text);
+        displayPositionFromNumber(positionNumber);
+      } else if (type === 'position') {
+        const posNum = parseInt(document.getElementById('positionNumberInput').value);
+        if (isNaN(posNum) || posNum < 0 || posNum > 959) {
+          showMessage('Please enter a valid position number (0-959)', 'error');
+          return;
+        }
+        displayPositionFromNumber(posNum);
+      }
+    }
+
+    // Double SHA256 hash (like Bitcoin uses)
+    async function doubleSHA256(text) {
+      // Convert text to bytes
+      const encoder = new TextEncoder();
+      const data = encoder.encode(text);
+      
+      // First SHA256
+      const hash1 = await crypto.subtle.digest('SHA-256', data);
+      
+      // Second SHA256
+      const hash2 = await crypto.subtle.digest('SHA-256', hash1);
+      
+      // Convert to hex string
+      const hashArray = Array.from(new Uint8Array(hash2));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      
+      return hashHex;
+    }
+
+    // Validate Block Hash
+    function isValidBlockHash(hash) {
+      return /^[0-9a-fA-F]{64}$/.test(hash);
+    }
+
+    // Display Position from Block Hash
+    function displayPosition(blockHash, blockHeight) {
+      const chess960Number = stringToChess960Number(blockHash);
+      const fen = generateChess960FEN(chess960Number);
+      const backRank = fen.split(' ')[0].split('/')[7];
+
+      currentData = {
+        positionNumber: chess960Number,
+        backRank: backRank.toUpperCase(),
+        blockHeight: blockHeight,
+        blockHash: blockHash,
+        fen: fen
+      };
+
+      updateDisplay();
+    }
+
+    // Display Position from Number
+    function displayPositionFromNumber(positionNumber) {
+      const fen = generateChess960FEN(positionNumber);
+      const backRank = fen.split(' ')[0].split('/')[7];
+
+      currentData = {
+        positionNumber: positionNumber,
+        backRank: backRank.toUpperCase(),
+        blockHeight: null,
+        blockHash: null,
+        fen: fen
+      };
+
+      updateDisplay();
+    }
+
+    // Update Display
+    function updateDisplay() {
+      if (!currentData) return;
+
+      // Update position info
+      document.getElementById('positionNumber').textContent = currentData.positionNumber;
+      document.getElementById('backRank').textContent = currentData.backRank;
+      
+      // Show/hide block info based on whether we have block data
+      const blockHeightRow = document.getElementById('blockHeightRow');
+      const blockHashRow = document.getElementById('blockHashRow');
+      
+      if (currentData.blockHeight && currentData.blockHash) {
+        // Show block info
+        blockHeightRow.style.display = 'flex';
+        blockHashRow.style.display = 'flex';
+        
+        document.getElementById('blockHeight').textContent = currentData.blockHeight.toLocaleString();
+        const shortHash = `${currentData.blockHash.substring(0, 8)}...${currentData.blockHash.substring(56)}`;
+        document.getElementById('blockHash').textContent = shortHash;
+        document.getElementById('blockHashLink').href = `https://mempool.space/block/${currentData.blockHash}`;
+      } else {
+        // Hide block info in manual mode
+        blockHeightRow.style.display = 'none';
+        blockHashRow.style.display = 'none';
+      }
+
+      // Render chessboard
+      renderChessboard(currentData.fen);
+    }
+
+    // Convert any string to Chess960 Number (0-959) using character codes
+    function stringToChess960Number(str) {
+      let num = 0;
+      for (let i = 0; i < str.length; i++) {
+        num = (num * 256 + str.charCodeAt(i)) % 960;
+      }
+      return num;
+    }
+
+    // Generate Chess960 FEN from Position Number
+    function generateChess960FEN(n) {
+      if (n < 0 || n >= 960) {
+        throw new Error('Chess960 number must be between 0 and 959');
+      }
+
+      const pieces = new Array(8).fill('');
+      
+      // Place first bishop on dark squares (0, 2, 4, 6)
+      const darkSquares = [0, 2, 4, 6];
+      const b1 = Math.floor(n / 4) % 4;
+      pieces[darkSquares[b1]] = 'B';
+      
+      // Place second bishop on light squares (1, 3, 5, 7)
+      const lightSquares = [1, 3, 5, 7];
+      const b2 = n % 4;
+      pieces[lightSquares[b2]] = 'B';
+      
+      // Place queen
+      const q = Math.floor(n / 16) % 6;
+      let emptyCount = 0;
+      for (let i = 0; i < 8; i++) {
+        if (pieces[i] === '') {
+          if (emptyCount === q) {
+            pieces[i] = 'Q';
+            break;
+          }
+          emptyCount++;
+        }
+      }
+      
+      // Place knights
+      const knightCombinations = [
+        [0, 1], [0, 2], [0, 3], [0, 4], [1, 2],
+        [1, 3], [1, 4], [2, 3], [2, 4], [3, 4]
+      ];
+      const nValue = Math.floor(n / 96);
+      const [n1, n2] = knightCombinations[nValue];
+      
+      emptyCount = 0;
+      for (let i = 0; i < 8; i++) {
+        if (pieces[i] === '') {
+          if (emptyCount === n1 || emptyCount === n2) {
+            pieces[i] = 'N';
+          }
+          emptyCount++;
+        }
+      }
+      
+      // Place rooks and king (R-K-R)
+      const remaining = [];
+      for (let i = 0; i < 8; i++) {
+        if (pieces[i] === '') {
+          remaining.push(i);
+        }
+      }
+      pieces[remaining[0]] = 'R';
+      pieces[remaining[1]] = 'K';
+      pieces[remaining[2]] = 'R';
+      
+      // Create FEN
+      const backRank = pieces.join('');
+      return `${backRank.toLowerCase()}/pppppppp/8/8/8/8/PPPPPPPP/${backRank} w KQkq - 0 1`;
+    }
+
+    // Render Chessboard
+    function renderChessboard(fen) {
+      const board = document.getElementById('chessboard');
+      board.innerHTML = '';
+      
+      const rows = fen.split(' ')[0].split('/');
+      
+      rows.forEach((row, rowIndex) => {
+        let colIndex = 0;
+        
+        for (let char of row) {
+          if (isNaN(char)) {
+            // It's a piece
+            const square = document.createElement('div');
+            square.className = `square ${(rowIndex + colIndex) % 2 === 0 ? 'light' : 'dark'}`;
+            
+            const img = document.createElement('img');
+            img.src = PIECE_IMAGES[char];
+            img.className = 'piece-img';
+            img.alt = char;
+            square.appendChild(img);
+            
+            board.appendChild(square);
+            colIndex++;
+          } else {
+            // Empty squares
+            const emptyCount = parseInt(char);
+            for (let i = 0; i < emptyCount; i++) {
+              const square = document.createElement('div');
+              square.className = `square ${(rowIndex + colIndex) % 2 === 0 ? 'light' : 'dark'}`;
+              board.appendChild(square);
+              colIndex++;
+            }
+          }
+        }
+      });
+    }
+
+    // UI Helpers
+    function showLoading(show) {
+      document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
+    }
+
+    function showMessage(message, type) {
+      clearMessage();
+      const container = document.getElementById('messageContainer');
+      const div = document.createElement('div');
+      div.className = type === 'error' ? 'error-message' : 'success-message';
+      div.textContent = message;
+      container.appendChild(div);
+      
+      // Auto-clear success messages after 5 seconds
+      if (type === 'success') {
+        setTimeout(() => clearMessage(), 5000);
+      }
+    }
+
+    function clearMessage() {
+      document.getElementById('messageContainer').innerHTML = '';
+    }
+
+    // Modal Functions
+    function openDownloadModal() {
+      document.getElementById('downloadModal').classList.add('active');
+    }
+
+    function openAboutModal() {
+      document.getElementById('aboutModal').classList.add('active');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+    }
+
+    // Close modal when clicking outside
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal')) {
+        e.target.classList.remove('active');
+      }
+    });
+
+    // Copy widget code
+    function copyWidgetCode() {
+      const code = document.getElementById('widgetCode').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        const button = event.target;
+        button.textContent = 'Copied!';
+        setTimeout(() => {
+          button.textContent = 'Copy';
+        }, 2000);
+      });
+    }
+
+    // Download widget
+    function downloadWidget() {
+      // Close the modal first
+      closeModal('downloadModal');
+      
+      // Small delay to ensure modal is closed before capturing HTML
+      setTimeout(() => {
+        const htmlContent = document.documentElement.outerHTML;
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'btc-chess-widget.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+    }
+  </script>
+
+
+</body></html>

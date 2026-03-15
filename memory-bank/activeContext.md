@@ -7,6 +7,28 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Game-Count Position Offset (Mar 11, 2026)
+- **Problem**: Multiple games within the same Bitcoin block got the same Chess960 position
+- **Fix**: `fetchBitcoinPosition()` now tracks `_gameCountInBlock` — each call offsets the base position by `(basePosition + gameCount) % 960`. Counter resets when block hash changes.
+- Block API data cached 30s (avoid hammering mempool.space), but position derivation always uses latest game counter
+- Log format: `₿ Position #X from block Y (game Z in block, base #W)`
+- Deployed to Railway
+
+### SVG Piece Icons on Board (Mar 11, 2026)
+- Extracted 12 piece SVGs from `btc-chess-widget(5).html` into `public/pieces/` (wK/wQ/wR/wB/wN/wP + black variants)
+- Replaced Unicode chess characters with `<img src="/pieces/XX.svg">` in: game.ejs, throne.ejs, throne-live.ejs, timeline.ejs
+- White pieces: light fill (#e6e6e6) with dark stroke; Black pieces: no fill with light stroke (#e6e6e6)
+- Deployed to Railway
+
+### Bitcoin-Derived Chess960 Positions + Admin QR Fix (Mar 11, 2026)
+- **Chess960 positions from Bitcoin blockhash**: Game positions are now deterministically derived from the latest Bitcoin block hash via mempool.space API, with fallback to random if API is unavailable
+- **New functions in `chess960.js`**: `hashToPosition(hexHash)` maps any hash to position 0-959 using Bishop placement constraints; `fetchBitcoinPosition()` fetches latest block and returns `{ positionNumber, blockHeight, blockHash, pieces }`
+- **New API endpoint**: `GET /api/bitcoin-position` — returns current Bitcoin-derived position info
+- **Game engine updated**: `callNextChallenger()` is now async, tries Bitcoin position first with random fallback. Logs `₿ Position #X from block Y` on success.
+- **Admin QR code fix**: Changed venue QR `<img>` src from authenticated `/api/admin/venue-qr?format=png` to public `/api/venue-qr.png` — the authenticated endpoint wasn't accessible to `<img>` tags reliably
+- **Enlarge button**: Already present with fullscreen overlay (`enlargeQR()`) + print button
+- Status: **deployed to Railway**
+
 ### Custom SVG Icon System (Mar 5, 2026)
 - **Replaced all emoji with custom SVG icons** across every EJS template (12 files)
 - **Icon library**: 25 hand-crafted SVGs in `public/icons/` — crown, trophy, lightning, crossed-swords, shield, handshake, coins, castle, chess-piece, gear, chart, scroll, globe, stopwatch, medal, bell, queue, gamepad, key, warning, checkmark, cross, hourglass, eye, pawn

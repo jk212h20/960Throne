@@ -14,6 +14,7 @@ const compression = require('compression');
 const db = require('./services/database');
 const gameEngine = require('./services/gameEngine');
 const telegram = require('./services/telegram');
+const dgtBoard = require('./services/dgtBoard');
 
 const PORT = process.env.PORT || 3000;
 
@@ -35,6 +36,9 @@ async function start() {
 
     // Initialize game engine with Socket.io
     gameEngine.init(io);
+
+    // Initialize DGT board service (LiveChessCloud polling)
+    dgtBoard.init(io, db);
 
     // Middleware
     app.use(compression());
