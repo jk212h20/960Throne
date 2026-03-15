@@ -384,12 +384,13 @@
             }
             
             if (feeds && feeds.length > 0) {
-                const raw = feeds[0].serialnr || feeds[0].id || feeds[0];
-                feedId = typeof raw === 'string' ? parseInt(raw, 10) : raw;
-                log('Board found: ' + feedId + ' (v6)', 'success');
+                const serial = feeds[0].serialnr || feeds[0].id || feeds[0];
+                feedId = serial;
+                log('Board found: ' + serial + ' (v7)', 'success');
+                log('Sending: ' + JSON.stringify({ call: 'subscribe', id: 2, param: { serialnr: serial } }), 'info');
                 updateConnectionUI(true, 'Board found! Subscribing...');
-                // LiveChess 2.2.9: subscribe takes serial as single positional arg in array
-                wsSend({ call: 'subscribe', id: 2, param: [feedId] });
+                // Try { serialnr: "52264" } — matching the field name from eboards response
+                wsSend({ call: 'subscribe', id: 2, param: { serialnr: serial } });
             } else {
                 log('No boards detected. Retrying in 5s...', 'error');
                 updateConnectionUI(true, 'LiveChess running but no board. Retrying...');
