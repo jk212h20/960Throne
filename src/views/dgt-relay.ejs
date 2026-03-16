@@ -616,6 +616,16 @@
         const wasRunning = clockState.running;
         const prevActiveSide = clockState.activeSide;
         
+        // Check if LiveChess values actually changed from last snapshot
+        const sameAsLastSnapshot = (clock.white === clockState.snapshotWhite && 
+                                     clock.black === clockState.snapshotBlack);
+        
+        // If local countdown is running and LiveChess just sent the same stale values,
+        // skip the resync — our local countdown is more accurate
+        if (sameAsLastSnapshot && clockTickTimer && clockState.running) {
+            return; // Don't reset our locally-counted values with stale snapshot
+        }
+        
         // Detect which side is active by comparing to previous snapshot
         if (clock.run && clockState.snapshotWhite !== null) {
             const whiteDelta = clockState.snapshotWhite - clock.white;
@@ -633,12 +643,13 @@
             // If neither changed, keep existing activeSide
         }
         
-        // Store snapshot values
+        // Store snapshot values (the raw values from LiveChess, not our counted-down values)
         clockState.prevWhite = clockState.snapshotWhite;
         clockState.prevBlack = clockState.snapshotBlack;
         clockState.snapshotWhite = clock.white;
         clockState.snapshotBlack = clock.black;
         clockState.snapshotTime = now;
+        // Resync our local values to the new (genuinely changed) snapshot
         clockState.white = clock.white;
         clockState.black = clock.black;
         clockState.running = !!clock.run;
