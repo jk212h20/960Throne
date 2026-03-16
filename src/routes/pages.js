@@ -147,6 +147,11 @@ router.get('/join', (req, res) => {
     res.render('join', { player: req.player, venueCode: code || '' });
 });
 
+// Round Position — Shows current Bitcoin-derived Chess960 position with lock schedule (public)
+router.get('/position', (req, res) => {
+    res.render('position');
+});
+
 // Event Timeline (public)
 router.get('/timeline', (req, res) => {
     const timeline = db.getTimelineData();

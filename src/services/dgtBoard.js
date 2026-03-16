@@ -136,6 +136,23 @@ function markGameStarted() {
 }
 
 /**
+ * Admin bypass: skip position verification and go straight to showing live position.
+ * Called when admin wants to skip the setup mode overlay on the throne display.
+ */
+function skipSetupMode() {
+    if (!expectedPosition.expectedFen) {
+        return { error: 'No position verification active' };
+    }
+    if (expectedPosition.gameStarted) {
+        return { error: 'Game already started — setup mode already skipped' };
+    }
+    console.log('♟️  DGT: Admin skipped position verification (setup mode bypassed)');
+    markGameStarted();
+    broadcast();
+    return { success: true, message: 'Setup mode skipped — showing live position' };
+}
+
+/**
  * Build the expected 8×8 board array from the expected FEN.
  * Same format as fenToBoard() output — used by throne.ejs to render the target position.
  */
@@ -348,5 +365,6 @@ module.exports = {
     setExpectedPosition,
     clearExpectedPosition,
     markGameStarted,
+    skipSetupMode,
     checkPositionMatch,
 };

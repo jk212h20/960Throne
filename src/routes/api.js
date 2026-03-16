@@ -633,6 +633,13 @@ router.post('/admin/remove-challenger', requireAdmin, (req, res) => {
     res.json(outcome);
 });
 
+// Skip board setup / position verification — admin bypass to show live position on throne
+router.post('/admin/skip-setup', requireAdmin, (req, res) => {
+    const result = dgtBoard.skipSetupMode();
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+});
+
 router.post('/admin/undo-game', requireAdmin, (req, res) => {
     const { gameId } = req.body;
     if (!gameId) return res.status(400).json({ error: 'Game ID required' });
@@ -982,6 +989,79 @@ router.get('/bitcoin-position', async (req, res) => {
         res.json(btcPos);
     } catch (err) {
         console.error('Bitcoin position fetch error:', err.message);
+        res.status(502).json({ error: 'Failed to fetch Bitcoin block data' });
+    }
+});
+
+// Round Position — for the /position page. Returns the current Bitcoin-derived
+// Chess960 position. Server-side lock: caches the position when the lock window
+// starts (5 min before round) and returns that cached position until the round begins.
+const ROUND_SCHEDULE = [
+    { name: 'Round 1', utcMs: Date.UTC(2026, 2, 16, 20, 0) },  // Mar 16 2:00 PM CST = 20:00 UTC
+    { name: 'Round 2', utcMs: Date.UTC(2026, 2, 16, 21, 30) },  // Mar 16 3:30 PM CST
+    { name: 'Round 3', utcMs: Date.UTC(2026, 2, 16, 23, 0) },   // Mar 16 5:00 PM CST
+    { name: 'Round 4', utcMs: Date.UTC(2026, 2, 17, 0, 30) },   // Mar 16 6:30 PM CST
+    { name: 'Round 5', utcMs: Date.UTC(2026, 2, 17, 15, 0) },   // Mar 17 9:00 AM CST
+    { name: 'Round 6', utcMs: Date.UTC(2026, 2, 17, 16, 30) },  // Mar 17 10:30 AM CST
+    { name: 'Round 7', utcMs: Date.UTC(2026, 2, 17, 20, 0) },   // Mar 17 2:00 PM CST
+    { name: 'Round 8', utcMs: Date.UTC(2026, 2, 17, 21, 30) },  // Mar 17 3:30 PM CST
+    { name: 'Round 9', utcMs: Date.UTC(2026, 2, 17, 23, 0) },   // Mar 17 5:00 PM CST
+];
+const ROUND_LOCK_MS = 5 * 60 * 1000; // 5 minutes before round
+let _lockedRoundPosition = null; // { roundName, data }
+
+router.get('/round-position', async (req, res) => {
+    try {
+        const now = Date.now();
+
+        // Check if we're in a lock window
+        let lockedForRound = null;
+        for (const round of ROUND_SCHEDULE) {
+            const lockTime = round.utcMs - ROUND_LOCK_MS;
+            if (now >= lockTime && now < round.utcMs) {
+                lockedForRound = round;
+                break;
+            }
+        }
+
+        // If locked and we already have a cached position for this round, return it
+        if (lockedForRound && _lockedRoundPosition && _lockedRoundPosition.roundName === lockedForRound.name) {
+            return res.json(_lockedRoundPosition.data);
+        }
+
+        // Fetch current bitcoin block
+        const hashRes = await fetch('https://mempool.space/api/blocks/tip/hash');
+        if (!hashRes.ok) throw new Error('Failed to fetch block hash');
+        const blockHash = await hashRes.text();
+
+        const blockRes = await fetch(`https://mempool.space/api/block/${blockHash}`);
+        if (!blockRes.ok) throw new Error('Failed to fetch block details');
+        const blockData = await blockRes.json();
+
+        const positionNumber = chess960.stringToPositionNumber(blockHash);
+        const pieces = chess960.positionFromNumber(positionNumber);
+
+        const data = {
+            positionNumber,
+            pieces,
+            backRank: pieces.join(''),
+            blockHeight: blockData.height,
+            blockHash,
+            locked: !!lockedForRound,
+            lockedForRound: lockedForRound ? lockedForRound.name : null,
+        };
+
+        // If entering lock window, cache this position
+        if (lockedForRound) {
+            _lockedRoundPosition = { roundName: lockedForRound.name, data };
+        } else {
+            // Clear lock cache when not in any lock window
+            _lockedRoundPosition = null;
+        }
+
+        res.json(data);
+    } catch (err) {
+        console.error('Round position fetch error:', err.message);
         res.status(502).json({ error: 'Failed to fetch Bitcoin block data' });
     }
 });

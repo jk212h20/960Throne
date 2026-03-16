@@ -59,6 +59,9 @@
                     </div>
                     <div class="text-xs text-gray-500">Position #<%= state.game.chess960_position %></div>
                     <div id="admin-pos-verify" class="text-xs mt-1 px-2 py-1 rounded" style="display:none;"></div>
+                    <button id="skip-setup-btn" onclick="skipBoardSetup()" class="w-full text-xs bg-yellow-700 hover:bg-yellow-600 text-white px-3 py-2 rounded mt-1 flex items-center justify-center gap-1" style="display:none;">
+                        <%- include('partials/icon', { name: 'skip', size: 14, cls: '' }) %> Skip Board Setup
+                    </button>
                     <div class="text-sm text-yellow-400 mt-1">⏱️ Started <span id="admin-game-elapsed">0:00</span> ago</div>
                     <div id="admin-dgt-clock" class="flex items-center gap-3 mt-2 text-sm" style="display:none;">
                         <span class="text-gray-400">DGT Clock:</span>
@@ -480,6 +483,12 @@
             if (!confirm('Remove challenger (no-show)? Same position will be used for the next challenger.')) return;
             if (await api('/api/admin/remove-challenger', {})) setTimeout(() => location.reload(), 500);
         }
+        async function skipBoardSetup() {
+            if (await api('/api/admin/skip-setup', {})) {
+                const btn = document.getElementById('skip-setup-btn');
+                if (btn) btn.style.display = 'none';
+            }
+        }
         async function resolveNotification(id) { if (await api('/api/admin/notifications/resolve', { id })) setTimeout(() => location.reload(), 500); }
 
         async function reconcilePayouts() {
@@ -785,12 +794,19 @@
                 if (blackEl) blackEl.textContent = formatAdminClock(data.clock.black);
             }
 
-            // Position verification
+            // Position verification + skip setup button
             const el = document.getElementById('admin-pos-verify');
+            const skipBtn = document.getElementById('skip-setup-btn');
             if (!el) return;
             const pv = data.positionVerification;
-            if (!pv) { el.style.display = 'none'; return; }
+            if (!pv) {
+                el.style.display = 'none';
+                if (skipBtn) skipBtn.style.display = 'none';
+                return;
+            }
             el.style.display = 'block';
+            // Show skip button when position verification is active (setup mode)
+            if (skipBtn) skipBtn.style.display = 'flex';
             if (pv.matches === true) {
                 el.style.background = 'rgba(34,197,94,0.15)';
                 el.style.color = '#22c55e';

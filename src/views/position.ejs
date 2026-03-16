@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Current Position — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+        .position-board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            aspect-ratio: 1;
+            border: 2px solid #d4a843;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .position-board .sq {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            aspect-ratio: 1;
+        }
+        .position-board .sq img {
+            width: 80%;
+            height: 80%;
+            object-fit: contain;
+        }
+        .sq-light { background: #b58863; }
+        .sq-dark { background: #6d4c2e; }
+        .position-number {
+            font-size: 4rem;
+            font-weight: 900;
+            color: #d4a843;
+            text-align: center;
+            line-height: 1;
+        }
+        .lock-banner {
+            background: linear-gradient(135deg, #d4a843 0%, #b8922f 100%);
+            color: #0f0f1a;
+            font-weight: 700;
+            text-align: center;
+            padding: 12px 16px;
+            border-radius: 8px;
+            animation: pulse-lock 2s ease-in-out infinite;
+        }
+        @keyframes pulse-lock {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+        }
+        .round-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+        .round-active {
+            background: rgba(212, 168, 67, 0.15);
+            border: 1px solid rgba(212, 168, 67, 0.4);
+        }
+        .round-past {
+            opacity: 0.4;
+        }
+        .round-future {
+            opacity: 0.7;
+        }
+        .round-locked {
+            background: rgba(212, 168, 67, 0.25);
+            border: 1px solid #d4a843;
+        }
+        .countdown {
+            font-family: 'Courier New', monospace;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #d4a843;
+        }
+        .block-info {
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            color: #6b7280;
+            word-break: break-all;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .status-live { background: #22c55e; animation: blink 1.5s ease-in-out infinite; }
+        .status-locked { background: #d4a843; }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-throne-darker p-4">
+    <div class="max-w-lg mx-auto">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-4">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <%- include('partials/icon', { name: 'castle', size: 24, cls: 'text-throne-gold' }) %>
+                Round Position
+            </h1>
+            <a href="/" class="text-gray-500 hover:text-throne-gold text-sm">← Back</a>
+        </div>
+
+        <!-- Status indicator -->
+        <div id="status-bar" class="flex items-center gap-2 mb-4 text-sm">
+            <span class="status-dot status-live" id="status-dot"></span>
+            <span id="status-text">Loading…</span>
+        </div>
+
+        <!-- Lock banner (hidden by default) -->
+        <div id="lock-banner" class="lock-banner mb-4" style="display: none;">
+            🔒 Position locked for <span id="lock-round-name">Round X</span>
+        </div>
+
+        <!-- Position Number -->
+        <div class="card p-6 mb-4 text-center">
+            <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Chess960 Position</div>
+            <div class="position-number" id="pos-number">—</div>
+            <div class="text-sm text-gray-400 mt-2" id="pos-pieces"></div>
+        </div>
+
+        <!-- Board Display -->
+        <div class="card p-4 mb-4">
+            <div class="position-board" id="pos-board">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+
+        <!-- Bitcoin Block Info -->
+        <div class="card p-4 mb-4">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-throne-gold font-bold text-sm">₿ Bitcoin Block</span>
+            </div>
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-sm text-gray-400">Height</span>
+                <span class="font-mono text-sm" id="block-height">—</span>
+            </div>
+            <div class="mb-1">
+                <span class="text-sm text-gray-400">Hash</span>
+                <div class="block-info mt-1" id="block-hash">—</div>
+            </div>
+        </div>
+
+        <!-- Countdown to next round -->
+        <div class="card p-4 mb-4 text-center" id="countdown-card">
+            <div class="text-xs text-gray-400 uppercase tracking-wider mb-1" id="countdown-label">Next round in</div>
+            <div class="countdown" id="countdown-timer">—</div>
+        </div>
+
+        <!-- Schedule -->
+        <div class="card p-4 mb-4">
+            <h2 class="text-sm font-bold text-throne-gold mb-3 uppercase tracking-wider">Tournament Schedule</h2>
+            <div class="space-y-1" id="schedule-list">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+
+        <!-- Footer nav -->
+        <div class="flex justify-center gap-6 mt-6 text-sm text-gray-500">
+            <a href="/live" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %> Throne</a>
+            <a href="/leaderboard" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'trophy', size: 16, cls: '' }) %> Leaderboard</a>
+            <a href="/timeline" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'scroll', size: 16, cls: '' }) %> Timeline</a>
+        </div>
+    </div>
+
+    <script>
+        // Tournament schedule — all times in UTC-6 (CST / America/Tegucigalpa)
+        // Months are 0-indexed in JS Date: March = 2
+        const SCHEDULE = [
+            { name: 'Round 1',  date: '2026-03-16', time: '14:00', day: 'Mar 16' },
+            { name: 'Round 2',  date: '2026-03-16', time: '15:30', day: 'Mar 16' },
+            { name: 'Round 3',  date: '2026-03-16', time: '17:00', day: 'Mar 16' },
+            { name: 'Round 4',  date: '2026-03-16', time: '18:30', day: 'Mar 16' },
+            { name: 'Round 5',  date: '2026-03-17', time: '09:00', day: 'Mar 17' },
+            { name: 'Round 6',  date: '2026-03-17', time: '10:30', day: 'Mar 17' },
+            { name: 'Round 7',  date: '2026-03-17', time: '14:00', day: 'Mar 17' },
+            { name: 'Round 8',  date: '2026-03-17', time: '15:30', day: 'Mar 17' },
+            { name: 'Round 9',  date: '2026-03-17', time: '17:00', day: 'Mar 17' },
+        ];
+
+        const LOCK_MINUTES = 5; // Lock position this many minutes before round start
+        const TZ_OFFSET = -6; // UTC-6
+
+        // Convert schedule time to UTC timestamp
+        function scheduleToUtc(entry) {
+            const [h, m] = entry.time.split(':').map(Number);
+            const [y, mo, d] = entry.date.split('-').map(Number);
+            // Create date in UTC, then adjust for CST offset
+            return Date.UTC(y, mo - 1, d, h - TZ_OFFSET, m, 0);
+        }
+
+        // Get current round status
+        function getRoundStatus(now) {
+            let nextRound = null;
+            let lockedForRound = null;
+            let currentRoundIdx = -1;
+
+            for (let i = 0; i < SCHEDULE.length; i++) {
+                const roundTime = scheduleToUtc(SCHEDULE[i]);
+                const lockTime = roundTime - (LOCK_MINUTES * 60 * 1000);
+
+                if (now >= lockTime && now < roundTime) {
+                    // We're in the lock window
+                    lockedForRound = SCHEDULE[i];
+                    currentRoundIdx = i;
+                    break;
+                }
+                if (now < lockTime) {
+                    nextRound = { ...SCHEDULE[i], lockTime, roundTime };
+                    currentRoundIdx = i;
+                    break;
+                }
+            }
+
+            return { nextRound, lockedForRound, currentRoundIdx };
+        }
+
+        // Piece map for SVG files
+        const PIECE_MAP = {
+            'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
+            'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP',
+        };
+
+        function renderBoard(pieces) {
+            const board = document.getElementById('pos-board');
+            board.innerHTML = '';
+            if (!pieces || pieces.length !== 8) {
+                board.innerHTML = '<div class="col-span-8 text-center text-gray-500 py-8">No position data</div>';
+                return;
+            }
+
+            // Full starting position: black back rank, black pawns, 4 empty rows, white pawns, white back rank
+            const rows = [];
+            // Row 0 (rank 8): black pieces
+            rows.push(pieces.map(p => p.toLowerCase()));
+            // Row 1 (rank 7): black pawns
+            rows.push(Array(8).fill('p'));
+            // Rows 2-5 (ranks 6-3): empty
+            for (let i = 0; i < 4; i++) rows.push(Array(8).fill(null));
+            // Row 6 (rank 2): white pawns
+            rows.push(Array(8).fill('P'));
+            // Row 7 (rank 1): white pieces
+            rows.push([...pieces]);
+
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const sq = document.createElement('div');
+                    const isLight = (row + col) % 2 === 0;
+                    sq.className = 'sq ' + (isLight ? 'sq-light' : 'sq-dark');
+                    const piece = rows[row][col];
+                    if (piece) {
+                        const img = document.createElement('img');
+                        img.src = '/pieces/' + PIECE_MAP[piece] + '.svg';
+                        img.alt = piece;
+                        sq.appendChild(img);
+                    }
+                    board.appendChild(sq);
+                }
+            }
+        }
+
+        function renderSchedule(now) {
+            const list = document.getElementById('schedule-list');
+            list.innerHTML = '';
+
+            for (let i = 0; i < SCHEDULE.length; i++) {
+                const entry = SCHEDULE[i];
+                const roundTime = scheduleToUtc(entry);
+                const lockTime = roundTime - (LOCK_MINUTES * 60 * 1000);
+
+                const div = document.createElement('div');
+                div.className = 'round-row';
+
+                let statusClass = 'round-future';
+                let badge = '';
+
+                if (now >= roundTime) {
+                    statusClass = 'round-past';
+                    badge = '<span class="text-xs text-gray-500">✓</span>';
+                } else if (now >= lockTime) {
+                    statusClass = 'round-locked';
+                    badge = '<span class="text-xs text-throne-gold font-bold">🔒 LOCKED</span>';
+                } else {
+                    statusClass = 'round-future';
+                }
+
+                // Find next upcoming round
+                const { currentRoundIdx } = getRoundStatus(now);
+                if (i === currentRoundIdx && now < roundTime) {
+                    if (statusClass !== 'round-locked') statusClass = 'round-active';
+                }
+
+                div.className = 'round-row ' + statusClass;
+                div.innerHTML = `
+                    <div>
+                        <span class="font-bold">${entry.name}</span>
+                        <span class="text-gray-400 text-xs ml-2">${entry.day} · ${formatTime(entry.time)}</span>
+                    </div>
+                    ${badge}
+                `;
+                list.appendChild(div);
+            }
+        }
+
+        function formatTime(time24) {
+            const [h, m] = time24.split(':').map(Number);
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+            return h12 + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+        }
+
+        function formatCountdown(ms) {
+            if (ms <= 0) return '0:00';
+            const totalSec = Math.floor(ms / 1000);
+            const hrs = Math.floor(totalSec / 3600);
+            const mins = Math.floor((totalSec % 3600) / 60);
+            const secs = totalSec % 60;
+            if (hrs > 0) {
+                return hrs + ':' + String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+            }
+            return mins + ':' + String(secs).padStart(2, '0');
+        }
+
+        // State
+        let currentPosition = null;
+        let lockedPosition = null; // When locked, we freeze the display
+        let isLocked = false;
+
+        async function fetchPosition() {
+            try {
+                const res = await fetch('/api/round-position');
+                if (!res.ok) throw new Error('API error');
+                const data = await res.json();
+                return data;
+            } catch (err) {
+                console.error('Failed to fetch position:', err);
+                return null;
+            }
+        }
+
+        function updateDisplay(data) {
+            if (!data) return;
+
+            document.getElementById('pos-number').textContent = '#' + data.positionNumber;
+            document.getElementById('pos-pieces').textContent = data.backRank;
+            document.getElementById('block-height').textContent = data.blockHeight ? data.blockHeight.toLocaleString() : '—';
+            document.getElementById('block-hash').textContent = data.blockHash || '—';
+            renderBoard(data.pieces);
+            currentPosition = data;
+        }
+
+        function updateCountdown() {
+            const now = Date.now();
+            const { nextRound, lockedForRound } = getRoundStatus(now);
+
+            const statusDot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            const lockBanner = document.getElementById('lock-banner');
+            const countdownLabel = document.getElementById('countdown-label');
+            const countdownTimer = document.getElementById('countdown-timer');
+            const countdownCard = document.getElementById('countdown-card');
+
+            if (lockedForRound) {
+                // LOCKED — position frozen
+                if (!isLocked) {
+                    isLocked = true;
+                    lockedPosition = currentPosition;
+                }
+                statusDot.className = 'status-dot status-locked';
+                statusText.textContent = 'Position locked for ' + lockedForRound.name;
+                lockBanner.style.display = 'block';
+                document.getElementById('lock-round-name').textContent = lockedForRound.name;
+
+                const roundTime = scheduleToUtc(lockedForRound);
+                const timeLeft = roundTime - now;
+                countdownLabel.textContent = lockedForRound.name + ' starts in';
+                countdownTimer.textContent = formatCountdown(timeLeft);
+                countdownCard.style.display = 'block';
+            } else if (nextRound) {
+                // LIVE — position updating
+                if (isLocked) {
+                    isLocked = false;
+                    lockedPosition = null;
+                }
+                statusDot.className = 'status-dot status-live';
+                statusText.textContent = 'Live — position updates with new Bitcoin blocks';
+                lockBanner.style.display = 'none';
+
+                const lockTime = nextRound.lockTime;
+                const timeToLock = lockTime - now;
+                countdownLabel.textContent = 'Locks for ' + nextRound.name + ' in';
+                countdownTimer.textContent = formatCountdown(timeToLock);
+                countdownCard.style.display = 'block';
+            } else {
+                // All rounds done
+                if (isLocked) {
+                    isLocked = false;
+                    lockedPosition = null;
+                }
+                statusDot.className = 'status-dot status-live';
+                statusText.textContent = 'Tournament schedule complete';
+                lockBanner.style.display = 'none';
+                countdownCard.style.display = 'none';
+            }
+
+            renderSchedule(now);
+        }
+
+        // Main loop
+        async function init() {
+            // Initial fetch
+            const data = await fetchPosition();
+            if (data) updateDisplay(data);
+            updateCountdown();
+
+            // Refresh position every 30 seconds (unless locked)
+            setInterval(async () => {
+                if (!isLocked) {
+                    const data = await fetchPosition();
+                    if (data) updateDisplay(data);
+                }
+            }, 30000);
+
+            // Update countdown every second
+            setInterval(updateCountdown, 1000);
+        }
+
+        init();
+    </script>
+    <script src="/vscale.js"></script>
+</body>
+</html>

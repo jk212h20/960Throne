@@ -7,6 +7,14 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Admin Reorder — Drag-and-Drop King + Queue (Mar 16, 2026)
+- **Problem**: No way to arbitrarily reorder the king and queue list. Admin had to remove/re-add players one by one.
+- **Solution**: New "↕️ Reorder King + Queue" button in admin Queue Management section. Opens a modal showing all players (king first, then queue) in a unified draggable list.
+- **UI**: Modal with drag-and-drop (desktop), touch drag (mobile), and ▲/▼ arrow buttons. First player becomes King, rest become queue in that order. Confirmation dialog before applying.
+- **Backend**: `db.reorderQueue(playerIds)` clears queue and re-inserts in given order. `gameEngine.adminReorder(order)` handles king changes, active game cancellation (as no_show), and queue rebuilding. `POST /api/admin/reorder` endpoint.
+- **Files changed**: `database.js`, `gameEngine.js`, `api.js`, `admin.ejs`
+- Status: **committed** (0638641), not yet deployed
+
 ### Fix LNURL-withdraw 502 Error + Stuck Pending Payouts (Mar 15, 2026)
 - **Problem 1**: Phoenix wallet showed "502 error" when claiming sats via LNURL-withdraw, even though sats arrived. The `/claim/callback` handler was `await`ing `lightning.payInvoice()` synchronously — if LND took >30s, Railway's reverse proxy killed the connection with 502.
 - **Problem 2**: Payouts stuck as "pending" forever in admin panel. The 502 killed the connection before `db.updatePayout()` could set status to 'completed'.
