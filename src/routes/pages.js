@@ -187,6 +187,15 @@ router.get('/admin/dgt-relay', (req, res) => {
     res.render('dgt-relay', { relaySecret, serverUrl });
 });
 
+// Admin Users
+router.get('/admin/users', (req, res) => {
+    if (!req.isAdmin) {
+        return res.render('admin-login', { returnTo: '/admin/users' });
+    }
+    const players = db.getAllPlayers();
+    res.render('admin-users', { players });
+});
+
 // Admin
 router.get('/admin', (req, res) => {
     if (!req.isAdmin) {

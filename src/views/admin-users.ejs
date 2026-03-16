@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users — Admin — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }</style>
+</head>
+<body class="min-h-screen bg-throne-darker p-4">
+    <div class="max-w-4xl mx-auto">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold flex items-center gap-2"><%- include('partials/icon', { name: 'user', size: 24, cls: '' }) %> Users (<%= players.length %>)</h1>
+            <div class="flex gap-3">
+                <a href="/admin" class="text-sm text-gray-400 hover:text-throne-gold flex items-center gap-1"><%- include('partials/icon', { name: 'gear', size: 14, cls: '' }) %> Admin</a>
+                <a href="/throne" class="text-sm text-gray-400 hover:text-throne-gold flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 14, cls: '' }) %> Throne</a>
+                <a href="/leaderboard" class="text-sm text-gray-400 hover:text-throne-gold flex items-center gap-1"><%- include('partials/icon', { name: 'trophy', size: 14, cls: '' }) %> Board</a>
+            </div>
+        </div>
+
+        <!-- Summary -->
+        <div class="grid grid-cols-3 gap-3 mb-4">
+            <div class="card text-center py-3">
+                <div class="text-2xl font-bold text-throne-gold font-mono"><%= players.reduce((s, p) => s + p.total_sats_earned, 0).toLocaleString() %></div>
+                <div class="text-xs text-gray-400">Total Earned</div>
+            </div>
+            <div class="card text-center py-3">
+                <div class="text-2xl font-bold text-green-400 font-mono"><%= players.reduce((s, p) => s + p.total_sats_claimed, 0).toLocaleString() %></div>
+                <div class="text-xs text-gray-400">Total Cashed Out</div>
+            </div>
+            <div class="card text-center py-3">
+                <div class="text-2xl font-bold text-yellow-400 font-mono"><%= players.reduce((s, p) => s + p.sat_balance, 0).toLocaleString() %></div>
+                <div class="text-xs text-gray-400">Total Remaining</div>
+            </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="card">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm" id="users-table">
+                    <thead>
+                        <tr class="text-gray-500 border-b border-gray-700">
+                            <th class="py-2 text-left cursor-pointer hover:text-white" onclick="sortTable('name')">
+                                Name <span id="sort-name" class="text-xs"></span>
+                            </th>
+                            <th class="py-2 text-right cursor-pointer hover:text-white" onclick="sortTable('games_played')">
+                                Games <span id="sort-games_played" class="text-xs"></span>
+                            </th>
+                            <th class="py-2 text-right cursor-pointer hover:text-white" onclick="sortTable('total_sats_earned')">
+                                Earned <span id="sort-total_sats_earned" class="text-xs"></span>
+                            </th>
+                            <th class="py-2 text-right cursor-pointer hover:text-white" onclick="sortTable('total_sats_claimed')">
+                                Cashed Out <span id="sort-total_sats_claimed" class="text-xs"></span>
+                            </th>
+                            <th class="py-2 text-right cursor-pointer hover:text-white" onclick="sortTable('sat_balance')">
+                                Remaining <span id="sort-sat_balance" class="text-xs"></span>
+                            </th>
+                            <th class="py-2 text-right cursor-pointer hover:text-white" onclick="sortTable('games_won')">
+                                W <span id="sort-games_won" class="text-xs"></span>
+                            </th>
+                            <th class="py-2 text-right cursor-pointer hover:text-white" onclick="sortTable('games_lost')">
+                                L <span id="sort-games_lost" class="text-xs"></span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-tbody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const players = <%- JSON.stringify(players) %>;
+        let currentSort = 'total_sats_earned';
+        let sortAsc = false;
+
+        function sortTable(key) {
+            if (currentSort === key) {
+                sortAsc = !sortAsc;
+            } else {
+                currentSort = key;
+                sortAsc = key === 'name';
+            }
+            renderTable();
+        }
+
+        function renderTable() {
+            const sorted = [...players].sort((a, b) => {
+                let va = a[currentSort];
+                let vb = b[currentSort];
+                if (typeof va === 'string') va = (va || '').toLowerCase();
+                if (typeof vb === 'string') vb = (vb || '').toLowerCase();
+                if (va < vb) return sortAsc ? -1 : 1;
+                if (va > vb) return sortAsc ? 1 : -1;
+                return 0;
+            });
+
+            // Update sort indicators
+            document.querySelectorAll('[id^="sort-"]').forEach(el => el.textContent = '');
+            const indicator = document.getElementById('sort-' + currentSort);
+            if (indicator) indicator.textContent = sortAsc ? '▲' : '▼';
+
+            const tbody = document.getElementById('users-tbody');
+            tbody.innerHTML = sorted.map(p => `
+                <tr class="border-b border-gray-800 hover:bg-gray-800/50">
+                    <td class="py-2 font-medium">${p.name || '<span class="text-gray-600">(no name)</span>'}</td>
+                    <td class="py-2 text-right text-gray-400">${p.games_played}</td>
+                    <td class="py-2 text-right text-throne-gold font-mono">${p.total_sats_earned.toLocaleString()}</td>
+                    <td class="py-2 text-right text-green-400 font-mono">${p.total_sats_claimed.toLocaleString()}</td>
+                    <td class="py-2 text-right text-yellow-400 font-mono">${p.sat_balance.toLocaleString()}</td>
+                    <td class="py-2 text-right text-green-400">${p.games_won}</td>
+                    <td class="py-2 text-right text-red-400">${p.games_lost}</td>
+                </tr>
+            `).join('');
+        }
+
+        renderTable();
+    </script>
+<script src="/vscale.js"></script>
+</body>
+</html>
