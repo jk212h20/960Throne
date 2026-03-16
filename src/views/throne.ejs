@@ -279,7 +279,36 @@
             forceReload();
         }
         socket.on('new_king', transitionReload);
-        socket.on('queue_updated', transitionReload);
+        socket.on('queue_updated', (data) => {
+            // Update queue list in-place instead of reloading to prevent QR jump
+            const queueList = document.getElementById('queue-list');
+            if (!queueList || !data || !data.queue) { transitionReload(); return; }
+            if (data.queue.length === 0) {
+                queueList.innerHTML = '<div class="text-center text-gray-600 mt-8">' +
+                    '<div class="mb-2"><svg width="36" height="36" class="text-gray-600 inline-block"><use href="#icon-castle"/></svg></div>' +
+                    '<div>No challengers in line</div>' +
+                    '<div class="text-sm mt-1">Scan QR to join!</div></div>';
+            } else {
+                let html = '';
+                data.queue.forEach((entry, i) => {
+                    const isOnDeck = entry.status === 'on_deck';
+                    const bgClass = isOnDeck ? 'bg-throne-gold/20 border border-throne-gold on-deck-pulse' : 'bg-throne-darker';
+                    const numClass = isOnDeck ? 'text-throne-gold' : 'text-gray-600';
+                    const nameClass = i === 0 ? 'text-2xl font-bold text-throne-gold' : 'text-lg';
+                    const icon = isOnDeck ? '<span class="text-2xl font-bold text-throne-gold">⏰</span>' :
+                        '<span class="text-2xl font-bold ' + numClass + '">#' + entry.position + '</span>';
+                    html += '<div class="mb-2 p-3 rounded-lg ' + bgClass + '">' +
+                        '<div class="flex items-center justify-between">' +
+                        '<div class="flex items-center gap-3">' + icon +
+                        '<span class="' + nameClass + '">' + entry.player_name + '</span></div>';
+                    if (isOnDeck) {
+                        html += '<span class="text-sm font-mono text-throne-gold" id="deck-timer">ON DECK</span>';
+                    }
+                    html += '</div></div>';
+                });
+                queueList.innerHTML = html;
+            }
+        });
         socket.on('on_deck', safeReload);           // minor — skip during DGT
         socket.on('player_removed_timeout', transitionReload);
 
