@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Result — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+        .result-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 28px 16px;
+            border-radius: 16px;
+            font-size: 1.5rem;
+            font-weight: 800;
+            border: 3px solid transparent;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.1s;
+            line-height: 1.2;
+        }
+        .result-btn:active { transform: scale(0.97); }
+        .result-btn .player-name { font-size: 2rem; margin-top: 6px; }
+        .result-btn .sub-label { font-size: 0.85rem; font-weight: 500; opacity: 0.7; margin-top: 4px; }
+
+        .btn-king-wins {
+            background: linear-gradient(135deg, #166534, #15803d);
+            border-color: #22c55e;
+            color: #fff;
+        }
+        .btn-king-wins:hover { background: linear-gradient(135deg, #15803d, #16a34a); }
+
+        .btn-challenger-wins {
+            background: linear-gradient(135deg, #7f1d1d, #991b1b);
+            border-color: #ef4444;
+            color: #fff;
+        }
+        .btn-challenger-wins:hover { background: linear-gradient(135deg, #991b1b, #b91c1c); }
+
+        .btn-draw {
+            background: linear-gradient(135deg, #374151, #4b5563);
+            border-color: #9ca3af;
+            color: #fff;
+        }
+        .btn-draw:hover { background: linear-gradient(135deg, #4b5563, #6b7280); }
+
+        .btn-noshow {
+            background: linear-gradient(135deg, #78350f, #92400e);
+            border-color: #f59e0b;
+            color: #fde68a;
+        }
+        .btn-noshow:hover { background: linear-gradient(135deg, #92400e, #a16207); }
+
+        .game-header {
+            text-align: center;
+            padding: 20px 16px 12px;
+        }
+        .vs-display {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .color-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 6px;
+            font-weight: 700;
+        }
+        .color-badge-white { background: #fff; color: #1a1a1a; border: 2px solid #fff; }
+        .color-badge-black { background: #1a1a1a; color: #fff; border: 2px solid #555; }
+
+        .status-toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            z-index: 999;
+            max-width: 90vw;
+            text-align: center;
+        }
+        .no-game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 70vh;
+            text-align: center;
+            padding: 24px;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-throne-darker">
+    <div class="max-w-lg mx-auto p-4">
+
+        <% if (state.game) { %>
+        <% const kc = state.game.king_color || 'black'; %>
+
+        <!-- Game Header -->
+        <div class="game-header">
+            <div class="text-sm text-gray-400 mb-3">Game #<%= state.game.id %> — Position #<%= state.game.chess960_position %></div>
+            <div class="vs-display">
+                <div>
+                    <div class="color-badge <%= kc === 'white' ? 'color-badge-white' : 'color-badge-black' %>">
+                        <%- include('partials/icon', { name: 'crown', size: 20, cls: '' }) %>
+                        <%= state.game.king_name %>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">King · <%= kc %></div>
+                </div>
+                <span class="text-gray-500 text-lg">vs</span>
+                <div>
+                    <div class="color-badge <%= kc === 'white' ? 'color-badge-black' : 'color-badge-white' %>">
+                        <%- include('partials/icon', { name: 'crossed-swords', size: 20, cls: '' }) %>
+                        <%= state.game.challenger_name %>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">Challenger · <%= kc === 'white' ? 'black' : 'white' %></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Result Buttons -->
+        <div class="space-y-4 mt-2" id="report-buttons">
+            <button onclick="reportResult('king_won')" class="result-btn btn-king-wins">
+                <%- include('partials/icon', { name: 'crown', size: 32, cls: '' }) %>
+                <span class="player-name"><%= state.game.king_name %> Wins</span>
+                <span class="sub-label">King defends the throne</span>
+            </button>
+
+            <button onclick="reportResult('challenger_won')" class="result-btn btn-challenger-wins">
+                <%- include('partials/icon', { name: 'crossed-swords', size: 32, cls: '' }) %>
+                <span class="player-name"><%= state.game.challenger_name %> Wins</span>
+                <span class="sub-label">New king takes the throne</span>
+            </button>
+
+            <button onclick="reportResult('draw')" class="result-btn btn-draw">
+                <%- include('partials/icon', { name: 'handshake', size: 32, cls: '' }) %>
+                <span class="player-name">Draw</span>
+                <span class="sub-label"><%= state.game.king_name %> stays on the throne</span>
+            </button>
+
+            <button onclick="reportResult('no_show')" class="result-btn btn-noshow" style="padding: 18px 16px;">
+                <%- include('partials/icon', { name: 'warning', size: 24, cls: '' }) %>
+                <span style="font-size:1.2rem; margin-top:4px;">No Show</span>
+                <span class="sub-label">Challenger didn't show up</span>
+            </button>
+        </div>
+
+        <div id="status-toast" class="status-toast" style="display:none;"></div>
+
+        <% } else { %>
+        <!-- No Active Game -->
+        <div class="no-game-container">
+            <%- include('partials/icon', { name: 'hourglass', size: 64, cls: 'text-gray-600' }) %>
+            <div class="text-2xl font-bold text-gray-400 mt-6">No Active Game</div>
+            <div class="text-gray-500 mt-2">Waiting for a game to start...</div>
+            <div class="text-xs text-gray-600 mt-4">This page will auto-update when a game begins</div>
+        </div>
+        <% } %>
+
+    </div>
+
+    <script>
+        const socket = io();
+
+        async function reportResult(result) {
+            const buttons = document.getElementById('report-buttons');
+
+            // Disable buttons
+            buttons.style.opacity = '0.4';
+            buttons.style.pointerEvents = 'none';
+
+            try {
+                // No-show uses a different endpoint
+                if (result === 'no_show') {
+                    const nsRes = await fetch('/api/admin/remove-challenger', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    const nsData = await nsRes.json();
+                    if (!nsRes.ok) {
+                        showToast(nsData.error || 'Error', false);
+                        buttons.style.opacity = '1';
+                        buttons.style.pointerEvents = 'auto';
+                        return;
+                    }
+                    showToast('Challenger removed — next game starting...', true);
+                    return;
+                }
+
+                // Normal result override
+                const res = await fetch('/api/admin/override-result', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        gameId: <%= state.game ? state.game.id : 0 %>,
+                        result: result
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    showToast(data.error || 'Error reporting result', false);
+                    buttons.style.opacity = '1';
+                    buttons.style.pointerEvents = 'auto';
+                    return;
+                }
+                showToast('Result recorded!', true);
+            } catch (err) {
+                showToast('Connection error. Try again.', false);
+                buttons.style.opacity = '1';
+                buttons.style.pointerEvents = 'auto';
+            }
+        }
+
+        function showToast(msg, success) {
+            const toast = document.getElementById('status-toast');
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            toast.style.background = success ? 'rgba(22,101,52,0.95)' : 'rgba(127,29,29,0.95)';
+            toast.style.color = success ? '#86efac' : '#fca5a5';
+            toast.style.border = success ? '2px solid #22c55e' : '2px solid #ef4444';
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+
+        // Auto-reload when game state changes
+        socket.on('game_started', () => setTimeout(() => location.reload(), 500));
+        socket.on('game_ended', () => setTimeout(() => location.reload(), 1000));
+        socket.on('new_king', () => setTimeout(() => location.reload(), 1000));
+    </script>
+<script src="/vscale.js"></script>
+</body>
+</html>

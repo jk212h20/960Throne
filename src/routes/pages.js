@@ -188,6 +188,15 @@ router.get('/admin/dgt-relay', (req, res) => {
     res.render('dgt-relay', { relaySecret, serverUrl });
 });
 
+// Report Results — dedicated page for reporting game results (admin-protected)
+router.get('/report', (req, res) => {
+    if (!req.isAdmin) {
+        return res.render('admin-login', { returnTo: '/report' });
+    }
+    const state = gameEngine.getThoneState();
+    res.render('report', { state });
+});
+
 // Admin Users
 router.get('/admin/users', (req, res) => {
     if (!req.isAdmin) {
