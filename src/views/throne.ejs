@@ -37,8 +37,8 @@
         .sq-wrong { box-shadow: inset 0 0 0 3px rgba(239,68,68,0.9); z-index: 5; }
 
         /* Board coordinate labels — large, bold, white */
-        .board-rank-label { width: 28px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 700; color: #fff; font-family: 'Courier New', monospace; }
-        .board-file-label { width: 56px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 700; color: #fff; font-family: 'Courier New', monospace; }
+        .board-rank-label { width: 36px; display: flex; align-items: center; justify-content: center; font-size: 1.65rem; font-weight: 700; color: #fff; font-family: 'Courier New', monospace; }
+        .board-file-label { width: 56px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 1.65rem; font-weight: 700; color: #fff; font-family: 'Courier New', monospace; }
     </style>
 </head>
 <body class="h-screen bg-throne-darker flex flex-col">
@@ -97,7 +97,7 @@
             <!-- Venue Code & QR / Watch Live URL -->
             <div class="p-4 border-t border-gray-800 text-center">
                 <% if (showVenueCode && state.venueCode) { %>
-                <div class="text-xs text-gray-500 mb-2">Scan to join the line</div>
+                <div class="text-2xl font-bold text-gray-400 mb-3">Scan to join the line</div>
                 <img src="/api/venue-qr.png" alt="QR" class="mx-auto rounded-lg" style="background: #fff; padding: 8px; width: 90%; max-width: 340px; height: auto;">
                 <% } else if (!showVenueCode) { %>
                 <div class="text-sm text-gray-500 mb-2">🌐 Watch live at</div>
