@@ -362,78 +362,44 @@
         }
 
         // ─── DGT Clock Display ───────────────────────────
-        const tcBase = <%- state.config.timeControl.base %>;
-        const tcIncrement = <%- state.config.timeControl.increment %>;
-        let clockWhite = tcBase;
-        let clockBlack = tcBase;
-        let dgtClockOverride = false; // true once real DGT clock data arrives
-        let clockTickTimer = null;
-        let lastClockTick = null; // timestamp of last tick
-        // Track whose turn it is: 'white' starts, toggles on board changes
-        let currentTurn = 'white';
-        let moveCount = 0; // track board changes to know whose turn it is
-        let lastBoardJson = null; // detect board changes for turn toggling
-
-        // On page load, if game already in progress, start the countdown from current time.
-        // We don't know how much time each player has used, so we start both clocks at base time
-        // and only tick the active player's clock from this moment forward.
-        // DGT clock data will override with accurate values when available.
+        // Pure pass-through: display whatever the DGT hardware reports.
+        // No local countdown, no turn tracking — the physical clock is the source of truth.
+        let lastClockWhite = null;
+        let lastClockBlack = null;
 
         function formatClockTime(seconds) {
-            if (seconds == null || seconds < 0) seconds = 0;
+            if (seconds == null || seconds < 0) return '--:--';
             const m = Math.floor(seconds / 60);
             const s = seconds % 60;
             return m + ':' + String(s).padStart(2, '0');
         }
 
-        function ensureClockDisplay() {
-            // Clocks are now rendered inline in white-side and black-side panels
-            // Nothing to create dynamically — just verify elements exist
-        }
-
-        function renderClockDisplay() {
-            const whiteEl = document.getElementById('dgt-clock-white');
-            const blackEl = document.getElementById('dgt-clock-black');
-            if (whiteEl) whiteEl.textContent = formatClockTime(Math.round(clockWhite));
-            if (blackEl) blackEl.textContent = formatClockTime(Math.round(clockBlack));
-            // Active clock styling
-            if (whiteEl) whiteEl.className = 'dgt-clock ' + (currentTurn === 'white' ? 'dgt-clock-active' : 'dgt-clock-inactive');
-            if (blackEl) blackEl.className = 'dgt-clock ' + (currentTurn === 'black' ? 'dgt-clock-active' : 'dgt-clock-inactive');
-        }
-
         function updateClockDisplay(clock) {
             if (!clock) return;
-            // DGT hardware clock data overrides software countdown
-            dgtClockOverride = true;
-            clockWhite = clock.white;
-            clockBlack = clock.black;
-            ensureClockDisplay();
-            renderClockDisplay();
-        }
+            const whiteEl = document.getElementById('dgt-clock-white');
+            const blackEl = document.getElementById('dgt-clock-black');
 
-        // Software clock countdown — ticks the active player's clock down every 100ms
-        function startClockCountdown() {
-            if (clockTickTimer) return; // already running
-            lastClockTick = Date.now();
-            clockTickTimer = setInterval(() => {
-                if (dgtClockOverride) return; // DGT hardware is providing clock data
-                const now = Date.now();
-                const elapsed = (now - lastClockTick) / 1000;
-                lastClockTick = now;
-                if (currentTurn === 'white') {
-                    clockWhite = Math.max(0, clockWhite - elapsed);
-                } else {
-                    clockBlack = Math.max(0, clockBlack - elapsed);
+            // Determine which clock is active by seeing which one changed
+            const whiteChanged = lastClockWhite !== null && clock.white !== lastClockWhite;
+            const blackChanged = lastClockBlack !== null && clock.black !== lastClockBlack;
+            lastClockWhite = clock.white;
+            lastClockBlack = clock.black;
+
+            if (whiteEl) {
+                whiteEl.textContent = formatClockTime(clock.white);
+                // Active = this clock is counting down (its value decreased)
+                if (whiteChanged && !blackChanged) {
+                    whiteEl.className = 'dgt-clock dgt-clock-active';
+                    if (blackEl) blackEl.className = 'dgt-clock dgt-clock-inactive';
                 }
-                renderClockDisplay();
-            }, 100);
-        }
-
-        // Start countdown if there's an active game
-        if (gameStart) {
-            // Immediately update the server-rendered clock HTML with elapsed-adjusted values
-            renderClockDisplay();
-            startClockCountdown();
+            }
+            if (blackEl) {
+                blackEl.textContent = formatClockTime(clock.black);
+                if (blackChanged && !whiteChanged) {
+                    blackEl.className = 'dgt-clock dgt-clock-active';
+                    if (whiteEl) whiteEl.className = 'dgt-clock dgt-clock-inactive';
+                }
+            }
         }
 
         socket.on('dgt_board', (data) => {
@@ -445,23 +411,6 @@
 
             // Update board if board data present
             if (data.board) {
-                // Detect board change → toggle turn for software clock
-                const boardJson = JSON.stringify(data.board);
-                if (lastBoardJson && boardJson !== lastBoardJson && !dgtClockOverride) {
-                    // Board changed = a move was made. Add increment to the player who just moved, toggle turn.
-                    if (currentTurn === 'white') {
-                        clockWhite += tcIncrement;
-                    } else {
-                        clockBlack += tcIncrement;
-                    }
-                    currentTurn = currentTurn === 'white' ? 'black' : 'white';
-                    moveCount++;
-                    renderClockDisplay();
-                    // Start countdown if not already running
-                    startClockCountdown();
-                }
-                lastBoardJson = boardJson;
-
                 let boardEl = document.getElementById('live-board');
                 // Create board dynamically if it doesn't exist yet
                 if (!boardEl) {
@@ -504,32 +453,25 @@
             }
         });
 
-        // Handle game lifecycle events for clock management
+        // Handle game lifecycle events
         socket.on('game_started', (data) => {
             if (dgtActive) {
-                // Reset clocks for new game
-                const tc = data.timeControl || { base: tcBase, increment: tcIncrement };
-                clockWhite = tc.base;
-                clockBlack = tc.base;
-                currentTurn = 'white';
-                moveCount = 0;
-                lastBoardJson = null;
-                dgtClockOverride = false;
+                // Reset clock display — DGT hardware will send real values
+                lastClockWhite = null;
+                lastClockBlack = null;
                 gameStart = Date.now();
-                renderClockDisplay();
-                startClockCountdown();
+                const whiteEl = document.getElementById('dgt-clock-white');
+                const blackEl = document.getElementById('dgt-clock-black');
+                if (whiteEl) { whiteEl.textContent = '--:--'; whiteEl.className = 'dgt-clock dgt-clock-active'; }
+                if (blackEl) { blackEl.textContent = '--:--'; blackEl.className = 'dgt-clock dgt-clock-active'; }
             } else {
                 safeReload();
             }
         });
 
         socket.on('game_ended', (data) => {
-            if (dgtActive) {
-                // Stop clock countdown
-                if (clockTickTimer) { clearInterval(clockTickTimer); clockTickTimer = null; }
-            } else {
-                safeReload();
-            }
+            if (!dgtActive) safeReload();
+            // When DGT is active, clocks just stop updating (hardware stops sending)
         });
 
         // Live QR code update — when admin rotates the venue code, update QR + code text immediately

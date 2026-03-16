@@ -429,10 +429,15 @@
                     updateRelayClockDisplay(clock);
                 }
                 
+                // Handle FEN + clock together
                 if (fen && typeof fen === 'string' && fen.includes('/')) {
-                    handleBoardFen(fen, clock);
+                    const fenChanged = handleBoardFen(fen, clock);
+                    // If FEN didn't change but clock did, push clock-only update
+                    if (!fenChanged && clock) {
+                        pushClockToServer(clock);
+                    }
                 } else if (clock) {
-                    // Clock changed but FEN didn't — still push clock update
+                    // No FEN but clock present — push clock-only
                     pushClockToServer(clock);
                 }
                 
@@ -618,12 +623,13 @@
     
     function handleBoardFen(fen, clock) {
         const placement = fen.split(' ')[0];
-        if (placement === lastFen) return;
+        if (placement === lastFen) return false; // No change
         lastFen = placement;
         
         renderBoard(fen);
         pushToServer(fen, clock);
         document.getElementById('fen-input').value = placement;
+        return true; // FEN changed
     }
     
     // Push clock-only update (when FEN hasn't changed but clock has)
