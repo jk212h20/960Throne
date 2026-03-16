@@ -298,16 +298,20 @@ function handleBwTime(msg) {
     const clock = {
         white: rightTotal,
         black: leftTotal,
+        running: clockRunning,
+        activeSide: rightTurn ? 'white' : (leftTurn ? 'black' : null),
     };
     
-    // Check if clock actually changed
+    // Check if clock actually changed (time values or running state)
     const changed = !lastClock || 
         clock.white !== lastClock.white || 
-        clock.black !== lastClock.black;
+        clock.black !== lastClock.black ||
+        clock.running !== lastClock.running ||
+        clock.activeSide !== lastClock.activeSide;
     
     if (changed) {
         lastClock = clock;
-        const activeStr = rightTurn ? 'White' : (leftTurn ? 'Black' : '?');
+        const activeStr = clock.activeSide || '?';
         console.log(`⏱️  Clock: White ${formatTime(clock.white)} | Black ${formatTime(clock.black)} [${activeStr}${clockRunning ? ' running' : ' stopped'}]`);
         pushToServer(lastFen, clock);
     }

@@ -255,7 +255,9 @@ function setBoardState(data) {
         JSON.stringify(board) !== JSON.stringify(currentState.board);
     const clockChanged = data.clock && (!currentState.clock ||
         data.clock.white !== currentState.clock.white ||
-        data.clock.black !== currentState.clock.black);
+        data.clock.black !== currentState.clock.black ||
+        data.clock.activeSide !== currentState.clock?.activeSide ||
+        data.clock.running !== currentState.clock?.running);
     
     if (boardChanged || clockChanged) {
         currentState = {

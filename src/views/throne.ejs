@@ -354,8 +354,8 @@
         }
 
         // ─── DGT Clock Display ───────────────────────────
-        // Pure pass-through: display whatever the DGT hardware reports.
-        // No turn tracking — just show the numbers. The physical clock is the source of truth.
+        // Display clock values from DGT hardware.
+        // When activeSide is provided (from serial relay), show active/inactive styling.
 
         function formatClockTime(seconds) {
             if (seconds == null || seconds < 0) return '--:--';
@@ -369,9 +369,18 @@
             const whiteEl = document.getElementById('dgt-clock-white');
             const blackEl = document.getElementById('dgt-clock-black');
 
-            // Just display the values — no active/inactive guessing
             if (whiteEl) whiteEl.textContent = formatClockTime(clock.white);
             if (blackEl) blackEl.textContent = formatClockTime(clock.black);
+
+            // If serial relay provides activeSide, show which clock is running
+            if (clock.activeSide) {
+                if (whiteEl) whiteEl.className = 'dgt-clock ' + (clock.activeSide === 'white' ? 'dgt-clock-active' : 'dgt-clock-inactive');
+                if (blackEl) blackEl.className = 'dgt-clock ' + (clock.activeSide === 'black' ? 'dgt-clock-active' : 'dgt-clock-inactive');
+            } else if (clock.running === false) {
+                // Both stopped
+                if (whiteEl) whiteEl.className = 'dgt-clock dgt-clock-inactive';
+                if (blackEl) blackEl.className = 'dgt-clock dgt-clock-inactive';
+            }
         }
 
         socket.on('dgt_board', (data) => {
