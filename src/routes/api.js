@@ -954,17 +954,18 @@ router.get('/admin/lightning-status', requireAdmin, async (req, res) => {
     res.json(status);
 });
 
-// Get a Bitcoin deposit address for the LND node
+// Get a Bitcoin deposit address for the LND node (with QR)
 router.get('/admin/lightning-address', requireAdmin, async (req, res) => {
     try {
         const address = await lightning.getNewAddress();
-        res.json({ address });
+        const qr = await QRCode.toDataURL(`bitcoin:${address}`, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+        res.json({ address, qr });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// Create a Lightning invoice to receive sats
+// Create a Lightning invoice to receive sats (with QR)
 router.post('/admin/lightning-invoice', requireAdmin, async (req, res) => {
     const { amount, memo } = req.body;
     if (!amount || parseInt(amount) <= 0) {
@@ -972,6 +973,8 @@ router.post('/admin/lightning-invoice', requireAdmin, async (req, res) => {
     }
     try {
         const invoice = await lightning.createInvoice(parseInt(amount), memo || '960 Throne node top-up');
+        const qr = await QRCode.toDataURL(invoice.paymentRequest, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+        invoice.qr = qr;
         res.json(invoice);
     } catch (err) {
         res.status(500).json({ error: err.message });

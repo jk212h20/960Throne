@@ -521,6 +521,7 @@
                 if (d.error) throw new Error(d.error);
                 document.getElementById('ln-deposit-label').textContent = 'Bitcoin deposit address (on-chain):';
                 document.getElementById('ln-deposit-value').textContent = d.address;
+                if (d.qr) { const qrImg = document.getElementById('ln-deposit-qr'); qrImg.src = d.qr; qrImg.style.display = 'block'; }
             } catch (err) {
                 document.getElementById('ln-deposit-label').textContent = 'Error: ' + err.message;
             }
@@ -551,6 +552,7 @@
                 if (d.error) throw new Error(d.error);
                 document.getElementById('ln-deposit-label').textContent = `Lightning invoice for ${parseInt(amount).toLocaleString()} sats:`;
                 document.getElementById('ln-deposit-value').textContent = d.paymentRequest;
+                if (d.qr) { const qrImg = document.getElementById('ln-deposit-qr'); qrImg.src = d.qr; qrImg.style.display = 'block'; }
             } catch (err) {
                 document.getElementById('ln-deposit-label').textContent = 'Error: ' + err.message;
             }
