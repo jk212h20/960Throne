@@ -135,14 +135,49 @@ function markGameStarted() {
 }
 
 /**
+ * Build the expected 8×8 board array from the expected FEN.
+ * Same format as fenToBoard() output — used by throne.ejs to render the target position.
+ */
+function getExpectedBoard() {
+    if (!expectedPosition.expectedFen) return null;
+    return fenToBoard(expectedPosition.expectedFen);
+}
+
+/**
+ * Compare each square of the actual DGT board against the expected board.
+ * Returns a flat array of 64 booleans (row-major, rank 8 to rank 1).
+ * true = piece on this square matches expected, false = mismatch.
+ * Returns null if no board data available.
+ */
+function getSquareMatches() {
+    if (!expectedPosition.expectedFen || !currentState.board) return null;
+    const expectedBoard = getExpectedBoard();
+    if (!expectedBoard) return null;
+
+    const matches = [];
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const actual = currentState.board[r][c];
+            const expected = expectedBoard[r][c];
+            // Compare piece and color (both null = match, both same piece+color = match)
+            const pieceMatch = (actual.piece === expected.piece) && (actual.color === expected.color);
+            matches.push(pieceMatch);
+        }
+    }
+    return matches;
+}
+
+/**
  * Check if the current DGT board matches the expected starting position.
- * Returns { matches, expected, actual, positionNumber, pieces, details }
+ * Returns { matches, expected, actual, positionNumber, pieces, details, expectedBoard, squareMatches }
  * Returns null if no expected position is set or game already started.
  */
 function checkPositionMatch() {
     if (!expectedPosition.expectedFen || expectedPosition.gameStarted) {
         return null; // No verification needed
     }
+
+    const expectedBoard = getExpectedBoard();
 
     if (!currentState.connected || !currentState.board) {
         return {
@@ -151,6 +186,8 @@ function checkPositionMatch() {
             pieces: expectedPosition.pieces,
             expected: expectedPosition.expectedFen,
             actual: null,
+            expectedBoard,
+            squareMatches: null,
             details: 'DGT board not connected',
         };
     }
@@ -158,6 +195,7 @@ function checkPositionMatch() {
     // Convert current board state to a FEN placement string for comparison
     const actualFen = boardToFenPlacement(currentState.board);
     const matches = actualFen === expectedPosition.expectedFen;
+    const squareMatches = getSquareMatches();
 
     return {
         matches,
@@ -165,6 +203,8 @@ function checkPositionMatch() {
         pieces: expectedPosition.pieces,
         expected: expectedPosition.expectedFen,
         actual: actualFen,
+        expectedBoard,
+        squareMatches,
         details: matches ? 'Board matches expected position' : 'Board does not match expected position',
     };
 }
@@ -271,6 +311,16 @@ function setBoardState(data) {
             error: null,
             source: data.source || 'relay',
         };
+
+        // Auto-detect clock start → transition from setup mode to live game
+        // When the clock starts running during setup mode, it means White's clock was pressed
+        if (!expectedPosition.gameStarted && expectedPosition.expectedFen && data.clock) {
+            if (data.clock.running === true || data.clock.activeSide) {
+                console.log('♟️  DGT: Clock started — transitioning from setup to live game');
+                markGameStarted();
+            }
+        }
+
         broadcast();
     }
     
