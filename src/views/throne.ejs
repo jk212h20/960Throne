@@ -339,7 +339,11 @@
         const checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>';
 
         // Track whether we're in setup mode (positionVerification present and not yet started)
+        // Setup mode is "sticky" — once entered, we stay until explicitly transitioned to live
+        // (pv returns with gameStarted=true, or we get a null pv after receiving a valid live board)
         let inSetupMode = false;
+        // Cache the last known verification data so we can keep showing setup during brief null gaps
+        let lastPv = null;
 
         /**
          * Render the expected (target) position on the board, with optional per-square checkmarks.
@@ -424,10 +428,12 @@
 
             if (pv.matches === true) {
                 // All pieces correct — show "Start White's Clock"
-                overlay.innerHTML = '<div class="board-overlay-text overlay-ready">Start White\'s Clock</div>';
+                overlay.innerHTML = '<div class="board-overlay-text overlay-ready">✓ Board Ready<br><span style="font-size:0.7em;font-weight:600;text-transform:none;">Start White\'s Clock to Begin</span></div>';
             } else if (pv.matches === false || pv.matches === null) {
-                // Pieces not matched or no DGT data yet — show "Set Up This Position"
-                overlay.innerHTML = '<div class="board-overlay-text overlay-setup">Set Up This Position</div>';
+                // Pieces not matched or no DGT data yet — show setup instructions with piece arrangement
+                const pieceStr = pv.pieces ? pv.pieces.join(' ') : '';
+                const posNum = pv.positionNumber != null ? '#' + pv.positionNumber : '';
+                overlay.innerHTML = '<div class="board-overlay-text overlay-setup">Set Up Position ' + posNum + '<br><span style="font-size:0.8em;letter-spacing:0.15em;">' + pieceStr + '</span></div>';
             }
         }
 
@@ -508,10 +514,21 @@
             const pv = data.positionVerification;
             const wasSetupMode = inSetupMode;
 
-            // Determine if we're in setup mode
-            // pv exists = game created but clock hasn't started yet
-            // pv === null = no expected position (game already started or no game)
-            inSetupMode = !!pv;
+            // Setup mode logic:
+            // - If pv exists → we're in setup mode (update lastPv for reference)
+            // - If pv is null BUT we were in setup mode → STAY in setup mode (sticky)
+            //   This handles brief null gaps between game_ended and game_started.
+            //   Only exit setup mode when pv explicitly signals game started (pv becomes null
+            //   because gameStarted=true on the server, meaning clock was detected running).
+            if (pv) {
+                inSetupMode = true;
+                lastPv = pv;
+            } else if (inSetupMode) {
+                // pv is null — server says no verification needed.
+                // This means either the game started (clock running) or game ended.
+                // Either way, transition to live mode.
+                inSetupMode = false;
+            }
 
             let boardEl = document.getElementById('live-board');
             // Create board dynamically if it doesn't exist yet
@@ -520,15 +537,17 @@
                 if (!boardEl) return;
             }
 
-            if (inSetupMode) {
+            if (inSetupMode && lastPv) {
                 // ─── SETUP MODE ──────────────────────────
                 // Show the expected (target) position on the board
-                // with per-square green checkmarks for correct pieces
-                if (pv.expectedBoard) {
-                    renderExpectedBoard(boardEl, pv.expectedBoard, pv.squareMatches);
+                // with per-square green checkmarks for correct pieces.
+                // Use latest pv if available, otherwise use cached lastPv.
+                const activePv = pv || lastPv;
+                if (activePv.expectedBoard) {
+                    renderExpectedBoard(boardEl, activePv.expectedBoard, pv ? pv.squareMatches : null);
                 }
                 // Show overlay text
-                updateBoardOverlay(pv);
+                updateBoardOverlay(activePv);
             } else {
                 // ─── LIVE MODE ───────────────────────────
                 // Show actual DGT board position
@@ -547,9 +566,16 @@
             }
         });
 
-        // Handle game lifecycle events — always reload to get fresh player names, positions, etc.
+        // Handle game lifecycle events
+        // Only reload on game_started (which fires after the new game is fully created).
+        // Don't reload on game_ended — it fires before callNextChallenger() (async) completes,
+        // causing a premature reload with no game state, then another reload when game_started fires.
         socket.on('game_started', forceReload);
-        socket.on('game_ended', forceReload);
+        socket.on('game_ended', () => {
+            // Don't reload — wait for game_started which comes after the new game is created.
+            // If there's no next game (queue empty), game_started won't fire,
+            // but queue_updated will fire and trigger reload.
+        });
 
         // Live QR code update — when admin rotates the venue code, update QR + code text immediately
         socket.on('venue_code_updated', (data) => {
