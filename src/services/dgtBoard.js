@@ -102,6 +102,8 @@ function setExpectedPosition(posNumber) {
         pieces: chess960.positionFromNumber(posNumber),
         gameStarted: false,
     };
+    // Clear stale clock data from previous game to prevent false "clock running" detection
+    currentState.clock = null;
     console.log(`♟️  DGT: Expected position set to #${posNumber} (${expectedPosition.pieces.join('')})`);
     // Re-broadcast so clients get the updated verification status
     broadcast();
@@ -313,10 +315,12 @@ function setBoardState(data) {
         };
 
         // Auto-detect clock start → transition from setup mode to live game
-        // When the clock starts running during setup mode, it means White's clock was pressed
+        // Requirements: position must match expected AND clock must be actively running
+        // This prevents stale clock data from previous games from triggering the transition
         if (!expectedPosition.gameStarted && expectedPosition.expectedFen && data.clock) {
-            if (data.clock.running === true || data.clock.activeSide) {
-                console.log('♟️  DGT: Clock started — transitioning from setup to live game');
+            const posMatch = checkPositionMatch();
+            if (posMatch && posMatch.matches === true && data.clock.running === true) {
+                console.log('♟️  DGT: Position correct + clock running — transitioning to live game');
                 markGameStarted();
             }
         }
