@@ -30,7 +30,10 @@
                 <div class="text-2xl font-mono text-throne-gold font-bold flex items-center gap-1 justify-end"><%- include('partials/icon', { name: 'lightning', size: 22, cls: 'text-throne-gold' }) %> <%= player.sat_balance.toLocaleString() %></div>
                 <div class="text-xs text-gray-400">sat balance</div>
                 <% if (player.total_sats_earned > player.sat_balance) { %>
-                <div class="text-xs text-gray-600"><%= player.total_sats_earned.toLocaleString() %> total earned</div>
+                <div class="text-xs text-gray-600"><%= player.total_sats_earned.toLocaleString() %> earned</div>
+                <% } %>
+                <% if (player.total_sats_claimed > 0) { %>
+                <div class="text-xs text-green-600"><%= player.total_sats_claimed.toLocaleString() %> paid out ✓</div>
                 <% } %>
             </div>
         </div>

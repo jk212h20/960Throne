@@ -910,6 +910,8 @@ function getEventStats() {
 function getAccountingAudit(satRate) {
     // Sum of all sats credited to players (total_sats_earned)
     const playerSatsResult = db.exec(`SELECT COALESCE(SUM(total_sats_earned), 0) FROM players`);
+    const claimedSatsResult = db.exec(`SELECT COALESCE(SUM(total_sats_claimed), 0) FROM players`);
+    const totalSatsClaimed = claimedSatsResult[0]?.values[0][0] || 0;
     const totalPlayerSats = playerSatsResult[0]?.values[0][0] || 0;
 
     // Sum of all completed reign sats
@@ -939,6 +941,7 @@ function getAccountingAudit(satRate) {
 
     return {
         totalPlayerSats,
+        totalSatsClaimed,
         completedReignSats,
         completedReignCount,
         completedReignSeconds: Math.floor(completedReignSeconds),

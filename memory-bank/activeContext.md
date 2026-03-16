@@ -7,6 +7,17 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### LNURL-withdraw One-Tap Sat Claim (Mar 15, 2026)
+- **Problem**: Claiming sats required typing a Lightning address into a form — friction-heavy, especially on mobile at a chess event.
+- **Solution**: Implemented LNURL-withdraw (LUD-03) — the standard protocol for "server pays user." Player taps one button, wallet opens, confirms, sats arrive.
+- **Flow**: Player taps "Claim X sats" → server creates LNURL-withdraw session → deep link opens Phoenix/Zeus/Alby → wallet sends invoice → server pays it → done
+- **New endpoints**: `POST /api/claim/create` (generates LNURL), `GET /api/claim/lnurl` (wallet gets withdraw params), `GET /api/claim/callback` (wallet sends invoice, server pays), `GET /api/claim/status/:k1` (frontend polls)
+- **Player UI**: Big gold "Claim X sats" button as primary action. Shows QR code + "Open in Wallet" deep link. Auto-opens wallet on mobile. Polls for completion, shows success/error. Old Lightning address form hidden in collapsed `<details>` as fallback.
+- **Shared code**: Exported `encodeLnurl()` from `auth/lightning.js` for reuse
+- **In-memory sessions**: `pendingWithdraws` Map with 5min TTL, auto-cleanup every 2min
+- **Files changed**: `auth/lightning.js` (export encodeLnurl), `api.js` (+4 endpoints, ~150 lines), `player.ejs` (new claim UI + JS)
+- Status: **deployed to Railway** (commit c9d2543)
+
 ### King Always Black + Simplified Throne Layout (Mar 15, 2026)
 - **Design decision**: King ALWAYS plays black. No more random color assignment. Removed `Math.random()` from `database.js createGame()` — now hardcodes `kingColor = 'black'`.
 - **Throne layout simplified**: Challenger (white) ALWAYS on left, King (black) ALWAYS on right. Board ALWAYS standard orientation (white bottom, ranks 8→1 top→bottom, files a→h left→right). Removed all `isKingWhite` conditional logic.
