@@ -713,30 +713,78 @@ router.get('/admin/payouts', requireAdmin, (req, res) => {
     res.json({ payouts: db.getAllPayouts() });
 });
 
-// Reconcile stuck pending payouts — marks pending payouts without payment_hash as failed
-router.post('/admin/reconcile-payouts', requireAdmin, (req, res) => {
+// Reconcile stuck pending payouts — checks LND for actual payment status
+router.post('/admin/reconcile-payouts', requireAdmin, async (req, res) => {
     const pending = db.getPendingPayouts();
-    let fixed = 0;
-    for (const payout of pending) {
-        if (!payout.payment_hash) {
-            // No payment hash = payment was never confirmed by LND → safe to mark failed
-            db.updatePayout(payout.id, {
-                status: 'failed',
-                error_message: 'Reconciled: no payment confirmation received (connection lost during processing)'
-            });
-            fixed++;
-            console.log(`🔧 Reconciled payout #${payout.id}: ${payout.amount_sats} sats for ${payout.player_name} → failed (no payment hash)`);
-        }
-        // Payouts WITH a payment_hash but still pending = payment succeeded but status update was lost
-        // These need manual verification via LND — flag them but don't auto-resolve
+    if (pending.length === 0) {
+        return res.json({ success: true, message: 'No pending payouts to reconcile.' });
     }
-    const withHash = pending.filter(p => p.payment_hash).length;
+
+    let markedCompleted = 0;
+    let markedFailed = 0;
+    let couldNotVerify = 0;
+    const details = [];
+
+    try {
+        // Fetch recent payments from LND to cross-reference
+        const lndPayments = await lightning.listPayments(200);
+        
+        // Build a lookup: amount_sat → array of successful payments
+        // LND payment status: SUCCEEDED, FAILED, IN_FLIGHT, UNKNOWN
+        const succeededPayments = lndPayments.filter(p => p.status === 'SUCCEEDED');
+        
+        for (const payout of pending) {
+            // Strategy 1: Match by amount + time window (±5 minutes of payout creation)
+            const payoutTime = new Date(payout.created_at + 'Z').getTime() / 1000; // unix seconds
+            const matchWindow = 300; // 5 minutes
+            
+            const match = succeededPayments.find(lndPay => {
+                const lndAmount = parseInt(lndPay.value_sat || lndPay.value || '0');
+                const lndTime = parseInt(lndPay.creation_date || '0');
+                return lndAmount === payout.amount_sats && 
+                       Math.abs(lndTime - payoutTime) < matchWindow;
+            });
+
+            if (match) {
+                // Payment found in LND as SUCCEEDED — mark completed and deduct balance
+                db.updatePayout(payout.id, {
+                    payment_hash: match.payment_hash,
+                    status: 'completed',
+                    completed_at: new Date().toISOString()
+                });
+                db.deductSatsFromPlayer(payout.player_id, payout.amount_sats);
+                markedCompleted++;
+                details.push(`✅ Payout #${payout.id}: ${payout.amount_sats} sats to ${payout.player_name} → COMPLETED (matched LND payment ${match.payment_hash.substring(0, 16)}...)`);
+                console.log(details[details.length - 1]);
+            } else {
+                // No matching LND payment found — mark as failed (payment never went through)
+                db.updatePayout(payout.id, {
+                    status: 'failed',
+                    error_message: 'Reconciled: no matching successful LND payment found'
+                });
+                markedFailed++;
+                details.push(`❌ Payout #${payout.id}: ${payout.amount_sats} sats to ${payout.player_name} → FAILED (no matching LND payment)`);
+                console.log(details[details.length - 1]);
+            }
+        }
+    } catch (err) {
+        // If LND is unreachable, don't mark anything — report the error
+        console.error('🔧 Reconcile error — could not reach LND:', err.message);
+        return res.status(502).json({
+            success: false,
+            error: `Could not reach LND to verify payments: ${err.message}`,
+            message: 'Reconciliation aborted — no payouts were changed.'
+        });
+    }
+
+    const message = `Reconciled ${pending.length} pending payout(s): ${markedCompleted} completed, ${markedFailed} failed.`;
     res.json({
         success: true,
         totalPending: pending.length,
-        markedFailed: fixed,
-        needsManualReview: withHash,
-        message: `Reconciled ${fixed} stuck payouts as failed.${withHash > 0 ? ` ${withHash} payout(s) have payment hashes and need manual LND verification.` : ''}`
+        markedCompleted,
+        markedFailed,
+        details,
+        message
     });
 });
 

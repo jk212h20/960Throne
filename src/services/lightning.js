@@ -256,11 +256,22 @@ async function isConfigured() {
     }
 }
 
+/**
+ * List recent payments from LND.
+ * Returns array of payment objects with payment_hash, value_sat, status, etc.
+ * @param {number} maxPayments - Maximum number of payments to return (default 100)
+ */
+async function listPayments(maxPayments = 100) {
+    const result = await lndRequest(`/v1/payments?include_incomplete=true&max_payments=${maxPayments}&reversed=true`);
+    return result.payments || [];
+}
+
 module.exports = {
     getNodeInfo,
     getWalletBalance,
     getChannelBalance,
     payInvoice,
+    listPayments,
     resolveLightningAddress,
     requestInvoice,
     payLightningAddress,

@@ -7,6 +7,16 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Fix LNURL-withdraw 502 Error + Stuck Pending Payouts (Mar 15, 2026)
+- **Problem 1**: Phoenix wallet showed "502 error" when claiming sats via LNURL-withdraw, even though sats arrived. The `/claim/callback` handler was `await`ing `lightning.payInvoice()` synchronously — if LND took >30s, Railway's reverse proxy killed the connection with 502.
+- **Problem 2**: Payouts stuck as "pending" forever in admin panel. The 502 killed the connection before `db.updatePayout()` could set status to 'completed'.
+- **Problem 3**: `payResult.paymentHash` was wrong — LND returns `payment_hash` (snake_case), not `paymentHash` (camelCase). Status was storing `undefined`.
+- **Fix**: Callback now responds `{ status: "OK" }` immediately, then pays invoice in background via `processWithdrawPayment()` async function. Background function updates payout status + session when payment completes/fails.
+- **Admin reconcile**: New `POST /api/admin/reconcile-payouts` endpoint + "Reconcile Pending" button in admin Payout History. Marks pending payouts without payment_hash as 'failed' (player balance was never deducted, so no money lost).
+- **New DB function**: `getPendingPayouts()` — queries payouts with status 'pending' or 'paying'.
+- **Files changed**: `api.js` (callback refactor + reconcile endpoint), `database.js` (getPendingPayouts), `admin.ejs` (reconcile button + JS)
+- Status: **committed** (46edd1f), deploying to Railway
+
 ### LNURL-withdraw One-Tap Sat Claim (Mar 15, 2026)
 - **Problem**: Claiming sats required typing a Lightning address into a form — friction-heavy, especially on mobile at a chess event.
 - **Solution**: Implemented LNURL-withdraw (LUD-03) — the standard protocol for "server pays user." Player taps one button, wallet opens, confirms, sats arrive.
