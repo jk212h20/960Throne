@@ -42,116 +42,8 @@
     </div>
 
     <div class="flex-1 flex">
-        <!-- Left: King & Game (70%) -->
-        <div class="flex-[7] flex flex-col">
-            <!-- Compact King Info Bar -->
-            <div class="px-6 py-3 border-b border-gray-800 flex items-center justify-between" id="king-section">
-                <% if (state.king) { %>
-                <div class="flex items-center gap-4">
-                    <div class="flex items-center gap-2">
-                        <%- include('partials/icon', { name: 'crown', size: 28, cls: 'text-throne-gold' }) %>
-                        <span class="text-2xl font-bold text-throne-gold" id="king-name"><%= state.king.name %></span>
-                    </div>
-                    <div class="text-sm text-gray-400">
-                        <span class="font-mono" id="reign-time"><%= Math.floor(state.reignSeconds / 3600) %>:<%= String(Math.floor((state.reignSeconds % 3600) / 60)).padStart(2, '0') %>:<%= String(state.reignSeconds % 60).padStart(2, '0') %></span>
-                        reign · <span class="font-mono" id="win-streak"><%= state.reign ? state.reign.consecutive_wins : 0 %></span> streak
-                    </div>
-                </div>
-                <div class="text-right">
-                    <div class="text-3xl font-mono font-bold text-throne-gold sats-glow" id="sat-counter"><%= state.liveSats.toLocaleString() %></div>
-                    <div class="text-xs text-gray-500">sats this reign (<%= state.config.satRate %>/s)</div>
-                </div>
-                <% } else { %>
-                <div class="text-lg text-gray-500">No King on the Throne</div>
-                <div class="text-sm text-gray-600">Waiting for the first player...</div>
-                <% } %>
-            </div>
-
-            <!-- Active Game / Chess960 Board -->
-            <div class="flex-1 flex items-center justify-center p-4" id="game-section">
-                <% if (state.game) { %>
-                <div class="text-center">
-                    <% const kc = state.game.king_color || 'white'; %>
-                    <!-- Player matchup + game info -->
-                    <div class="flex items-center justify-center gap-3 mb-3">
-                        <span class="<%= kc === 'white' ? 'color-box-white' : 'color-box-black' %> text-lg font-bold flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %> <%= state.game.king_name %></span>
-                        <span class="text-gray-500 text-sm">vs</span>
-                        <span class="<%= kc === 'white' ? 'color-box-black' : 'color-box-white' %> text-lg font-bold flex items-center gap-1"><%- include('partials/icon', { name: 'crossed-swords', size: 16, cls: '' }) %> <%= state.game.challenger_name %></span>
-                        <span class="text-sm text-gray-500 ml-2">Game #<%= state.stats.totalGames + 1 %> · Pos #<%= state.game.chess960_position %> · <span id="game-elapsed" class="font-mono"><%= state.game.elapsed %></span>s</span>
-                    </div>
-                    <!-- Chess960 Full Board — stub for live electronic board integration -->
-                    <div class="inline-block bg-throne-dark rounded-xl p-3 border border-gray-700" id="live-board" data-live-board="true" data-position="<%= state.game.chess960_position %>">
-                        <%
-                          const pieces = state.game.position.pieces;
-                          const isKingWhite = kc === 'white';
-                          const fileLabels = isKingWhite ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
-                          const rankLabels = isKingWhite ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
-                          const backRank = isKingWhite ? pieces : [...pieces].reverse();
-                          const board = [];
-                          if (isKingWhite) {
-                            board.push(backRank.map(p => ({img: 'b' + p})));
-                            board.push(Array(8).fill({img: 'bP'}));
-                            for (let r = 0; r < 4; r++) board.push(Array(8).fill(null));
-                            board.push(Array(8).fill({img: 'wP'}));
-                            board.push(backRank.map(p => ({img: 'w' + p})));
-                          } else {
-                            board.push([...pieces].reverse().map(p => ({img: 'w' + p})));
-                            board.push(Array(8).fill({img: 'wP'}));
-                            for (let r = 0; r < 4; r++) board.push(Array(8).fill(null));
-                            board.push(Array(8).fill({img: 'bP'}));
-                            board.push([...pieces].reverse().map(p => ({img: 'b' + p})));
-                          }
-                        %>
-                        <div class="inline-block">
-                            <% board.forEach((row, r) => { %>
-                            <div class="flex">
-                                <div class="w-5 flex items-center justify-center text-xs text-gray-500 font-mono"><%= rankLabels[r] %></div>
-                                <% row.forEach((sq, c) => { %>
-                                <div class="board-square <%= (r + c) % 2 === 0 ? 'sq-light' : 'sq-dark' %>" data-square="<%= fileLabels[c] %><%= rankLabels[r] %>">
-                                    <% if (sq) { %>
-                                    <img src="/pieces/<%= sq.img %>.svg" class="piece-img" alt="<%= sq.img %>">
-                                    <% } %>
-                                </div>
-                                <% }) %>
-                            </div>
-                            <% }) %>
-                            <div class="flex">
-                                <div class="w-5"></div>
-                                <% fileLabels.forEach(f => { %>
-                                <div class="board-square" style="height:auto;"><span class="text-xs text-gray-500 font-mono"><%= f %></span></div>
-                                <% }) %>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Clock Display -->
-                    <%
-                      const tcBase = state.config.timeControl.base;
-                      const clockWhite = (dgt && dgt.clock) ? dgt.clock.white : tcBase;
-                      const clockBlack = (dgt && dgt.clock) ? dgt.clock.black : tcBase;
-                      const fmtClock = (s) => Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
-                    %>
-                    <div id="dgt-clock-container" style="display:flex;align-items:center;justify-content:center;gap:24px;margin-top:12px;">
-                        <div style="text-align:center">
-                            <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">♔ White</div>
-                            <div id="dgt-clock-white" class="dgt-clock dgt-clock-active"><%= fmtClock(clockWhite) %></div>
-                        </div>
-                        <div style="text-align:center">
-                            <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">♚ Black</div>
-                            <div id="dgt-clock-black" class="dgt-clock dgt-clock-active"><%= fmtClock(clockBlack) %></div>
-                        </div>
-                    </div>
-                </div>
-                <% } else if (state.king) { %>
-                <div class="text-center text-gray-500">
-                    <div class="mb-3"><%- include('partials/icon', { name: 'hourglass', size: 48, cls: 'text-gray-500' }) %></div>
-                    <div class="text-xl">Waiting for challenger...</div>
-                </div>
-                <% } %>
-            </div>
-        </div>
-
-        <!-- Right: Queue (30%) -->
-        <div class="flex-[3] bg-throne-dark border-l border-gray-800 flex flex-col">
+        <!-- Left: Queue & QR (30%) -->
+        <div class="flex-[3] bg-throne-dark border-r border-gray-800 flex flex-col">
             <div class="p-4 border-b border-gray-800">
                 <h2 class="text-lg font-bold text-gray-300 flex items-center gap-2"><%- include('partials/icon', { name: 'queue', size: 20, cls: '' }) %> Challengers</h2>
             </div>
@@ -195,6 +87,128 @@
                 <% } %>
             </div>
         </div>
+
+        <!-- Right: King & Game (70%) -->
+        <div class="flex-[7] flex flex-col">
+            <!-- Compact King Info Bar -->
+            <div class="px-6 py-3 border-b border-gray-800 flex items-center justify-between" id="king-section">
+                <% if (state.king) { %>
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <%- include('partials/icon', { name: 'crown', size: 28, cls: 'text-throne-gold' }) %>
+                        <span class="text-2xl font-bold text-throne-gold" id="king-name"><%= state.king.name %></span>
+                    </div>
+                    <div class="text-lg text-gray-400 flex items-center gap-2">
+                        <span class="font-mono text-2xl" id="reign-time"><%= Math.floor(state.reignSeconds / 3600) %>:<%= String(Math.floor((state.reignSeconds % 3600) / 60)).padStart(2, '0') %>:<%= String(state.reignSeconds % 60).padStart(2, '0') %></span>
+                        <span>reign ·</span> <span class="font-mono text-2xl" id="win-streak"><%= state.reign ? state.reign.consecutive_wins : 0 %></span> <span>streak</span>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-3xl font-mono font-bold text-throne-gold sats-glow" id="sat-counter"><%= state.liveSats.toLocaleString() %></div>
+                    <div class="text-xs text-gray-500">sats this reign (<%= state.config.satRate %>/s)</div>
+                </div>
+                <% } else { %>
+                <div class="text-lg text-gray-500">No King on the Throne</div>
+                <div class="text-sm text-gray-600">Waiting for the first player...</div>
+                <% } %>
+            </div>
+
+            <!-- Active Game / Chess960 Board -->
+            <div class="flex-1 flex items-center justify-center p-4" id="game-section">
+                <% if (state.game) { %>
+                <div class="flex items-center justify-center gap-6">
+                    <% const kc = state.game.king_color || 'white'; %>
+                    <%
+                      // Determine which player is white and which is black
+                      const whiteName = kc === 'white' ? state.game.king_name : state.game.challenger_name;
+                      const blackName = kc === 'white' ? state.game.challenger_name : state.game.king_name;
+                      const whiteIsKing = kc === 'white';
+                      const blackIsKing = kc === 'black';
+                    %>
+                    <!-- Left side: White player + clock -->
+                    <div class="flex flex-col items-center gap-3" id="white-side">
+                        <div class="color-box-white text-lg font-bold flex items-center gap-1">
+                            <% if (whiteIsKing) { %><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %><% } else { %><%- include('partials/icon', { name: 'crossed-swords', size: 16, cls: '' }) %><% } %>
+                            <%= whiteName %>
+                        </div>
+                        <%
+                          const tcBase = state.config.timeControl.base;
+                          const clockWhite = (dgt && dgt.clock) ? dgt.clock.white : tcBase;
+                          const fmtClock = (s) => Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+                        %>
+                        <div id="dgt-clock-white" class="dgt-clock dgt-clock-active"><%= fmtClock(clockWhite) %></div>
+                    </div>
+
+                    <!-- Center: Board + game info -->
+                    <div class="text-center">
+                        <div class="text-sm text-gray-500 mb-2">Game #<%= state.stats.totalGames + 1 %> · Pos #<%= state.game.chess960_position %></div>
+                    <!-- Chess960 Full Board -->
+                    <div class="inline-block bg-throne-dark rounded-xl p-3 border border-gray-700" id="live-board" data-live-board="true" data-position="<%= state.game.chess960_position %>">
+                        <%
+                          const pieces = state.game.position.pieces;
+                          const isKingWhite = kc === 'white';
+                          const fileLabels = isKingWhite ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
+                          const rankLabels = isKingWhite ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+                          const backRank = isKingWhite ? pieces : [...pieces].reverse();
+                          const board = [];
+                          if (isKingWhite) {
+                            board.push(backRank.map(p => ({img: 'b' + p})));
+                            board.push(Array(8).fill({img: 'bP'}));
+                            for (let r = 0; r < 4; r++) board.push(Array(8).fill(null));
+                            board.push(Array(8).fill({img: 'wP'}));
+                            board.push(backRank.map(p => ({img: 'w' + p})));
+                          } else {
+                            board.push([...pieces].reverse().map(p => ({img: 'w' + p})));
+                            board.push(Array(8).fill({img: 'wP'}));
+                            for (let r = 0; r < 4; r++) board.push(Array(8).fill(null));
+                            board.push(Array(8).fill({img: 'bP'}));
+                            board.push([...pieces].reverse().map(p => ({img: 'b' + p})));
+                          }
+                        %>
+                        <div class="inline-block">
+                            <% board.forEach((row, r) => { %>
+                            <div class="flex">
+                                <div class="w-5 flex items-center justify-center text-xs text-gray-500 font-mono"><%= rankLabels[r] %></div>
+                                <% row.forEach((sq, c) => { %>
+                                <div class="board-square <%= (r + c) % 2 === 0 ? 'sq-light' : 'sq-dark' %>" data-square="<%= fileLabels[c] %><%= rankLabels[r] %>">
+                                    <% if (sq) { %>
+                                    <img src="/pieces/<%= sq.img %>.svg" class="piece-img" alt="<%= sq.img %>">
+                                    <% } %>
+                                </div>
+                                <% }) %>
+                            </div>
+                            <% }) %>
+                            <div class="flex">
+                                <div class="w-5"></div>
+                                <% fileLabels.forEach(f => { %>
+                                <div class="board-square" style="height:auto;"><span class="text-xs text-gray-500 font-mono"><%= f %></span></div>
+                                <% }) %>
+                            </div>
+                        </div>
+                    </div>
+                    </div><!-- end center board column -->
+
+                    <!-- Right side: Black player + clock -->
+                    <div class="flex flex-col items-center gap-3" id="black-side">
+                        <div class="color-box-black text-lg font-bold flex items-center gap-1">
+                            <% if (blackIsKing) { %><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %><% } else { %><%- include('partials/icon', { name: 'crossed-swords', size: 16, cls: '' }) %><% } %>
+                            <%= blackName %>
+                        </div>
+                        <%
+                          const clockBlack = (dgt && dgt.clock) ? dgt.clock.black : tcBase;
+                        %>
+                        <div id="dgt-clock-black" class="dgt-clock dgt-clock-active"><%= fmtClock(clockBlack) %></div>
+                    </div>
+                </div><!-- end flex row: white | board | black -->
+                <% } else if (state.king) { %>
+                <div class="text-center text-gray-500">
+                    <div class="mb-3"><%- include('partials/icon', { name: 'hourglass', size: 48, cls: 'text-gray-500' }) %></div>
+                    <div class="text-xl">Waiting for challenger...</div>
+                </div>
+                <% } %>
+            </div>
+        </div>
+
     </div>
 
     <!-- Recent Games Ticker (bottom bar) -->
@@ -248,12 +262,6 @@
             const totalEl = document.getElementById('total-sats-earned');
             if (totalEl) totalEl.textContent = (baseSats + currentReignSats).toLocaleString();
 
-            // Game elapsed timer
-            if (gameStart) {
-                const gameSec = Math.floor((now - gameStart) / 1000);
-                const el = document.getElementById('game-elapsed');
-                if (el) el.textContent = gameSec;
-            }
         }
 
         setInterval(updateCounters, 1000);
@@ -379,26 +387,8 @@
         }
 
         function ensureClockDisplay() {
-            if (document.getElementById('dgt-clock-container')) return;
-            const gameSection = document.getElementById('game-section');
-            if (!gameSection) return;
-            // Insert clock container after the board
-            const container = document.createElement('div');
-            container.id = 'dgt-clock-container';
-            container.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:24px;margin-top:12px;';
-            container.innerHTML = `
-                <div style="text-align:center">
-                    <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">♔ White</div>
-                    <div id="dgt-clock-white" class="dgt-clock dgt-clock-active">` + formatClockTime(clockWhite) + `</div>
-                </div>
-                <div style="text-align:center">
-                    <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">♚ Black</div>
-                    <div id="dgt-clock-black" class="dgt-clock dgt-clock-inactive">` + formatClockTime(clockBlack) + `</div>
-                </div>
-            `;
-            // Append to the wrapper div inside game-section
-            const wrapper = gameSection.querySelector('.text-center') || gameSection;
-            wrapper.appendChild(container);
+            // Clocks are now rendered inline in white-side and black-side panels
+            // Nothing to create dynamically — just verify elements exist
         }
 
         function renderClockDisplay() {
