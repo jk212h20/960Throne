@@ -266,8 +266,6 @@
             // When DGT is active, skip reloads — the live board is what matters
         }
         socket.on('new_king', safeReload);
-        socket.on('game_started', safeReload);
-        socket.on('game_ended', safeReload);
         socket.on('queue_updated', safeReload);
         socket.on('on_deck', safeReload);
         socket.on('player_removed_timeout', safeReload);
@@ -356,8 +354,31 @@
         }
 
         // ─── DGT Clock Display ───────────────────────────
+        const tcBase = <%- state.config.timeControl.base %>;
+        const tcIncrement = <%- state.config.timeControl.increment %>;
+        let clockWhite = tcBase;
+        let clockBlack = tcBase;
+        let dgtClockOverride = false; // true once real DGT clock data arrives
+        let clockTickTimer = null;
+        let lastClockTick = null; // timestamp of last tick
+        // Track whose turn it is: 'white' starts, toggles on board changes
+        let currentTurn = 'white';
+        let moveCount = 0; // track board changes to know whose turn it is
+        let lastBoardJson = null; // detect board changes for turn toggling
+
+        // On page load, if game already in progress, deduct elapsed time from white's clock
+        // (we assume white started and roughly half the elapsed time is white's, half black's)
+        // This is an approximation — DGT clock data will override when available
+        if (gameStart) {
+            const elapsedSec = (Date.now() - gameStart) / 1000;
+            // Simple split: white loses half elapsed, black loses half
+            // This way both clocks show reasonable values on page reload
+            clockWhite = Math.max(0, tcBase - elapsedSec / 2);
+            clockBlack = Math.max(0, tcBase - elapsedSec / 2);
+        }
+
         function formatClockTime(seconds) {
-            if (seconds == null) return '--:--';
+            if (seconds == null || seconds < 0) seconds = 0;
             const m = Math.floor(seconds / 60);
             const s = seconds % 60;
             return m + ':' + String(s).padStart(2, '0');
@@ -374,11 +395,11 @@
             container.innerHTML = `
                 <div style="text-align:center">
                     <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">♔ White</div>
-                    <div id="dgt-clock-white" class="dgt-clock dgt-clock-inactive">--:--</div>
+                    <div id="dgt-clock-white" class="dgt-clock dgt-clock-active">` + formatClockTime(clockWhite) + `</div>
                 </div>
                 <div style="text-align:center">
                     <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">♚ Black</div>
-                    <div id="dgt-clock-black" class="dgt-clock dgt-clock-inactive">--:--</div>
+                    <div id="dgt-clock-black" class="dgt-clock dgt-clock-inactive">` + formatClockTime(clockBlack) + `</div>
                 </div>
             `;
             // Append to the wrapper div inside game-section
@@ -386,17 +407,49 @@
             wrapper.appendChild(container);
         }
 
-        function updateClockDisplay(clock) {
-            if (!clock) return;
-            ensureClockDisplay();
+        function renderClockDisplay() {
             const whiteEl = document.getElementById('dgt-clock-white');
             const blackEl = document.getElementById('dgt-clock-black');
-            if (whiteEl) whiteEl.textContent = formatClockTime(clock.white);
-            if (blackEl) blackEl.textContent = formatClockTime(clock.black);
-            // Determine active clock: the one with less time (it's ticking) — or use turn info if available
-            // Simple heuristic: if both are > 0, both show as active; if one is counting down differently, highlight it
-            if (whiteEl) whiteEl.className = 'dgt-clock ' + (clock.white > 0 ? 'dgt-clock-active' : 'dgt-clock-inactive');
-            if (blackEl) blackEl.className = 'dgt-clock ' + (clock.black > 0 ? 'dgt-clock-active' : 'dgt-clock-inactive');
+            if (whiteEl) whiteEl.textContent = formatClockTime(Math.round(clockWhite));
+            if (blackEl) blackEl.textContent = formatClockTime(Math.round(clockBlack));
+            // Active clock styling
+            if (whiteEl) whiteEl.className = 'dgt-clock ' + (currentTurn === 'white' ? 'dgt-clock-active' : 'dgt-clock-inactive');
+            if (blackEl) blackEl.className = 'dgt-clock ' + (currentTurn === 'black' ? 'dgt-clock-active' : 'dgt-clock-inactive');
+        }
+
+        function updateClockDisplay(clock) {
+            if (!clock) return;
+            // DGT hardware clock data overrides software countdown
+            dgtClockOverride = true;
+            clockWhite = clock.white;
+            clockBlack = clock.black;
+            ensureClockDisplay();
+            renderClockDisplay();
+        }
+
+        // Software clock countdown — ticks the active player's clock down every 100ms
+        function startClockCountdown() {
+            if (clockTickTimer) return; // already running
+            lastClockTick = Date.now();
+            clockTickTimer = setInterval(() => {
+                if (dgtClockOverride) return; // DGT hardware is providing clock data
+                const now = Date.now();
+                const elapsed = (now - lastClockTick) / 1000;
+                lastClockTick = now;
+                if (currentTurn === 'white') {
+                    clockWhite = Math.max(0, clockWhite - elapsed);
+                } else {
+                    clockBlack = Math.max(0, clockBlack - elapsed);
+                }
+                renderClockDisplay();
+            }, 100);
+        }
+
+        // Start countdown if there's an active game
+        if (gameStart) {
+            // Immediately update the server-rendered clock HTML with elapsed-adjusted values
+            renderClockDisplay();
+            startClockCountdown();
         }
 
         socket.on('dgt_board', (data) => {
@@ -408,6 +461,23 @@
 
             // Update board if board data present
             if (data.board) {
+                // Detect board change → toggle turn for software clock
+                const boardJson = JSON.stringify(data.board);
+                if (lastBoardJson && boardJson !== lastBoardJson && !dgtClockOverride) {
+                    // Board changed = a move was made. Add increment to the player who just moved, toggle turn.
+                    if (currentTurn === 'white') {
+                        clockWhite += tcIncrement;
+                    } else {
+                        clockBlack += tcIncrement;
+                    }
+                    currentTurn = currentTurn === 'white' ? 'black' : 'white';
+                    moveCount++;
+                    renderClockDisplay();
+                    // Start countdown if not already running
+                    startClockCountdown();
+                }
+                lastBoardJson = boardJson;
+
                 let boardEl = document.getElementById('live-board');
                 // Create board dynamically if it doesn't exist yet
                 if (!boardEl) {
@@ -447,6 +517,34 @@
             // Update clock display AFTER board creation (so createDgtBoard doesn't nuke it)
             if (data.clock) {
                 updateClockDisplay(data.clock);
+            }
+        });
+
+        // Handle game lifecycle events for clock management
+        socket.on('game_started', (data) => {
+            if (dgtActive) {
+                // Reset clocks for new game
+                const tc = data.timeControl || { base: tcBase, increment: tcIncrement };
+                clockWhite = tc.base;
+                clockBlack = tc.base;
+                currentTurn = 'white';
+                moveCount = 0;
+                lastBoardJson = null;
+                dgtClockOverride = false;
+                gameStart = Date.now();
+                renderClockDisplay();
+                startClockCountdown();
+            } else {
+                safeReload();
+            }
+        });
+
+        socket.on('game_ended', (data) => {
+            if (dgtActive) {
+                // Stop clock countdown
+                if (clockTickTimer) { clearInterval(clockTickTimer); clockTickTimer = null; }
+            } else {
+                safeReload();
             }
         });
     </script>

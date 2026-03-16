@@ -58,6 +58,22 @@
                 — playing <span class="font-bold <%= myColor === 'white' ? 'color-box-white' : 'color-box-black' %>" style="font-size: 0.875rem;"><%= myColor === 'white' ? 'White' : 'Black' %></span>
             </div>
             <div class="text-sm text-yellow-400 mt-2 flex items-center justify-center gap-1"><%- include('partials/icon', { name: 'stopwatch', size: 16, cls: 'text-yellow-400' }) %> Started <span id="game-elapsed">0:00</span> ago</div>
+
+            <!-- Chess Clocks -->
+            <%
+              const tcBaseG = state.config.timeControl.base;
+              const fmtClockG = (s) => Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+            %>
+            <div id="game-clock-container" style="display:flex;align-items:center;justify-content:center;gap:16px;margin-top:12px;">
+                <div style="text-align:center">
+                    <div style="font-size:11px;color:#9ca3af;margin-bottom:2px;">♔ White</div>
+                    <div id="game-clock-white" style="font-family:'Courier New',monospace;font-size:1.5rem;font-weight:bold;padding:6px 14px;border-radius:8px;min-width:80px;text-align:center;background:rgba(34,197,94,0.15);border:2px solid rgba(34,197,94,0.4);color:#22c55e;"><%= fmtClockG(tcBaseG) %></div>
+                </div>
+                <div style="text-align:center">
+                    <div style="font-size:11px;color:#9ca3af;margin-bottom:2px;">♚ Black</div>
+                    <div id="game-clock-black" style="font-family:'Courier New',monospace;font-size:1.5rem;font-weight:bold;padding:6px 14px;border-radius:8px;min-width:80px;text-align:center;background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.1);color:#6b7280;"><%= fmtClockG(tcBaseG) %></div>
+                </div>
+            </div>
         </div>
 
         <!-- Report Result -->
@@ -161,19 +177,68 @@
             }
         }
 
-        // Game elapsed timer
+        // Game elapsed timer + chess clock countdown
         <% if (state.game && state.game.started_at) { %>
         (function() {
             const gameStart = new Date('<%- state.game.started_at %><%- state.game.started_at.endsWith("Z") ? "" : "Z" %>').getTime();
             const el = document.getElementById('game-elapsed');
-            function tickGame() {
+            const tcBase = <%- state.config.timeControl.base %>;
+            const elapsedSec = (Date.now() - gameStart) / 1000;
+            // Approximate: split elapsed equally between both clocks
+            let cW = Math.max(0, tcBase - elapsedSec / 2);
+            let cB = Math.max(0, tcBase - elapsedSec / 2);
+            let turn = 'white';
+            let lastTick = Date.now();
+            let dgtOverride = false;
+
+            function fmtCl(s) { if (s < 0) s = 0; return Math.floor(s/60) + ':' + String(Math.floor(s)%60).padStart(2,'0'); }
+
+            function renderGameClocks() {
+                const wEl = document.getElementById('game-clock-white');
+                const bEl = document.getElementById('game-clock-black');
+                if (wEl) {
+                    wEl.textContent = fmtCl(cW);
+                    wEl.style.background = turn === 'white' ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.05)';
+                    wEl.style.border = turn === 'white' ? '2px solid rgba(34,197,94,0.4)' : '2px solid rgba(255,255,255,0.1)';
+                    wEl.style.color = turn === 'white' ? '#22c55e' : '#6b7280';
+                }
+                if (bEl) {
+                    bEl.textContent = fmtCl(cB);
+                    bEl.style.background = turn === 'black' ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.05)';
+                    bEl.style.border = turn === 'black' ? '2px solid rgba(34,197,94,0.4)' : '2px solid rgba(255,255,255,0.1)';
+                    bEl.style.color = turn === 'black' ? '#22c55e' : '#6b7280';
+                }
+            }
+
+            renderGameClocks();
+
+            setInterval(() => {
+                // Elapsed timer
                 const sec = Math.floor((Date.now() - gameStart) / 1000);
                 const m = Math.floor(sec / 60);
                 const s = sec % 60;
                 if (el) el.textContent = m + ':' + String(s).padStart(2, '0');
-            }
-            tickGame();
-            setInterval(tickGame, 1000);
+
+                // Clock countdown (unless DGT override)
+                if (!dgtOverride) {
+                    const now = Date.now();
+                    const dt = (now - lastTick) / 1000;
+                    lastTick = now;
+                    if (turn === 'white') cW = Math.max(0, cW - dt);
+                    else cB = Math.max(0, cB - dt);
+                    renderGameClocks();
+                }
+            }, 200);
+
+            // Listen for DGT clock updates
+            socket.on('dgt_board', (data) => {
+                if (data.clock) {
+                    dgtOverride = true;
+                    cW = data.clock.white;
+                    cB = data.clock.black;
+                    renderGameClocks();
+                }
+            });
         })();
         <% } %>
 
