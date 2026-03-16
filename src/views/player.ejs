@@ -84,9 +84,9 @@
             </div>
         </div>
 
-        <!-- ====== NOT IN QUEUE — INLINE JOIN WITH SCAN/CODE ====== -->
+        <!-- ====== NOT IN QUEUE — INLINE JOIN WITH SCAN/CODE (hidden — kept for future use) ====== -->
         <% } else if (!state.king || state.king.id !== player.id) { %>
-        <div class="card mb-4">
+        <div class="card mb-4" style="display:none;">
             <div class="text-lg font-bold mb-2 text-center">Ready to play?</div>
             <% if (state.king) { %>
             <div class="text-gray-400 mb-4 text-center">
