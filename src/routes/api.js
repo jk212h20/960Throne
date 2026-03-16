@@ -27,7 +27,8 @@ function requirePlayer(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-    const adminPassword = process.env.ADMIN_PASSWORD || 'changeme';
+    const dbPassword = db.getConfig('admin_password_override');
+    const adminPassword = dbPassword || process.env.ADMIN_PASSWORD || 'changeme';
     const provided = req.cookies?.admin_token || req.headers['x-admin-token'];
     if (provided !== adminPassword) {
         return res.status(403).json({ error: 'Admin access required' });
@@ -360,9 +361,15 @@ router.post('/telegram/unlink', requirePlayer, (req, res) => {
 // Admin API
 // ============================================================
 
+// Helper: get current admin password (DB override takes priority over env var)
+function getAdminPassword() {
+    const dbPassword = db.getConfig('admin_password_override');
+    return dbPassword || process.env.ADMIN_PASSWORD || 'changeme';
+}
+
 router.post('/admin/login', (req, res) => {
     const { password } = req.body;
-    const adminPassword = process.env.ADMIN_PASSWORD || 'changeme';
+    const adminPassword = getAdminPassword();
     if (password !== adminPassword) {
         return res.status(401).json({ error: 'Invalid admin password' });
     }
@@ -489,11 +496,43 @@ router.get('/admin/payouts', requireAdmin, (req, res) => {
     res.json({ payouts: db.getAllPayouts() });
 });
 
+// Immediate Reset
+router.post('/admin/immediate-reset', requireAdmin, (req, res) => {
+    const { password } = req.body;
+    const adminPassword = getAdminPassword();
+    if (password !== adminPassword) {
+        return res.status(403).json({ error: 'Invalid password' });
+    }
+    const result = gameEngine.immediateReset();
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+});
+
+// Change Admin Password
+router.post('/admin/change-password', requireAdmin, (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'Current and new password required' });
+    }
+    if (newPassword.length < 4) {
+        return res.status(400).json({ error: 'New password must be at least 4 characters' });
+    }
+    const adminPassword = getAdminPassword();
+    if (currentPassword !== adminPassword) {
+        return res.status(403).json({ error: 'Current password is incorrect' });
+    }
+    // Store the new password as a DB config override
+    db.setConfig('admin_password_override', newPassword);
+    // Update the admin cookie to the new password so they stay logged in
+    res.cookie('admin_token', newPassword, { httpOnly: true, maxAge: 10 * 365 * 24 * 60 * 60 * 1000, path: '/' });
+    res.json({ success: true, message: 'Admin password changed successfully' });
+});
+
 // Scheduled Reset
 router.post('/admin/schedule-reset', requireAdmin, (req, res) => {
     const { resetAt, password } = req.body;
     // Double-check password for this high-security action
-    const adminPassword = process.env.ADMIN_PASSWORD || 'changeme';
+    const adminPassword = getAdminPassword();
     if (password !== adminPassword) {
         return res.status(403).json({ error: 'Password required to schedule a reset' });
     }

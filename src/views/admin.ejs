@@ -222,6 +222,39 @@
                 </div>
             </div>
 
+            <!-- Immediate Reset -->
+            <div class="card">
+                <h2 class="text-lg font-bold mb-3">⚡ Reset Event Now</h2>
+                <p class="text-xs text-gray-500 mb-3">Immediately reset all event data — stats, sats, games, and reigns. Player accounts are kept. A backup is created automatically.</p>
+                <div class="space-y-2">
+                    <div>
+                        <label class="text-xs text-gray-400">Enter admin password to confirm</label>
+                        <input type="password" id="immediate-reset-password" class="input text-sm" placeholder="Admin password">
+                    </div>
+                    <button onclick="immediateReset()" class="w-full text-sm bg-red-900 hover:bg-red-800 text-red-300 px-3 py-2 rounded">⚡ Reset Event Now</button>
+                </div>
+            </div>
+
+            <!-- Change Admin Password -->
+            <div class="card">
+                <h2 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'key', size: 20, cls: '' }) %> Change Admin Password</h2>
+                <div class="space-y-2">
+                    <div>
+                        <label class="text-xs text-gray-400">Current password</label>
+                        <input type="password" id="current-password" class="input text-sm" placeholder="Current password">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">New password</label>
+                        <input type="password" id="new-password" class="input text-sm" placeholder="New password">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Confirm new password</label>
+                        <input type="password" id="confirm-password" class="input text-sm" placeholder="Confirm new password">
+                    </div>
+                    <button onclick="changePassword()" class="w-full text-sm bg-purple-900 hover:bg-purple-800 text-purple-300 px-3 py-2 rounded flex items-center justify-center gap-1"><%- include('partials/icon', { name: 'key', size: 14, cls: '' }) %> Change Password</button>
+                </div>
+            </div>
+
             <!-- Scheduled Reset -->
             <div class="card <%= scheduledReset ? 'border-red-700' : '' %>">
                 <h2 class="text-lg font-bold mb-3">🧹 Scheduled Reset</h2>
@@ -434,6 +467,34 @@
             `;
         }
 
+        // Immediate Reset
+        async function immediateReset() {
+            const pw = document.getElementById('immediate-reset-password').value;
+            if (!pw) return alert('Enter admin password to confirm');
+            if (!confirm('⚠️ RESET ALL EVENT DATA NOW?\n\nThis will immediately clear ALL stats, sats, games, and reigns.\nPlayer accounts will be kept.\nA backup is created automatically.')) return;
+            if (await api('/api/admin/immediate-reset', { password: pw })) {
+                alert('Event data has been reset!');
+                setTimeout(() => location.reload(), 500);
+            }
+        }
+
+        // Change Admin Password
+        async function changePassword() {
+            const current = document.getElementById('current-password').value;
+            const newPw = document.getElementById('new-password').value;
+            const confirm = document.getElementById('confirm-password').value;
+            if (!current || !newPw || !confirm) return alert('All fields are required');
+            if (newPw !== confirm) return alert('New passwords do not match');
+            if (newPw.length < 4) return alert('New password must be at least 4 characters');
+            const result = await api('/api/admin/change-password', { currentPassword: current, newPassword: newPw });
+            if (result) {
+                alert('Password changed successfully!');
+                document.getElementById('current-password').value = '';
+                document.getElementById('new-password').value = '';
+                document.getElementById('confirm-password').value = '';
+            }
+        }
+
         // Scheduled Reset
         async function scheduleReset() {
             const dt = document.getElementById('reset-datetime').value;
@@ -521,6 +582,14 @@
                 el.style.color = '#eab308';
                 el.textContent = '🟡 Waiting for DGT board';
             }
+        });
+
+        // Live QR update on admin page too
+        socket.on('venue_code_updated', (data) => {
+            const qrImg = document.getElementById('venue-qr-img');
+            if (qrImg) qrImg.src = '/api/venue-qr.png?t=' + Date.now();
+            // Reload to update code text / expiry
+            setTimeout(() => location.reload(), 1000);
         });
 
         socket.on('game_started', () => setTimeout(() => location.reload(), 500));

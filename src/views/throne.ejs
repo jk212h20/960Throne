@@ -531,6 +531,23 @@
                 safeReload();
             }
         });
+
+        // Live QR code update — when admin rotates the venue code, update QR + code text immediately
+        socket.on('venue_code_updated', (data) => {
+            // Update the QR image by adding a cache-busting parameter
+            const qrImg = document.querySelector('img[src*="venue-qr.png"]');
+            if (qrImg) {
+                qrImg.src = '/api/venue-qr.png?t=' + Date.now();
+            }
+            // Update the venue code text
+            if (data.code) {
+                const codeEls = document.querySelectorAll('.tracking-\\[0\\.3em\\]');
+                codeEls.forEach(el => { el.textContent = data.code; });
+            }
+        });
+
+        // Also reload on event reset
+        socket.on('event_reset', () => { location.reload(); });
     </script>
 <script src="/vscale.js"></script>
 </body>

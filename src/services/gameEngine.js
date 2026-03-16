@@ -922,6 +922,46 @@ function cancelReset() {
     return { success: true, message: 'Scheduled reset cancelled' };
 }
 
+/**
+ * Immediate event reset — same as scheduled but executes now.
+ */
+function immediateReset() {
+    console.log('🧹 Executing immediate event reset...');
+
+    // Flush any accumulated sats first
+    flushAccumulatedSats();
+
+    // Backup the database before reset
+    const backupPath = db.backupDatabase('pre-reset');
+
+    // End any active reign cleanly
+    const currentReignId = db.getConfig('current_reign_id');
+    if (currentReignId) {
+        const reign = db.getReignById(parseInt(currentReignId));
+        if (reign && !reign.dethroned_at) {
+            const reignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
+            const satRate = parseInt(db.getConfig('sat_rate_per_second') || '21');
+            const finalSats = Math.floor(reignSeconds) * satRate;
+            const satsDelta = finalSats - reign.total_sats_earned;
+            if (satsDelta > 0) db.addSatsToPlayer(reign.king_id, satsDelta);
+            db.endReign(parseInt(currentReignId), reignSeconds, finalSats);
+        }
+    }
+
+    // Cancel any scheduled reset
+    if (scheduledResetTimer) { clearTimeout(scheduledResetTimer); scheduledResetTimer = null; }
+    db.setConfig('scheduled_reset_at', '');
+
+    // Reset all event data
+    db.resetEventData();
+    gameStartTime = null;
+
+    console.log(`🧹 Immediate reset complete. Backup saved at: ${backupPath}`);
+    notifyAdmin(`🧹 Event data has been reset (immediate)! Backup saved. All stats, sats, and games cleared.`);
+    broadcast('event_reset', { backupPath });
+    return { success: true, backupPath };
+}
+
 function executeScheduledReset() {
     console.log('🧹 Executing scheduled event reset...');
     
@@ -1042,6 +1082,7 @@ module.exports = {
     scheduleReset,
     cancelReset,
     getScheduledReset,
+    immediateReset,
     // Sat accounting
     flushAccumulatedSats,
     // Helpers
