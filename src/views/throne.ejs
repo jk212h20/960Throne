@@ -266,14 +266,22 @@
         // Socket events — refresh on state changes
         // dgtActive only suppresses minor updates (on_deck). Structural changes always reload.
         let dgtActive = false;
+        let transitionPending = false; // true when game_ended fired, waiting for game_started
+        let transitionTimer = null;
         function forceReload() { location.reload(); }
         function safeReload() {
             if (!dgtActive) location.reload();
         }
-        socket.on('new_king', forceReload);
-        socket.on('queue_updated', forceReload);
+        // During transition (game just ended, new game may be starting async),
+        // defer reloads to let game_started arrive first.
+        function transitionReload() {
+            if (transitionPending) return; // already waiting — don't reload yet
+            forceReload();
+        }
+        socket.on('new_king', transitionReload);
+        socket.on('queue_updated', transitionReload);
         socket.on('on_deck', safeReload);           // minor — skip during DGT
-        socket.on('player_removed_timeout', forceReload);
+        socket.on('player_removed_timeout', transitionReload);
 
         // DGT Board live updates
         function createDgtBoard() {
@@ -553,11 +561,22 @@
         // Only reload on game_started (which fires after the new game is fully created).
         // Don't reload on game_ended — it fires before callNextChallenger() (async) completes,
         // causing a premature reload with no game state, then another reload when game_started fires.
-        socket.on('game_started', forceReload);
+        socket.on('game_started', () => {
+            // Game is fully created — safe to reload now
+            if (transitionTimer) clearTimeout(transitionTimer);
+            transitionPending = false;
+            forceReload();
+        });
         socket.on('game_ended', () => {
-            // Don't reload — wait for game_started which comes after the new game is created.
-            // If there's no next game (queue empty), game_started won't fire,
-            // but queue_updated will fire and trigger reload.
+            // Enter transition period — callNextChallenger() is async (Bitcoin fetch).
+            // Suppress new_king/queue_updated reloads for up to 5s to let game_started arrive.
+            transitionPending = true;
+            if (transitionTimer) clearTimeout(transitionTimer);
+            transitionTimer = setTimeout(() => {
+                // Timeout: no game_started arrived (queue was empty). Reload now.
+                transitionPending = false;
+                forceReload();
+            }, 5000);
         });
 
         // Live QR code update — when admin rotates the venue code, update QR + code text immediately
