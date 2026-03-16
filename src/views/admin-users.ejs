@@ -104,7 +104,18 @@
             const tbody = document.getElementById('users-tbody');
             tbody.innerHTML = sorted.map(p => `
                 <tr class="border-b border-gray-800 hover:bg-gray-800/50">
-                    <td class="py-2 font-medium">${p.name || '<span class="text-gray-600">(no name)</span>'}</td>
+                    <td class="py-2 font-medium">
+                        <span id="name-display-${p.id}" class="cursor-pointer hover:text-throne-gold" onclick="startRename(${p.id})" title="Click to rename">
+                            ${p.name || '<span class="text-gray-600">(no name)</span>'}
+                        </span>
+                        <span id="name-edit-${p.id}" style="display:none" class="flex items-center gap-1">
+                            <input type="text" id="name-input-${p.id}" value="${(p.name || '').replace(/"/g, '&quot;')}"
+                                class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white w-32"
+                                onkeydown="if(event.key==='Enter')saveRename(${p.id});if(event.key==='Escape')cancelRename(${p.id})">
+                            <button onclick="saveRename(${p.id})" class="text-green-400 hover:text-green-300 text-xs px-1">✓</button>
+                            <button onclick="cancelRename(${p.id})" class="text-red-400 hover:text-red-300 text-xs px-1">✗</button>
+                        </span>
+                    </td>
                     <td class="py-2 text-right text-gray-400">${p.games_played}</td>
                     <td class="py-2 text-right text-throne-gold font-mono">${p.total_sats_earned.toLocaleString()}</td>
                     <td class="py-2 text-right text-green-400 font-mono">${p.total_sats_claimed.toLocaleString()}</td>
@@ -116,6 +127,47 @@
         }
 
         renderTable();
+
+        function startRename(playerId) {
+            document.getElementById('name-display-' + playerId).style.display = 'none';
+            document.getElementById('name-edit-' + playerId).style.display = 'flex';
+            const input = document.getElementById('name-input-' + playerId);
+            input.focus();
+            input.select();
+        }
+
+        function cancelRename(playerId) {
+            document.getElementById('name-display-' + playerId).style.display = '';
+            document.getElementById('name-edit-' + playerId).style.display = 'none';
+        }
+
+        async function saveRename(playerId) {
+            const input = document.getElementById('name-input-' + playerId);
+            const newName = input.value.trim();
+            if (!newName) { cancelRename(playerId); return; }
+
+            input.disabled = true;
+            try {
+                const res = await fetch('/api/admin/rename-player', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ playerId, name: newName })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(data.error || 'Rename failed');
+                    input.disabled = false;
+                    return;
+                }
+                // Update local data and re-render
+                const p = players.find(p => p.id === playerId);
+                if (p) p.name = data.name;
+                renderTable();
+            } catch (err) {
+                alert('Connection error');
+                input.disabled = false;
+            }
+        }
     </script>
 <script src="/vscale.js"></script>
 </body>

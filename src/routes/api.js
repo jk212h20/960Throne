@@ -692,6 +692,19 @@ router.get('/admin/notifications', requireAdmin, (req, res) => {
     res.json({ notifications: db.getUnresolvedNotifications() });
 });
 
+router.post('/admin/rename-player', requireAdmin, (req, res) => {
+    const { playerId, name } = req.body;
+    if (!playerId || !name || !name.trim()) {
+        return res.status(400).json({ error: 'Player ID and name are required' });
+    }
+    const trimmed = name.trim();
+    if (trimmed.length < 1 || trimmed.length > 30) {
+        return res.status(400).json({ error: 'Name must be 1-30 characters' });
+    }
+    db.setPlayerName(playerId, trimmed);
+    res.json({ success: true, name: trimmed });
+});
+
 router.post('/admin/notifications/resolve', requireAdmin, (req, res) => {
     const { id } = req.body;
     if (!id) return res.status(400).json({ error: 'Notification ID required' });
