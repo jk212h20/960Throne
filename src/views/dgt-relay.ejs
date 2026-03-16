@@ -433,27 +433,28 @@
                 // The board field IS the FEN position string (not a 64-char array)
                 const fen = board.fen || board.board;
                 
-                // Extract clock data from the board object (tries multiple field formats)
+                // Extract clock data and route through local countdown system
                 const clock = extractClockFromBoard(board);
                 if (clock) {
                     lastClock = clock;
-                    updateRelayClockDisplay(clock);
+                    onClockSnapshot(clock); // Handles countdown + server push
                 }
                 
-                // ALWAYS push to server on every poll (board + clock).
-                // Let the server decide if anything changed and needs broadcasting.
-                // This ensures clock ticks reach the throne even between moves.
+                // Update board display + push board changes to server
                 if (fen && typeof fen === 'string' && fen.includes('/')) {
                     const placement = fen.split(' ')[0];
                     if (placement !== lastFen) {
                         lastFen = placement;
                         renderBoard(fen);
                         document.getElementById('fen-input').value = placement;
+                        // Push board change to server (clock handled by onClockSnapshot)
+                        pushToServer(fen, clockState.activeSide ? {
+                            white: clockState.white,
+                            black: clockState.black,
+                            activeSide: clockState.activeSide,
+                            running: clockState.running,
+                        } : lastClock);
                     }
-                    // Push every poll cycle — server will broadcast if clock changed
-                    pushToServer(fen, clock || lastClock);
-                } else if (clock || lastClock) {
-                    pushClockToServer(clock || lastClock);
                 }
                 
                 // Also poll eboards as fallback (subscribe may not work in 2.2.9)
@@ -475,25 +476,20 @@
         // Subscription push events (from subscribe with board:true, clock:true)
         // These come without an id, or with the subscription id
         if (msg.param) {
-            // Extract clock from subscription push
+            // Extract clock from subscription push — route through countdown system
             const subClock = extractClockFromBoard(msg.param);
             if (subClock) {
                 lastClock = subClock;
-                updateRelayClockDisplay(subClock);
-                log('⏱️ Clock from subscription: W=' + formatClock(subClock.white) + ' B=' + formatClock(subClock.black), 'success');
+                onClockSnapshot(subClock);
             }
             
             // Extract FEN from subscription push
             const subFen = msg.param.fen || (msg.param.board && typeof msg.param.board === 'string' && msg.param.board.includes('/') ? msg.param.board : null);
             if (subFen) {
-                const fenChanged = handleBoardFen(subFen, subClock);
-                if (!fenChanged && subClock) {
-                    pushClockToServer(subClock);
-                }
+                handleBoardFen(subFen, subClock);
                 return;
             } else if (subClock) {
-                pushClockToServer(subClock);
-                return;
+                return; // Already handled by onClockSnapshot
             }
         }
         
@@ -594,6 +590,117 @@
         
         poll(); // First poll immediately
         pollTimer = setInterval(poll, 1500);
+    }
+    
+    // ─── Local Clock Countdown ───────────────────────────
+    // LiveChess only gives snapshots on events, not per-second ticks.
+    // So we run a local 1-second timer that counts down the active clock
+    // and pushes the calculated values to the server every second.
+    
+    let clockState = {
+        white: null,          // Current white seconds (locally counted down)
+        black: null,          // Current black seconds (locally counted down)
+        activeSide: null,     // 'white' | 'black' | null
+        running: false,       // Is any clock running?
+        snapshotTime: null,   // When we last got a snapshot from LiveChess (Date.now())
+        snapshotWhite: null,  // White value at snapshot time
+        snapshotBlack: null,  // Black value at snapshot time
+        prevWhite: null,      // Previous snapshot white (for detecting which side changed)
+        prevBlack: null,      // Previous snapshot black
+    };
+    let clockTickTimer = null;
+    
+    function onClockSnapshot(clock) {
+        // clock = { white, black, run, time } from LiveChess
+        const now = Date.now();
+        const wasRunning = clockState.running;
+        const prevActiveSide = clockState.activeSide;
+        
+        // Detect which side is active by comparing to previous snapshot
+        if (clock.run && clockState.snapshotWhite !== null) {
+            const whiteDelta = clockState.snapshotWhite - clock.white;
+            const blackDelta = clockState.snapshotBlack - clock.black;
+            
+            if (whiteDelta > 0 && blackDelta === 0) {
+                clockState.activeSide = 'white';
+            } else if (blackDelta > 0 && whiteDelta === 0) {
+                clockState.activeSide = 'black';
+            } else if (whiteDelta > 0 && blackDelta > 0) {
+                // Both changed — clock was pressed. The side that changed MORE was running.
+                // The OTHER side is now running (clock press switches sides).
+                clockState.activeSide = whiteDelta > blackDelta ? 'black' : 'white';
+            }
+            // If neither changed, keep existing activeSide
+        }
+        
+        // Store snapshot values
+        clockState.prevWhite = clockState.snapshotWhite;
+        clockState.prevBlack = clockState.snapshotBlack;
+        clockState.snapshotWhite = clock.white;
+        clockState.snapshotBlack = clock.black;
+        clockState.snapshotTime = now;
+        clockState.white = clock.white;
+        clockState.black = clock.black;
+        clockState.running = !!clock.run;
+        
+        // Log active side detection
+        if (clockState.activeSide && clockState.running) {
+            log('⏱️ Active: ' + clockState.activeSide + ' W=' + formatClock(clock.white) + ' B=' + formatClock(clock.black), 'success');
+        }
+        
+        // Start or stop the local countdown timer
+        // If active side changed, restart the timer
+        if (clockState.running && clockState.activeSide) {
+            if (prevActiveSide !== clockState.activeSide) {
+                stopClockTick(); // Side changed — restart timer
+            }
+            startClockTick();
+        } else if (!clockState.running) {
+            stopClockTick();
+        }
+        
+        // Update relay display + push to server
+        updateRelayClockDisplay(clockState);
+        pushClockToServer({
+            white: clockState.white,
+            black: clockState.black,
+            activeSide: clockState.activeSide,
+            running: clockState.running,
+        });
+    }
+    
+    function startClockTick() {
+        if (clockTickTimer) return; // Already ticking
+        log('🔄 Clock countdown started (' + clockState.activeSide + ')', 'info');
+        clockTickTimer = setInterval(() => {
+            if (!clockState.running || !clockState.activeSide) {
+                stopClockTick();
+                return;
+            }
+            // Decrement active side
+            if (clockState.activeSide === 'white') {
+                clockState.white = Math.max(0, clockState.white - 1);
+            } else {
+                clockState.black = Math.max(0, clockState.black - 1);
+            }
+            // Update relay display
+            updateRelayClockDisplay(clockState);
+            // Push to server
+            pushClockToServer({
+                white: clockState.white,
+                black: clockState.black,
+                activeSide: clockState.activeSide,
+                running: clockState.running,
+            });
+        }, 1000);
+    }
+    
+    function stopClockTick() {
+        if (clockTickTimer) {
+            clearInterval(clockTickTimer);
+            clockTickTimer = null;
+            log('⏸️ Clock countdown stopped', 'info');
+        }
     }
     
     // ─── Clock Helpers ───────────────────────────────────
