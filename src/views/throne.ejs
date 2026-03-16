@@ -183,12 +183,15 @@
                 <% } %>
             </div>
 
-            <!-- Venue Code & QR -->
+            <!-- Venue Code & QR / Watch Live URL -->
             <div class="p-4 border-t border-gray-800 text-center">
-                <% if (state.venueCode) { %>
+                <% if (showVenueCode && state.venueCode) { %>
                 <div class="text-xs text-gray-500 mb-2">Scan to join the line</div>
                 <img src="/api/venue-qr.png" alt="QR" class="mx-auto rounded-lg mb-2" width="280" height="280" style="background: #fff; padding: 8px;">
                 <div class="text-3xl font-mono font-bold text-throne-gold tracking-[0.3em]"><%= state.venueCode.code %></div>
+                <% } else if (!showVenueCode) { %>
+                <div class="text-sm text-gray-500 mb-2">🌐 Watch live at</div>
+                <div class="text-lg font-mono text-throne-gold"><%= state.baseUrl ? state.baseUrl.replace(/^https?:\/\//, '') : '960throne.com' %>/live</div>
                 <% } %>
             </div>
         </div>

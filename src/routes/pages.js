@@ -89,21 +89,21 @@ router.get('/queue', (req, res) => {
     res.render('queue', { state, player: req.player });
 });
 
-// Throne — Big screen venue dashboard (admin password protected)
+// Throne — Big screen venue dashboard (admin password protected, shows QR code)
 router.get('/throne', (req, res) => {
     if (!req.isAdmin) {
         return res.render('admin-login', { returnTo: '/throne' });
     }
     const state = gameEngine.getThoneState();
     const dgt = dgtBoard.getState();
-    res.render('throne', { state, dgt });
+    res.render('throne', { state, dgt, showVenueCode: true });
 });
 
-// Live — Public web version of throne (no QR code/venue code)
+// Live — Public web version of throne (no QR code, shows "Watch live" URL instead)
 router.get('/live', (req, res) => {
     const state = gameEngine.getThoneState();
     const dgt = dgtBoard.getState();
-    res.render('throne-live', { state, dgt });
+    res.render('throne', { state, dgt, showVenueCode: false });
 });
 
 // Board — Just the live board, nothing else (public, embeddable)
