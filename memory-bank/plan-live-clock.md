@@ -1,4 +1,4 @@
-# Plan: Live Clock Display from DGT Board
+# Plan: Live Clock Display from DGT Board — ✅ IMPLEMENTED
 
 ## Goal
 Show real-time chess clock data from the DGT 3000 clock on `/throne` (big screen) and potentially other pages.

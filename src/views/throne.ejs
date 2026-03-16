@@ -13,8 +13,10 @@
         .sq-light { background: #f0d9b5; }
         .sq-dark { background: #b58863; }
         .sq-highlight { background: #cdd26a !important; }
-        .color-box-white { display: inline-block; background: #fff; color: #1a1a1a; padding: 2px 10px; border-radius: 4px; border: 2px solid #fff; }
-        .color-box-black { display: inline-block; background: #1a1a1a; color: #fff; padding: 2px 10px; border-radius: 4px; border: 2px solid #555; }
+        .color-box-white { display: inline-block; background: #fff; color: #1a1a1a; padding: 4px 14px; border-radius: 4px; border: 2px solid #fff; }
+        .color-box-black { display: inline-block; background: #1a1a1a; color: #fff; padding: 4px 14px; border-radius: 4px; border: 2px solid #555; }
+        .player-side { position: relative; }
+        .player-side .crown-badge { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); color: #FFD700; filter: drop-shadow(0 0 4px rgba(255,215,0,0.6)); }
         .dgt-clock { font-family: 'Courier New', monospace; font-size: 2.5rem; font-weight: bold; padding: 12px 20px; border-radius: 12px; min-width: 120px; text-align: center; }
         .dgt-clock-active { background: rgba(34,197,94,0.15); border: 2px solid rgba(34,197,94,0.4); color: #22c55e; }
         .dgt-clock-inactive { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); color: #6b7280; }
@@ -79,8 +81,7 @@
             <div class="p-4 border-t border-gray-800 text-center">
                 <% if (showVenueCode && state.venueCode) { %>
                 <div class="text-xs text-gray-500 mb-2">Scan to join the line</div>
-                <img src="/api/venue-qr.png" alt="QR" class="mx-auto rounded-lg mb-2" width="280" height="280" style="background: #fff; padding: 8px;">
-                <div class="text-3xl font-mono font-bold text-throne-gold tracking-[0.3em]"><%= state.venueCode.code %></div>
+                <img src="/api/venue-qr.png" alt="QR" class="mx-auto rounded-lg" style="background: #fff; padding: 8px; width: 90%; max-width: 340px; height: auto;">
                 <% } else if (!showVenueCode) { %>
                 <div class="text-sm text-gray-500 mb-2">🌐 Watch live at</div>
                 <div class="text-lg font-mono text-throne-gold"><%= state.baseUrl ? state.baseUrl.replace(/^https?:\/\//, '') : '960throne.com' %>/live</div>
@@ -127,9 +128,12 @@
                     %>
                     <!-- Left side: White player + clock -->
                     <div class="flex flex-col items-center gap-3" id="white-side">
-                        <div class="color-box-white text-lg font-bold flex items-center gap-1">
-                            <% if (whiteIsKing) { %><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %><% } else { %><%- include('partials/icon', { name: 'crossed-swords', size: 16, cls: '' }) %><% } %>
-                            <%= whiteName %>
+                        <div class="player-side">
+                            <% if (whiteIsKing) { %><div class="crown-badge"><%- include('partials/icon', { name: 'crown', size: 24, cls: '' }) %></div><% } %>
+                            <div class="color-box-white text-2xl font-bold flex items-center gap-1">
+                                <% if (!whiteIsKing) { %><%- include('partials/icon', { name: 'crossed-swords', size: 20, cls: '' }) %><% } %>
+                                <%= whiteName %>
+                            </div>
                         </div>
                         <%
                           const tcBase = state.config.timeControl.base;
@@ -190,9 +194,12 @@
 
                     <!-- Right side: Black player + clock -->
                     <div class="flex flex-col items-center gap-3" id="black-side">
-                        <div class="color-box-black text-lg font-bold flex items-center gap-1">
-                            <% if (blackIsKing) { %><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %><% } else { %><%- include('partials/icon', { name: 'crossed-swords', size: 16, cls: '' }) %><% } %>
-                            <%= blackName %>
+                        <div class="player-side">
+                            <% if (blackIsKing) { %><div class="crown-badge"><%- include('partials/icon', { name: 'crown', size: 24, cls: '' }) %></div><% } %>
+                            <div class="color-box-black text-2xl font-bold flex items-center gap-1">
+                                <% if (!blackIsKing) { %><%- include('partials/icon', { name: 'crossed-swords', size: 20, cls: '' }) %><% } %>
+                                <%= blackName %>
+                            </div>
                         </div>
                         <%
                           const clockBlack = (dgt && dgt.clock) ? dgt.clock.black : tcBase;
@@ -211,22 +218,7 @@
 
     </div>
 
-    <!-- Recent Games Ticker (bottom bar) -->
-    <div class="bg-throne-dark border-t border-gray-800 px-6 py-2 flex items-center gap-6 overflow-x-auto text-sm">
-        <span class="text-gray-500 shrink-0">Recent:</span>
-        <% state.recentGames.forEach(g => { %>
-        <span class="shrink-0 text-gray-400">
-            <% if (g.result === 'king_won') { %>
-                <%- include('partials/icon', { name: 'crown', size: 14, cls: 'text-throne-gold' }) %> <%= g.king_name %> def. <%= g.challenger_name %>
-            <% } else if (g.result === 'challenger_won') { %>
-                <%- include('partials/icon', { name: 'crossed-swords', size: 14, cls: 'text-red-400' }) %> <%= g.challenger_name %> dethroned <%= g.king_name %>!
-            <% } else { %>
-                <%- include('partials/icon', { name: 'handshake', size: 14, cls: '' }) %> <%= g.king_name %> drew vs <%= g.challenger_name %>
-            <% } %>
-            <span class="text-throne-gold ml-1"><%= g.sats_earned %> sats</span>
-        </span>
-        <% }) %>
-    </div>
+    <!-- Recent Games Ticker (bottom bar) — hidden on throne display -->
 
     <script>
         const socket = io();
