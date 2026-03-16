@@ -440,14 +440,20 @@
                     updateRelayClockDisplay(clock);
                 }
                 
-                // Handle FEN + clock together
+                // ALWAYS push to server on every poll (board + clock).
+                // Let the server decide if anything changed and needs broadcasting.
+                // This ensures clock ticks reach the throne even between moves.
                 if (fen && typeof fen === 'string' && fen.includes('/')) {
-                    const fenChanged = handleBoardFen(fen, clock);
-                    if (!fenChanged && clock) {
-                        pushClockToServer(clock);
+                    const placement = fen.split(' ')[0];
+                    if (placement !== lastFen) {
+                        lastFen = placement;
+                        renderBoard(fen);
+                        document.getElementById('fen-input').value = placement;
                     }
-                } else if (clock) {
-                    pushClockToServer(clock);
+                    // Push every poll cycle — server will broadcast if clock changed
+                    pushToServer(fen, clock || lastClock);
+                } else if (clock || lastClock) {
+                    pushClockToServer(clock || lastClock);
                 }
                 
                 // Also poll eboards as fallback (subscribe may not work in 2.2.9)
