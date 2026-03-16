@@ -121,9 +121,8 @@ function clearExpectedPosition() {
         pieces: null,
         gameStarted: false,
     };
-    // Clear cached board so stale position from previous game doesn't re-display
-    currentState.board = null;
-    currentState.fen = null;
+    // Keep currentState.board — it represents what's physically on the DGT board.
+    // Clearing it would prevent red mismatch boxes from showing when the next game starts.
     currentState.lastMove = null;
     currentState.result = null;
     broadcast();
