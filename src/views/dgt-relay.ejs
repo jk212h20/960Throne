@@ -425,9 +425,9 @@
                     wsSend({ call: 'subscribe', id: 2, param: { feed: feedId, param: { board: true, clock: true } } });
                 }
                 
-                // Log clock details on every poll (need to see run field values when clock is ticking)
-                if (board.clock && eboardsPollId % 5 === 0) {
-                    log('CLOCK: run=' + JSON.stringify(board.clock.run) + ' W=' + board.clock.white + ' B=' + board.clock.black + ' time=' + board.clock.time, 'info');
+                // Log clock details frequently — need to see EXACT type/value of `run` field
+                if (board.clock && eboardsPollId % 3 === 0) {
+                    log('CLOCK: run=' + JSON.stringify(board.clock.run) + ' (type=' + typeof board.clock.run + ') W=' + board.clock.white + ' B=' + board.clock.black, 'info');
                 }
                 
                 // The board field IS the FEN position string (not a 64-char array)
@@ -593,80 +593,83 @@
     }
     
     // ─── Local Clock Countdown ───────────────────────────
-    // LiveChess only gives snapshots on events, not per-second ticks.
-    // So we run a local 1-second timer that counts down the active clock
-    // and pushes the calculated values to the server every second.
+    // LiveChess gives us clock values + the `run` field which tells us
+    // which side is active. We use this to run a local 1-second countdown
+    // and push updates to the server.
     
     let clockState = {
         white: null,          // Current white seconds (locally counted down)
         black: null,          // Current black seconds (locally counted down)
         activeSide: null,     // 'white' | 'black' | null
         running: false,       // Is any clock running?
-        snapshotTime: null,   // When we last got a snapshot from LiveChess (Date.now())
-        snapshotWhite: null,  // White value at snapshot time
-        snapshotBlack: null,  // Black value at snapshot time
-        prevWhite: null,      // Previous snapshot white (for detecting which side changed)
-        prevBlack: null,      // Previous snapshot black
+        lastSnapshotWhite: null,
+        lastSnapshotBlack: null,
     };
     let clockTickTimer = null;
     
     function onClockSnapshot(clock) {
         // clock = { white, black, run, time } from LiveChess
-        const now = Date.now();
-        const wasRunning = clockState.running;
+        // `run` can be: false, true, "white", "black", or possibly 0/1
+        
         const prevActiveSide = clockState.activeSide;
         
-        // Check if LiveChess values actually changed from last snapshot
-        const sameAsLastSnapshot = (clock.white === clockState.snapshotWhite && 
-                                     clock.black === clockState.snapshotBlack);
-        
-        // If local countdown is running and LiveChess just sent the same stale values,
-        // skip the resync — our local countdown is more accurate
-        if (sameAsLastSnapshot && clockTickTimer && clockState.running) {
-            return; // Don't reset our locally-counted values with stale snapshot
+        // Determine active side from `run` field
+        let activeSide = null;
+        let isRunning = false;
+        if (clock.run === 'white' || clock.run === 'White') {
+            activeSide = 'white';
+            isRunning = true;
+        } else if (clock.run === 'black' || clock.run === 'Black') {
+            activeSide = 'black';
+            isRunning = true;
+        } else if (clock.run === true || clock.run === 1) {
+            // Boolean true — doesn't tell us which side. Keep previous activeSide if known.
+            isRunning = true;
+            activeSide = clockState.activeSide; // Keep what we had
+        } else {
+            // run is false/0/null — clock stopped
+            isRunning = false;
+            activeSide = clockState.activeSide; // Keep last known side
         }
         
-        // Detect which side is active by comparing to previous snapshot
-        if (clock.run && clockState.snapshotWhite !== null) {
-            const whiteDelta = clockState.snapshotWhite - clock.white;
-            const blackDelta = clockState.snapshotBlack - clock.black;
-            
-            if (whiteDelta > 0 && blackDelta === 0) {
-                clockState.activeSide = 'white';
-            } else if (blackDelta > 0 && whiteDelta === 0) {
-                clockState.activeSide = 'black';
-            } else if (whiteDelta > 0 && blackDelta > 0) {
-                // Both changed — clock was pressed. The side that changed MORE was running.
-                // The OTHER side is now running (clock press switches sides).
-                clockState.activeSide = whiteDelta > blackDelta ? 'black' : 'white';
+        // Check if this is a genuinely new snapshot (values changed)
+        const sameValues = (clock.white === clockState.lastSnapshotWhite && 
+                            clock.black === clockState.lastSnapshotBlack);
+        
+        // Always log the raw run field so we can debug what LiveChess sends
+        if (!sameValues || activeSide !== clockState.activeSide) {
+            log('⏱️ Clock: run=' + JSON.stringify(clock.run) + ' active=' + activeSide + ' W=' + formatClock(clock.white) + ' B=' + formatClock(clock.black), 'success');
+        }
+        
+        // If local countdown is running and values haven't changed from LiveChess,
+        // skip the resync — just update activeSide/running state
+        if (sameValues && clockTickTimer && clockState.running) {
+            // Only update if side changed
+            if (activeSide !== clockState.activeSide) {
+                clockState.activeSide = activeSide;
+                stopClockTick();
+                if (isRunning && activeSide) startClockTick();
             }
-            // If neither changed, keep existing activeSide
+            clockState.running = isRunning;
+            if (!isRunning) stopClockTick();
+            return;
         }
         
-        // Store snapshot values (the raw values from LiveChess, not our counted-down values)
-        clockState.prevWhite = clockState.snapshotWhite;
-        clockState.prevBlack = clockState.snapshotBlack;
-        clockState.snapshotWhite = clock.white;
-        clockState.snapshotBlack = clock.black;
-        clockState.snapshotTime = now;
-        // Resync our local values to the new (genuinely changed) snapshot
+        // New values from LiveChess — resync
+        clockState.lastSnapshotWhite = clock.white;
+        clockState.lastSnapshotBlack = clock.black;
         clockState.white = clock.white;
         clockState.black = clock.black;
-        clockState.running = !!clock.run;
-        
-        // Log active side detection
-        if (clockState.activeSide && clockState.running) {
-            log('⏱️ Active: ' + clockState.activeSide + ' W=' + formatClock(clock.white) + ' B=' + formatClock(clock.black), 'success');
-        }
+        clockState.activeSide = activeSide;
+        clockState.running = isRunning;
         
         // Start or stop the local countdown timer
-        // If active side changed, restart the timer
-        if (clockState.running && clockState.activeSide) {
-            if (prevActiveSide !== clockState.activeSide) {
-                stopClockTick(); // Side changed — restart timer
+        if (isRunning && activeSide) {
+            if (prevActiveSide !== activeSide) {
+                stopClockTick();
             }
             startClockTick();
-        } else if (!clockState.running) {
+        } else if (!isRunning) {
             stopClockTick();
         }
         
@@ -681,22 +684,19 @@
     }
     
     function startClockTick() {
-        if (clockTickTimer) return; // Already ticking
-        log('🔄 Clock countdown started (' + clockState.activeSide + ')', 'info');
+        if (clockTickTimer) return;
+        log('🔄 Countdown: ' + clockState.activeSide + ' ticking', 'info');
         clockTickTimer = setInterval(() => {
             if (!clockState.running || !clockState.activeSide) {
                 stopClockTick();
                 return;
             }
-            // Decrement active side
             if (clockState.activeSide === 'white') {
                 clockState.white = Math.max(0, clockState.white - 1);
             } else {
                 clockState.black = Math.max(0, clockState.black - 1);
             }
-            // Update relay display
             updateRelayClockDisplay(clockState);
-            // Push to server
             pushClockToServer({
                 white: clockState.white,
                 black: clockState.black,
@@ -710,7 +710,6 @@
         if (clockTickTimer) {
             clearInterval(clockTickTimer);
             clockTickTimer = null;
-            log('⏸️ Clock countdown stopped', 'info');
         }
     }
     
