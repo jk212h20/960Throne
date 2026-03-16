@@ -20,6 +20,7 @@
         .dgt-clock { font-family: 'Courier New', monospace; font-size: 2.5rem; font-weight: bold; padding: 12px 20px; border-radius: 12px; min-width: 120px; text-align: center; }
         .dgt-clock-active { background: rgba(34,197,94,0.15); border: 2px solid rgba(34,197,94,0.4); color: #22c55e; }
         .dgt-clock-inactive { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); color: #6b7280; }
+        .dgt-clock-reset { background: rgba(239,68,68,0.1); border: 2px solid rgba(239,68,68,0.3); color: #ef4444; font-size: 1.4rem; letter-spacing: 0.05em; }
         @keyframes satsGlow { 0%,100% { text-shadow: 0 0 10px #FFD700; } 50% { text-shadow: 0 0 30px #FFD700, 0 0 60px #FFD700; } }
         .sats-glow { animation: satsGlow 2s ease-in-out infinite; }
 
@@ -538,7 +539,10 @@
             }
 
             // Update clock display AFTER board rendering
-            if (data.clock) {
+            if (inSetupMode) {
+                // During setup, show "RESET CLOCK" instead of time values
+                showResetClockMessage();
+            } else if (data.clock) {
                 updateClockDisplay(data.clock);
             }
         });
@@ -571,6 +575,16 @@
         // Also reload on event reset
         socket.on('event_reset', () => { location.reload(); });
 
+        /**
+         * Show "RESET CLOCK" message on both clocks during setup mode
+         */
+        function showResetClockMessage() {
+            const whiteEl = document.getElementById('dgt-clock-white');
+            const blackEl = document.getElementById('dgt-clock-black');
+            if (whiteEl) { whiteEl.textContent = 'RESET CLOCK'; whiteEl.className = 'dgt-clock dgt-clock-reset'; }
+            if (blackEl) { blackEl.textContent = 'RESET CLOCK'; blackEl.className = 'dgt-clock dgt-clock-reset'; }
+        }
+
         // ─── Initial page load: show setup overlay if position verification is active ──
         // The server passes `dgt` state which may include positionVerification
         (function initSetupMode() {
@@ -601,6 +615,8 @@
                     // Show overlay
                     updateBoardOverlay(pv);
                 }
+                // Show "RESET CLOCK" during initial setup
+                showResetClockMessage();
             }
         })();
     </script>
