@@ -355,9 +355,7 @@
 
         // ─── DGT Clock Display ───────────────────────────
         // Pure pass-through: display whatever the DGT hardware reports.
-        // No local countdown, no turn tracking — the physical clock is the source of truth.
-        let lastClockWhite = null;
-        let lastClockBlack = null;
+        // No turn tracking — just show the numbers. The physical clock is the source of truth.
 
         function formatClockTime(seconds) {
             if (seconds == null || seconds < 0) return '--:--';
@@ -371,27 +369,9 @@
             const whiteEl = document.getElementById('dgt-clock-white');
             const blackEl = document.getElementById('dgt-clock-black');
 
-            // Determine which clock is active by seeing which one changed
-            const whiteChanged = lastClockWhite !== null && clock.white !== lastClockWhite;
-            const blackChanged = lastClockBlack !== null && clock.black !== lastClockBlack;
-            lastClockWhite = clock.white;
-            lastClockBlack = clock.black;
-
-            if (whiteEl) {
-                whiteEl.textContent = formatClockTime(clock.white);
-                // Active = this clock is counting down (its value decreased)
-                if (whiteChanged && !blackChanged) {
-                    whiteEl.className = 'dgt-clock dgt-clock-active';
-                    if (blackEl) blackEl.className = 'dgt-clock dgt-clock-inactive';
-                }
-            }
-            if (blackEl) {
-                blackEl.textContent = formatClockTime(clock.black);
-                if (blackChanged && !whiteChanged) {
-                    blackEl.className = 'dgt-clock dgt-clock-active';
-                    if (whiteEl) whiteEl.className = 'dgt-clock dgt-clock-inactive';
-                }
-            }
+            // Just display the values — no active/inactive guessing
+            if (whiteEl) whiteEl.textContent = formatClockTime(clock.white);
+            if (blackEl) blackEl.textContent = formatClockTime(clock.black);
         }
 
         socket.on('dgt_board', (data) => {
@@ -449,8 +429,6 @@
         socket.on('game_started', (data) => {
             if (dgtActive) {
                 // Reset clock display — DGT hardware will send real values
-                lastClockWhite = null;
-                lastClockBlack = null;
                 gameStart = Date.now();
                 const whiteEl = document.getElementById('dgt-clock-white');
                 const blackEl = document.getElementById('dgt-clock-black');
