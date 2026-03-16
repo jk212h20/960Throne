@@ -257,6 +257,33 @@ async function isConfigured() {
 }
 
 /**
+ * Get a new on-chain Bitcoin address from the LND wallet (for deposits).
+ */
+async function getNewAddress() {
+    const result = await lndRequest('/v1/newaddress', 'GET');
+    return result.address;
+}
+
+/**
+ * Create a Lightning invoice (for receiving sats via Lightning).
+ * @param {number} amountSats - Amount in sats
+ * @param {string} memo - Invoice description
+ * @param {number} expiry - Expiry in seconds (default 3600 = 1 hour)
+ */
+async function createInvoice(amountSats, memo = '', expiry = 3600) {
+    const result = await lndRequest('/v1/invoices', 'POST', {
+        value: String(amountSats),
+        memo: memo || '960 Throne node top-up',
+        expiry: String(expiry),
+    });
+    return {
+        paymentRequest: result.payment_request,
+        rHash: result.r_hash,
+        addIndex: result.add_index,
+    };
+}
+
+/**
  * List recent payments from LND.
  * Returns array of payment objects with payment_hash, value_sat, status, etc.
  * @param {number} maxPayments - Maximum number of payments to return (default 100)
@@ -272,6 +299,8 @@ module.exports = {
     getChannelBalance,
     payInvoice,
     listPayments,
+    getNewAddress,
+    createInvoice,
     resolveLightningAddress,
     requestInvoice,
     payLightningAddress,

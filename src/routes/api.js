@@ -943,13 +943,39 @@ router.get('/admin/lightning-status', requireAdmin, async (req, res) => {
     const status = await lightning.isConfigured();
     if (status.configured) {
         try {
-            const balance = await lightning.getChannelBalance();
-            status.channelBalance = balance;
+            const channelBal = await lightning.getChannelBalance();
+            const walletBal = await lightning.getWalletBalance();
+            status.channelBalance = channelBal;
+            status.walletBalance = walletBal;
         } catch (e) {
             status.balanceError = e.message;
         }
     }
     res.json(status);
+});
+
+// Get a Bitcoin deposit address for the LND node
+router.get('/admin/lightning-address', requireAdmin, async (req, res) => {
+    try {
+        const address = await lightning.getNewAddress();
+        res.json({ address });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Create a Lightning invoice to receive sats
+router.post('/admin/lightning-invoice', requireAdmin, async (req, res) => {
+    const { amount, memo } = req.body;
+    if (!amount || parseInt(amount) <= 0) {
+        return res.status(400).json({ error: 'Amount in sats required' });
+    }
+    try {
+        const invoice = await lightning.createInvoice(parseInt(amount), memo || '960 Throne node top-up');
+        res.json(invoice);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ============================================================
