@@ -35,32 +35,46 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Left: Connection & Controls -->
             <div class="space-y-4">
-                <!-- LiveChess Connection -->
+                <!-- Direct USB Connection (Web Serial API) -->
                 <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
                     <h2 class="font-bold text-lg mb-3 flex items-center gap-2">
-                        <span class="status-dot dot-red" id="lc-dot"></span>
-                        LiveChess Connection
+                        <span class="status-dot dot-red" id="serial-dot"></span>
+                        DGT Board — Direct USB
                     </h2>
                     <div class="space-y-3">
-                        <div>
-                            <label class="text-sm text-gray-400 block mb-1">LiveChess URL (this computer)</label>
-                            <div class="flex gap-2">
-                                <input type="text" id="lc-url" value="http://localhost:1982" 
-                                    class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono text-white">
-                                <button id="btn-connect" onclick="toggleConnection()"
-                                    class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold">
-                                    Connect
-                                </button>
-                            </div>
-                        </div>
-                        <div class="text-sm text-gray-500" id="lc-status">
-                            Not connected. Make sure DGT LiveChess is running on this computer.
+                        <button id="btn-serial" onclick="toggleSerial()"
+                            class="w-full bg-green-600 hover:bg-green-500 text-white px-4 py-3 rounded-lg text-sm font-bold">
+                            🔌 Connect USB Board
+                        </button>
+                        <div class="text-sm text-gray-500" id="serial-status">
+                            Click to connect directly to DGT board via USB. No LiveChess needed.
                         </div>
                         <div class="text-xs text-gray-600">
-                            💡 Uses HTTP polling (every 1s) — works even from HTTPS pages
+                            ⚡ Reads raw DGT protocol — board position + clock with turn info every second
                         </div>
                     </div>
                 </div>
+
+                <!-- LiveChess Connection (fallback) -->
+                <details class="bg-gray-900 rounded-xl border border-gray-800">
+                    <summary class="p-5 cursor-pointer text-gray-500 text-sm">📡 LiveChess fallback (click to expand)</summary>
+                    <div class="px-5 pb-5 space-y-3">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="status-dot dot-red" id="lc-dot"></span>
+                            <span class="text-sm text-gray-400">LiveChess Connection</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="lc-url" value="http://localhost:1982" 
+                                class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono text-white">
+                            <button id="btn-connect" onclick="toggleConnection()"
+                                class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold">
+                                Connect
+                            </button>
+                        </div>
+                        <div class="text-sm text-gray-500" id="lc-status">Not connected</div>
+                        <div class="text-xs text-yellow-600">⚠️ LiveChess doesn't report which clock is active — clock display will be limited</div>
+                    </div>
+                </details>
 
                 <!-- Manual FEN Input -->
                 <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
@@ -808,8 +822,269 @@
         } catch (err) { /* silent — clock-only updates are best-effort */ }
     }
     
-    // Auto-connect on page load
-    connectLiveChess();
+    // ═══════════════════════════════════════════════════════
+    // ─── WEB SERIAL: Direct DGT Protocol (no LiveChess) ──
+    // ═══════════════════════════════════════════════════════
+    
+    let serialPort = null;
+    let serialReader = null;
+    let serialWriter = null;
+    let serialConnected = false;
+    let serialBuffer = new Uint8Array(0);
+    let serialBoard = new Array(64).fill(null);
+    let serialLastFen = null;
+    let serialLastClock = null;
+    let serialClockPollTimer = null;
+    let serialBoardPollTimer = null;
+    
+    // DGT Protocol Constants
+    const DGT_SEND_CLK         = 0x41;
+    const DGT_SEND_BRD         = 0x42;
+    const DGT_SEND_UPDATE_NICE = 0x4b;
+    const DGT_MSG_BOARD_DUMP   = 0x86;
+    const DGT_MSG_BWTIME       = 0x8d;
+    const DGT_MSG_FIELD_UPDATE = 0x8e;
+    
+    const DGT_PIECES = {
+        0x00: null,
+        0x01: 'wP', 0x02: 'wR', 0x03: 'wN', 0x04: 'wB', 0x05: 'wK', 0x06: 'wQ',
+        0x07: 'bP', 0x08: 'bR', 0x09: 'bN', 0x0A: 'bB', 0x0B: 'bK', 0x0C: 'bQ',
+    };
+    
+    function bcdToInt(byte) {
+        return ((byte >> 4) & 0x0f) * 10 + (byte & 0x0f);
+    }
+    
+    async function toggleSerial() {
+        if (serialConnected) {
+            await disconnectSerial();
+        } else {
+            await connectSerial();
+        }
+    }
+    
+    async function connectSerial() {
+        if (!('serial' in navigator)) {
+            log('❌ Web Serial API not supported. Use Chrome 89+ on desktop.', 'error');
+            document.getElementById('serial-status').textContent = 'Not supported in this browser. Use Chrome on desktop.';
+            return;
+        }
+        
+        try {
+            log('Requesting USB port...', 'info');
+            document.getElementById('serial-dot').className = 'status-dot dot-yellow';
+            document.getElementById('serial-status').textContent = 'Select the DGT board from the popup...';
+            
+            serialPort = await navigator.serial.requestPort();
+            await serialPort.open({ baudRate: 9600, dataBits: 8, parity: 'none', stopBits: 1 });
+            
+            serialConnected = true;
+            document.getElementById('serial-dot').className = 'status-dot dot-green';
+            document.getElementById('serial-status').textContent = '✅ Connected! Reading board + clock...';
+            document.getElementById('btn-serial').textContent = '🔌 Disconnect USB';
+            document.getElementById('btn-serial').className = 'w-full bg-red-600 hover:bg-red-500 text-white px-4 py-3 rounded-lg text-sm font-bold';
+            log('✅ Serial port open at 9600 baud', 'success');
+            
+            // Get writer for sending commands
+            serialWriter = serialPort.writable.getWriter();
+            
+            // Request initial board dump
+            await sendSerialCmd(DGT_SEND_BRD);
+            
+            // Enter UPDATE_NICE mode (field updates + clock on change)
+            setTimeout(() => sendSerialCmd(DGT_SEND_UPDATE_NICE), 500);
+            
+            // Request initial clock
+            setTimeout(() => sendSerialCmd(DGT_SEND_CLK), 1000);
+            
+            // Poll board every 5s as safety net
+            serialBoardPollTimer = setInterval(() => sendSerialCmd(DGT_SEND_BRD), 5000);
+            
+            // Poll clock every 1s for per-second updates
+            serialClockPollTimer = setInterval(() => sendSerialCmd(DGT_SEND_CLK), 1000);
+            
+            // Start reading
+            readSerialLoop();
+            
+        } catch (err) {
+            log('Serial connect failed: ' + err.message, 'error');
+            document.getElementById('serial-dot').className = 'status-dot dot-red';
+            document.getElementById('serial-status').textContent = 'Connection failed: ' + err.message;
+        }
+    }
+    
+    async function disconnectSerial() {
+        serialConnected = false;
+        if (serialClockPollTimer) { clearInterval(serialClockPollTimer); serialClockPollTimer = null; }
+        if (serialBoardPollTimer) { clearInterval(serialBoardPollTimer); serialBoardPollTimer = null; }
+        try {
+            if (serialReader) { await serialReader.cancel(); serialReader = null; }
+            if (serialWriter) { serialWriter.releaseLock(); serialWriter = null; }
+            if (serialPort) { await serialPort.close(); serialPort = null; }
+        } catch (e) { /* ignore cleanup errors */ }
+        document.getElementById('serial-dot').className = 'status-dot dot-red';
+        document.getElementById('serial-status').textContent = 'Disconnected';
+        document.getElementById('btn-serial').textContent = '🔌 Connect USB Board';
+        document.getElementById('btn-serial').className = 'w-full bg-green-600 hover:bg-green-500 text-white px-4 py-3 rounded-lg text-sm font-bold';
+        log('Serial disconnected', 'info');
+    }
+    
+    async function sendSerialCmd(cmd) {
+        if (serialWriter) {
+            try { await serialWriter.write(new Uint8Array([cmd])); }
+            catch (e) { /* ignore write errors during disconnect */ }
+        }
+    }
+    
+    async function readSerialLoop() {
+        while (serialPort && serialPort.readable && serialConnected) {
+            serialReader = serialPort.readable.getReader();
+            try {
+                while (true) {
+                    const { value, done } = await serialReader.read();
+                    if (done) break;
+                    if (value) {
+                        // Append to buffer
+                        const newBuf = new Uint8Array(serialBuffer.length + value.length);
+                        newBuf.set(serialBuffer);
+                        newBuf.set(value, serialBuffer.length);
+                        serialBuffer = newBuf;
+                        parseSerialBuffer();
+                    }
+                }
+            } catch (err) {
+                if (serialConnected) log('Serial read error: ' + err.message, 'error');
+            } finally {
+                try { serialReader.releaseLock(); } catch(e) {}
+            }
+        }
+    }
+    
+    function parseSerialBuffer() {
+        while (serialBuffer.length > 0) {
+            const msgType = serialBuffer[0];
+            if ((msgType & 0x80) === 0) { serialBuffer = serialBuffer.slice(1); continue; }
+            if (serialBuffer.length < 3) return;
+            const msgLen = ((serialBuffer[1] & 0x7f) << 7) | (serialBuffer[2] & 0x7f);
+            if (serialBuffer.length < msgLen) return;
+            
+            const msg = serialBuffer.slice(0, msgLen);
+            serialBuffer = serialBuffer.slice(msgLen);
+            
+            switch (msgType) {
+                case DGT_MSG_BOARD_DUMP: handleSerialBoardDump(msg); break;
+                case DGT_MSG_BWTIME: handleSerialBwTime(msg); break;
+                case DGT_MSG_FIELD_UPDATE: handleSerialFieldUpdate(msg); break;
+            }
+        }
+    }
+    
+    function handleSerialBoardDump(msg) {
+        if (msg.length < 67) return;
+        for (let i = 0; i < 64; i++) {
+            serialBoard[i] = DGT_PIECES[msg[3 + i]] || null;
+        }
+        const fen = serialBoardToFen();
+        if (fen !== serialLastFen) {
+            serialLastFen = fen;
+            lastFen = fen;
+            renderBoard(fen);
+            document.getElementById('fen-input').value = fen;
+            pushToServer(fen, serialLastClock);
+        }
+    }
+    
+    function handleSerialBwTime(msg) {
+        if (msg.length < 10) return;
+        // Check for Clock Ack
+        if ((msg[3] & 0x0f) === 0x0a || (msg[6] & 0x0f) === 0x0a) return;
+        
+        const status = msg[9];
+        // D5=1 means no clock connected
+        if (status & 0x20) return;
+        
+        // Right player = White (standard DGT setup)
+        const rH = msg[3] & 0x0f;
+        const rM = bcdToInt(msg[4]);
+        const rS = bcdToInt(msg[5]);
+        const whiteTotal = rH * 3600 + rM * 60 + rS;
+        
+        // Left player = Black
+        const lH = msg[6] & 0x0f;
+        const lM = bcdToInt(msg[7]);
+        const lS = bcdToInt(msg[8]);
+        const blackTotal = lH * 3600 + lM * 60 + lS;
+        
+        // Status bits
+        const clockRunning = !!(status & 0x01);  // D0
+        const rightTurn    = !!(status & 0x08);   // D3 = white's turn
+        const leftTurn     = !!(status & 0x10);   // D4 = black's turn
+        
+        const clock = {
+            white: whiteTotal,
+            black: blackTotal,
+            running: clockRunning,
+            activeSide: rightTurn ? 'white' : (leftTurn ? 'black' : null),
+        };
+        
+        // Only push if changed
+        const changed = !serialLastClock ||
+            clock.white !== serialLastClock.white ||
+            clock.black !== serialLastClock.black ||
+            clock.running !== serialLastClock.running ||
+            clock.activeSide !== serialLastClock.activeSide;
+        
+        if (changed) {
+            serialLastClock = clock;
+            lastClock = clock;
+            const side = clock.activeSide || '?';
+            log('⏱️ W=' + formatClock(clock.white) + ' B=' + formatClock(clock.black) + ' [' + side + (clockRunning ? ' ▶' : ' ⏸') + ']', 'success');
+            updateRelayClockDisplay(clock);
+            // Push with the real activeSide from byte 9!
+            if (serialLastFen) {
+                pushToServer(serialLastFen, clock);
+            } else {
+                pushClockToServer(clock);
+            }
+        }
+    }
+    
+    function handleSerialFieldUpdate(msg) {
+        if (msg.length < 5) return;
+        const field = msg[3];
+        const piece = msg[4];
+        serialBoard[field] = DGT_PIECES[piece] || null;
+        const fen = serialBoardToFen();
+        if (fen !== serialLastFen) {
+            serialLastFen = fen;
+            lastFen = fen;
+            renderBoard(fen);
+            document.getElementById('fen-input').value = fen;
+            pushToServer(fen, serialLastClock);
+        }
+    }
+    
+    function serialBoardToFen() {
+        let fen = '';
+        for (let rank = 0; rank < 8; rank++) {
+            let empty = 0;
+            for (let file = 0; file < 8; file++) {
+                const piece = serialBoard[rank * 8 + file];
+                if (!piece) { empty++; }
+                else {
+                    if (empty > 0) { fen += empty; empty = 0; }
+                    const ch = piece[1];
+                    fen += piece[0] === 'w' ? ch.toUpperCase() : ch.toLowerCase();
+                }
+            }
+            if (empty > 0) fen += empty;
+            if (rank < 7) fen += '/';
+        }
+        return fen;
+    }
+    
+    // Don't auto-connect LiveChess anymore — user picks the mode
+    // connectLiveChess();
     
     function boardArrayToFen(board) {
         if (!board) return null;
