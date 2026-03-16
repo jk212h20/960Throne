@@ -7,6 +7,13 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Chess Clock Countdown Fix (Mar 15, 2026)
+- **Problem**: Clocks on throne and game pages showed static initial values (e.g. "3:00") and never ticked down
+- **Root cause**: No client-side countdown timer — clocks only updated when DGT hardware sent data via Socket.io
+- **throne.ejs**: Added software clock countdown (100ms interval), white starts active, board changes toggle turn + add increment, DGT clock data overrides when available. On page reload, deducts elapsed time (split 50/50 between players as approximation). `game_started` resets clocks, `game_ended` stops countdown.
+- **game.ejs**: Added chess clock display (white/black) with countdown from base time. Active clock highlighted green. DGT clock data overrides. Integrated alongside existing elapsed timer.
+- Status: **deployed to Railway** (commit 53988d5)
+
 ### Live DGT Clock Display (Mar 15, 2026)
 - **Relay page** (`dgt-relay.ejs`): Extracts clock data from LiveChess eboards response (supports 4 DGT clock field formats: `clock` object, `whiteClockMs`/`blackClockMs`, `wtime`/`btime`, and `clock` string). Displays clock on relay page in a dedicated card. Includes clock in server push payload.
 - **Throne page** (`throne.ejs`): Dynamic clock display below the board with green active / gray inactive styling. Created via JS when DGT data arrives. CSS classes `.dgt-clock`, `.dgt-clock-active`, `.dgt-clock-inactive`.

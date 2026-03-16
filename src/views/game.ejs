@@ -183,10 +183,10 @@
             const gameStart = new Date('<%- state.game.started_at %><%- state.game.started_at.endsWith("Z") ? "" : "Z" %>').getTime();
             const el = document.getElementById('game-elapsed');
             const tcBase = <%- state.config.timeControl.base %>;
-            const elapsedSec = (Date.now() - gameStart) / 1000;
-            // Approximate: split elapsed equally between both clocks
-            let cW = Math.max(0, tcBase - elapsedSec / 2);
-            let cB = Math.max(0, tcBase - elapsedSec / 2);
+            // Start both clocks at base time — we don't know individual usage
+            // Clocks tick down from this moment; DGT clock data will override when available
+            let cW = tcBase;
+            let cB = tcBase;
             let turn = 'white';
             let lastTick = Date.now();
             let dgtOverride = false;

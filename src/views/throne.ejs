@@ -366,16 +366,10 @@
         let moveCount = 0; // track board changes to know whose turn it is
         let lastBoardJson = null; // detect board changes for turn toggling
 
-        // On page load, if game already in progress, deduct elapsed time from white's clock
-        // (we assume white started and roughly half the elapsed time is white's, half black's)
-        // This is an approximation — DGT clock data will override when available
-        if (gameStart) {
-            const elapsedSec = (Date.now() - gameStart) / 1000;
-            // Simple split: white loses half elapsed, black loses half
-            // This way both clocks show reasonable values on page reload
-            clockWhite = Math.max(0, tcBase - elapsedSec / 2);
-            clockBlack = Math.max(0, tcBase - elapsedSec / 2);
-        }
+        // On page load, if game already in progress, start the countdown from current time.
+        // We don't know how much time each player has used, so we start both clocks at base time
+        // and only tick the active player's clock from this moment forward.
+        // DGT clock data will override with accurate values when available.
 
         function formatClockTime(seconds) {
             if (seconds == null || seconds < 0) seconds = 0;
