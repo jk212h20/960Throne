@@ -84,9 +84,9 @@
             </div>
         </div>
 
-        <!-- ====== NOT IN QUEUE — INLINE JOIN WITH SCAN/CODE (hidden — kept for future use) ====== -->
+        <!-- ====== NOT IN QUEUE — INLINE JOIN WITH SCAN ====== -->
         <% } else if (!state.king || state.king.id !== player.id) { %>
-        <div class="card mb-4" style="display:none;">
+        <div class="card mb-4">
             <div class="text-lg font-bold mb-2 text-center">Ready to play?</div>
             <% if (state.king) { %>
             <div class="text-gray-400 mb-4 text-center">
@@ -101,7 +101,7 @@
             <div class="text-gray-400 mb-4 text-center">No King yet — be the first to claim the throne!</div>
             <% } %>
 
-            <div class="text-sm text-gray-400 mb-3 text-center">📍 If you're at the venue, scan the QR or enter the code to join</div>
+            <div class="text-sm text-gray-400 mb-3 text-center">📍 If you're at the venue, scan the QR to join</div>
 
             <!-- QR Scanner -->
             <div id="scanner-section" class="mb-3">
@@ -114,12 +114,10 @@
                 </div>
             </div>
 
-            <!-- Manual Code Entry -->
-            <div class="flex gap-2 mb-3">
-                <input type="text" id="venue-code-input" class="input flex-1 text-center text-lg font-mono tracking-widest"
-                    placeholder="VENUE CODE" maxlength="6" style="text-transform: uppercase;"
-                    onkeydown="if(event.key==='Enter')joinWithCode()">
-                <button onclick="joinWithCode()" id="join-btn" class="btn-gold px-5 whitespace-nowrap flex items-center gap-1"><%- include('partials/icon', { name: 'crossed-swords', size: 18, cls: '' }) %> Join</button>
+            <!-- Manual Code Entry (hidden — venue code submitted automatically via QR scan) -->
+            <div class="hidden">
+                <input type="text" id="venue-code-input">
+                <button id="join-btn">Join</button>
             </div>
 
             <div id="join-result" class="hidden mt-3 p-3 rounded-lg text-sm text-center"></div>
