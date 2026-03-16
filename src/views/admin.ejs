@@ -222,9 +222,10 @@
                 <div id="ln-topup" class="mt-3 pt-3 border-t border-gray-700" style="display:none;">
                     <div class="text-sm text-gray-400 mb-2">Top Up Node</div>
                     <div class="flex gap-2 mb-2">
-                        <button onclick="getDepositAddress()" class="flex-1 text-xs bg-orange-800 hover:bg-orange-700 px-2 py-2 rounded">₿ Bitcoin Address</button>
-                        <button onclick="showInvoiceForm()" class="flex-1 text-xs bg-purple-800 hover:bg-purple-700 px-2 py-2 rounded">⚡ Lightning Invoice</button>
+                        <button onclick="showInvoiceForm()" class="flex-1 text-xs bg-purple-800 hover:bg-purple-700 px-2 py-2 rounded">⚡ Receive via Lightning</button>
+                        <button onclick="getDepositAddress()" class="flex-1 text-xs bg-orange-800 hover:bg-orange-700 px-2 py-2 rounded">₿ On-chain Address</button>
                     </div>
+                    <div class="text-xs text-gray-500 mb-1">⚡ Lightning goes to channel balance (for payouts). ₿ On-chain goes to wallet (for opening channels).</div>
                     <div id="ln-deposit" class="hidden mt-2 p-3 bg-throne-darker rounded-lg text-center">
                         <div class="text-xs text-gray-400 mb-1" id="ln-deposit-label"></div>
                         <div class="font-mono text-xs text-throne-gold break-all select-all" id="ln-deposit-value"></div>
