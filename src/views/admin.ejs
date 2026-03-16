@@ -338,7 +338,10 @@
 
         <!-- Payout History -->
         <div class="card mt-4">
-            <h2 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'lightning', size: 20, cls: 'text-throne-gold' }) %> Payout History (<%= payouts.length %>)</h2>
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-bold flex items-center gap-2"><%- include('partials/icon', { name: 'lightning', size: 20, cls: 'text-throne-gold' }) %> Payout History (<%= payouts.length %>)</h2>
+                <button onclick="reconcilePayouts()" class="bg-yellow-600 hover:bg-yellow-500 text-black text-xs font-bold px-3 py-1 rounded">Reconcile Pending</button>
+            </div>
             <% if (payouts.length === 0) { %>
             <p class="text-gray-500 text-sm">No payouts yet</p>
             <% } else { %>
@@ -438,6 +441,15 @@
             if (await api('/api/admin/remove-challenger', {})) setTimeout(() => location.reload(), 500);
         }
         async function resolveNotification(id) { if (await api('/api/admin/notifications/resolve', { id })) setTimeout(() => location.reload(), 500); }
+
+        async function reconcilePayouts() {
+            if (!confirm('Reconcile pending payouts? This will mark stuck payouts (without payment confirmation) as failed.')) return;
+            const result = await api('/api/admin/reconcile-payouts', {});
+            if (result) {
+                alert(result.message);
+                setTimeout(() => location.reload(), 500);
+            }
+        }
 
         // Enlarge QR — fullscreen overlay
         function enlargeQR() {

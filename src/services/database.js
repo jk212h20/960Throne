@@ -848,6 +848,18 @@ function getAllPayouts() {
     return rowsToObjects(result[0]);
 }
 
+function getPendingPayouts() {
+    const result = db.exec(`
+        SELECT p.*, pl.name as player_name
+        FROM payouts p
+        JOIN players pl ON p.player_id = pl.id
+        WHERE p.status = 'pending' OR p.status = 'paying'
+        ORDER BY p.created_at ASC
+    `);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
 // ============================================================
 // Stats
 // ============================================================
@@ -1053,6 +1065,7 @@ module.exports = {
     updatePayout,
     getPlayerPayouts,
     getAllPayouts,
+    getPendingPayouts,
     
     // Stats
     getEventStats,

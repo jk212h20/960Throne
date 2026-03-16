@@ -301,7 +301,9 @@ router.get('/claim/lnurl', (req, res) => {
 });
 
 // Step 3: Wallet sends invoice here — server pays it (LUD-03 second request)
-router.get('/claim/callback', async (req, res) => {
+// IMPORTANT: Responds { status: "OK" } immediately, then pays in background.
+// This prevents Railway's reverse proxy from 502-ing on slow LND payments.
+router.get('/claim/callback', (req, res) => {
     const { k1, pr } = req.query;
 
     if (!k1 || !pr) {
@@ -331,25 +333,37 @@ router.get('/claim/callback', async (req, res) => {
     const payoutId = db.createPayout(session.playerId, session.amount, 'lnurl-withdraw');
     session.payoutId = payoutId;
 
+    // Respond OK immediately — wallet gets confirmation, no 502 timeout
+    res.json({ status: 'OK' });
+
+    // Pay the invoice in the background (after response is sent)
+    processWithdrawPayment(k1, session, payoutId, pr).catch(err => {
+        console.error(`⚡ Background withdraw payment error:`, err.message);
+    });
+});
+
+/**
+ * Background payment processor for LNURL-withdraw.
+ * Runs after the callback has already responded { status: "OK" } to the wallet.
+ * Updates the in-memory session and DB payout record when payment completes/fails.
+ */
+async function processWithdrawPayment(k1, session, payoutId, invoice) {
     try {
         // Pay the invoice provided by the wallet
-        const payResult = await lightning.payInvoice(pr);
+        const payResult = await lightning.payInvoice(invoice);
 
-        // Success — deduct from balance
+        // Success — deduct from balance and update records
         db.deductSatsFromPlayer(session.playerId, session.amount);
         db.updatePayout(payoutId, {
-            payment_hash: payResult.paymentHash,
+            payment_hash: payResult.payment_hash,
             status: 'completed',
             completed_at: new Date().toISOString()
         });
 
         session.status = 'complete';
-        session.paymentHash = payResult.paymentHash;
+        session.paymentHash = payResult.payment_hash;
 
         console.log(`⚡ LNURL-withdraw: ${session.amount} sats paid to ${session.playerName} (k1: ${k1.substring(0, 8)}...)`);
-
-        // LNURL spec requires { status: "OK" } response
-        return res.json({ status: 'OK' });
     } catch (err) {
         session.status = 'failed';
         session.error = err.message;
@@ -358,9 +372,8 @@ router.get('/claim/callback', async (req, res) => {
             error_message: err.message
         });
         console.error(`⚡ LNURL-withdraw failed for ${session.playerName}:`, err.message);
-        return res.json({ status: 'ERROR', reason: `Payment failed: ${err.message}` });
     }
-});
+}
 
 // Step 4: Frontend polls this to know when payment completed
 router.get('/claim/status/:k1', (req, res) => {
@@ -698,6 +711,33 @@ router.get('/admin/players', requireAdmin, (req, res) => {
 
 router.get('/admin/payouts', requireAdmin, (req, res) => {
     res.json({ payouts: db.getAllPayouts() });
+});
+
+// Reconcile stuck pending payouts — marks pending payouts without payment_hash as failed
+router.post('/admin/reconcile-payouts', requireAdmin, (req, res) => {
+    const pending = db.getPendingPayouts();
+    let fixed = 0;
+    for (const payout of pending) {
+        if (!payout.payment_hash) {
+            // No payment hash = payment was never confirmed by LND → safe to mark failed
+            db.updatePayout(payout.id, {
+                status: 'failed',
+                error_message: 'Reconciled: no payment confirmation received (connection lost during processing)'
+            });
+            fixed++;
+            console.log(`🔧 Reconciled payout #${payout.id}: ${payout.amount_sats} sats for ${payout.player_name} → failed (no payment hash)`);
+        }
+        // Payouts WITH a payment_hash but still pending = payment succeeded but status update was lost
+        // These need manual verification via LND — flag them but don't auto-resolve
+    }
+    const withHash = pending.filter(p => p.payment_hash).length;
+    res.json({
+        success: true,
+        totalPending: pending.length,
+        markedFailed: fixed,
+        needsManualReview: withHash,
+        message: `Reconciled ${fixed} stuck payouts as failed.${withHash > 0 ? ` ${withHash} payout(s) have payment hashes and need manual LND verification.` : ''}`
+    });
 });
 
 // Immediate Reset
