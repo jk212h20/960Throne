@@ -100,6 +100,10 @@
                 <% if (showVenueCode && state.venueCode) { %>
                 <div class="text-2xl font-bold text-gray-400 mb-3">Scan to join the line</div>
                 <img src="/api/venue-qr.png" alt="QR" class="mx-auto rounded-lg" style="background: #fff; padding: 8px; width: 90%; max-width: 340px; height: auto;">
+                <div id="venue-code-text" style="<%= (typeof showVenueCodeText !== 'undefined' && showVenueCodeText) ? '' : 'display:none;' %>">
+                    <div class="text-sm text-gray-500 mt-3">Or enter code:</div>
+                    <div class="text-4xl font-mono font-bold text-throne-gold tracking-[0.3em] mt-1" id="venue-code-value"><%= state.venueCode ? state.venueCode.code : '' %></div>
+                </div>
                 <% } else if (!showVenueCode) { %>
                 <div class="text-sm text-gray-500 mb-2">🌐 Watch live at</div>
                 <div class="text-lg font-mono text-throne-gold"><%= state.baseUrl ? state.baseUrl.replace(/^https?:\/\//, '') : '960throne.com' %>/live</div>
@@ -635,6 +639,14 @@
             if (data.code) {
                 const codeEls = document.querySelectorAll('.tracking-\\[0\\.3em\\]');
                 codeEls.forEach(el => { el.textContent = data.code; });
+            }
+        });
+
+        // Venue code visibility toggle — admin can show/hide the code text without reload
+        socket.on('venue_code_visibility', (data) => {
+            const el = document.getElementById('venue-code-text');
+            if (el) {
+                el.style.display = data.showCode ? '' : 'none';
             }
         });
 

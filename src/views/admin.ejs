@@ -158,6 +158,19 @@
                 <% } %>
                 <button onclick="rotateCode()" class="btn-outline w-full text-sm">🔄 Generate New Code</button>
 
+                <!-- Show Venue Code Toggle (shows code text on throne + code entry on player page) -->
+                <div class="mt-4 pt-4 border-t border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span>Show Code on Screen</span>
+                            <div class="text-xs text-gray-500 mt-0.5">Shows venue code text on throne &amp; enables manual code entry for players</div>
+                        </div>
+                        <button onclick="toggleVenueCode()" id="venue-code-toggle" class="<%= showVenueCode ? 'btn-red' : 'btn-green' %> text-sm">
+                            <%= showVenueCode ? 'Hide Code' : 'Show Code' %>
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Event Toggle -->
                 <div class="mt-4 pt-4 border-t border-gray-700">
                     <div class="flex items-center justify-between">
@@ -404,6 +417,16 @@
             if (await api('/api/admin/override-result', { gameId, result })) setTimeout(() => location.reload(), 500);
         }
         async function rotateCode() { if (await api('/api/admin/rotate-venue-code', {})) setTimeout(() => location.reload(), 500); }
+        async function toggleVenueCode() {
+            const result = await api('/api/admin/toggle-venue-code', {});
+            if (result) {
+                const btn = document.getElementById('venue-code-toggle');
+                if (btn) {
+                    btn.textContent = result.showCode ? 'Hide Code' : 'Show Code';
+                    btn.className = (result.showCode ? 'btn-red' : 'btn-green') + ' text-sm';
+                }
+            }
+        }
         async function toggleEvent() {
             const active = '<%= state.eventActive %>' !== 'true';
             if (await api('/api/admin/event-active', { active })) setTimeout(() => location.reload(), 500);

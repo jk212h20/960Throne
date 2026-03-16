@@ -655,6 +655,14 @@ router.post('/admin/event-active', requireAdmin, (req, res) => {
     res.json({ success: true, active: !!active });
 });
 
+router.post('/admin/toggle-venue-code', requireAdmin, (req, res) => {
+    const current = db.getConfig('show_venue_code') === 'true';
+    const newVal = !current;
+    db.setConfig('show_venue_code', newVal ? 'true' : 'false');
+    gameEngine.broadcast('venue_code_visibility', { showCode: newVal });
+    res.json({ success: true, showCode: newVal });
+});
+
 router.post('/admin/rotate-venue-code', requireAdmin, (req, res) => {
     const code = gameEngine.rotateVenueCode();
     res.json({ success: true, code });

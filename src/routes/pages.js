@@ -97,7 +97,8 @@ router.get('/throne', (req, res) => {
     }
     const state = gameEngine.getThoneState();
     const dgt = dgtBoard.getState();
-    res.render('throne', { state, dgt, showVenueCode: true });
+    const showCode = db.getConfig('show_venue_code') === 'true';
+    res.render('throne', { state, dgt, showVenueCode: true, showVenueCodeText: showCode });
 });
 
 // Live — Public web version of throne (no QR code, shows "Watch live" URL instead)
@@ -209,6 +210,7 @@ router.get('/admin', (req, res) => {
     const payouts = db.getAllPayouts();
     const recentGames = db.getRecentGames(20);
     const scheduledReset = gameEngine.getScheduledReset();
+    const showVenueCode = db.getConfig('show_venue_code') === 'true';
     res.render('admin', {
         state,
         players,
@@ -218,6 +220,7 @@ router.get('/admin', (req, res) => {
         payouts,
         recentGames,
         scheduledReset,
+        showVenueCode,
     });
 });
 
