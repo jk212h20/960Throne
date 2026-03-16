@@ -809,6 +809,9 @@ function flushAccumulatedSats() {
 // ============================================================
 
 function getThoneState() {
+    // Flush accumulated sats so DB values are fresh before returning state
+    flushAccumulatedSats();
+
     const kingId = db.getConfig('current_king_id');
     const reignId = db.getConfig('current_reign_id');
     const gameId = db.getConfig('current_game_id');
@@ -828,6 +831,18 @@ function getThoneState() {
     if (reign && !reign.dethroned_at) {
         reignSeconds = (Date.now() - new Date(reign.crowned_at).getTime()) / 1000;
         liveSats = Math.floor(reignSeconds) * satRate;
+    }
+
+    // Ensure king's total_sats_earned is never less than liveSats for this reign.
+    // This guards against DB reset / accumulator lag / server restart where
+    // crowned_at is preserved but player sats weren't fully flushed.
+    if (king && liveSats > 0) {
+        // The king's total must be at least liveSats (current reign alone)
+        if (king.total_sats_earned < liveSats) {
+            const deficit = liveSats - king.total_sats_earned;
+            king.total_sats_earned = liveSats;
+            king.sat_balance += deficit;
+        }
     }
 
     return {
