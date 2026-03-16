@@ -20,7 +20,8 @@ function attachPlayer(req, res, next) {
 }
 
 function attachAdmin(req, res, next) {
-    const adminPassword = process.env.ADMIN_PASSWORD || 'changeme';
+    const dbPassword = db.getConfig('admin_password_override');
+    const adminPassword = dbPassword || process.env.ADMIN_PASSWORD || 'changeme';
     const provided = req.cookies?.admin_token;
     req.isAdmin = provided === adminPassword;
     next();
