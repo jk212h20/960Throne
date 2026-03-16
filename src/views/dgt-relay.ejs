@@ -691,6 +691,9 @@
         } catch (err) { /* silent — clock-only updates are best-effort */ }
     }
     
+    // Auto-connect on page load
+    connectLiveChess();
+    
     function boardArrayToFen(board) {
         if (!board) return null;
         const squares = typeof board === 'string' ? board.split('') : board;
