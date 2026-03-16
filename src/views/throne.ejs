@@ -152,7 +152,7 @@
                                 <%= challengerName %>
                             </div>
                         </div>
-                        <div id="dgt-clock-white" class="dgt-clock dgt-clock-active"><%= fmtClock((dgt && dgt.clock) ? dgt.clock.white : tcBase) %></div>
+                        <div id="dgt-clock-white" class="dgt-clock dgt-clock-active"><%= fmtClock((dgt && dgt.clock) ? dgt.clock.black : tcBase) %></div>
                     </div>
 
                     <!-- Center: Board + game info -->
@@ -207,7 +207,7 @@
                                 <%= kingName %>
                             </div>
                         </div>
-                        <div id="dgt-clock-black" class="dgt-clock dgt-clock-active"><%= fmtClock((dgt && dgt.clock) ? dgt.clock.black : tcBase) %></div>
+                        <div id="dgt-clock-black" class="dgt-clock dgt-clock-active"><%= fmtClock((dgt && dgt.clock) ? dgt.clock.white : tcBase) %></div>
                     </div>
                 </div><!-- end flex row: white | board | black -->
                 <% } else if (state.king) { %>
@@ -433,13 +433,14 @@
             const whiteEl = document.getElementById('dgt-clock-white');
             const blackEl = document.getElementById('dgt-clock-black');
 
-            if (whiteEl) whiteEl.textContent = formatClockTime(clock.white);
-            if (blackEl) blackEl.textContent = formatClockTime(clock.black);
+            if (whiteEl) whiteEl.textContent = formatClockTime(clock.black);
+            if (blackEl) blackEl.textContent = formatClockTime(clock.white);
 
             // If serial relay provides activeSide, show which clock is running
+            // Note: white/black swapped because DGT left=white but our left=challenger(white pieces)=DGT black clock
             if (clock.activeSide) {
-                if (whiteEl) whiteEl.className = 'dgt-clock ' + (clock.activeSide === 'white' ? 'dgt-clock-active' : 'dgt-clock-inactive');
-                if (blackEl) blackEl.className = 'dgt-clock ' + (clock.activeSide === 'black' ? 'dgt-clock-active' : 'dgt-clock-inactive');
+                if (whiteEl) whiteEl.className = 'dgt-clock ' + (clock.activeSide === 'black' ? 'dgt-clock-active' : 'dgt-clock-inactive');
+                if (blackEl) blackEl.className = 'dgt-clock ' + (clock.activeSide === 'white' ? 'dgt-clock-active' : 'dgt-clock-inactive');
             } else if (clock.running === false) {
                 // Both stopped
                 if (whiteEl) whiteEl.className = 'dgt-clock dgt-clock-inactive';
