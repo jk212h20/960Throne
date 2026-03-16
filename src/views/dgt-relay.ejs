@@ -412,17 +412,28 @@
             if (feeds && feeds.length > 0) {
                 const board = feeds[0];
                 const newFeedId = board.serialnr || board.id || board;
-                // Only log board found once (not on every poll)
+                // Log the FULL raw board object on first discovery so we can see all fields
                 if (feedId !== newFeedId) {
                     feedId = newFeedId;
-                    log('Board: ' + feedId + ' (v10)', 'success');
-                    updateConnectionUI(true, '✅ Polling board positions (500ms)');
+                    log('Board: ' + feedId, 'success');
+                    log('RAW board object keys: ' + Object.keys(board).join(', '), 'info');
+                    log('RAW board object: ' + JSON.stringify(board).substring(0, 300), 'info');
+                    updateConnectionUI(true, '✅ Connected to board');
+                    
+                    // Try subscribing with clock: true (the LiveChess API way to get clock)
+                    log('Attempting subscribe with clock:true...', 'info');
+                    wsSend({ call: 'subscribe', id: 2, param: { feed: feedId, param: { board: true, clock: true } } });
+                }
+                
+                // Log raw data periodically (every 10th poll) so user can see clock fields
+                if (eboardsPollId % 10 === 0) {
+                    log('RAW poll #' + eboardsPollId + ': ' + JSON.stringify(board).substring(0, 200), 'info');
                 }
                 
                 // The board field IS the FEN position string (not a 64-char array)
                 const fen = board.fen || board.board;
                 
-                // Extract clock data from the board object
+                // Extract clock data from the board object (tries multiple field formats)
                 const clock = extractClockFromBoard(board);
                 if (clock) {
                     lastClock = clock;
@@ -432,16 +443,14 @@
                 // Handle FEN + clock together
                 if (fen && typeof fen === 'string' && fen.includes('/')) {
                     const fenChanged = handleBoardFen(fen, clock);
-                    // If FEN didn't change but clock did, push clock-only update
                     if (!fenChanged && clock) {
                         pushClockToServer(clock);
                     }
                 } else if (clock) {
-                    // No FEN but clock present — push clock-only
                     pushClockToServer(clock);
                 }
                 
-                // Skip subscribe (buggy in 2.2.9), poll eboards every 1.5s instead
+                // Also poll eboards as fallback (subscribe may not work in 2.2.9)
                 startEboardsPolling();
             } else {
                 log('No boards detected. Retrying in 5s...', 'error');
@@ -457,6 +466,31 @@
             return;
         }
         
+        // Subscription push events (from subscribe with board:true, clock:true)
+        // These come without an id, or with the subscription id
+        if (msg.param) {
+            // Extract clock from subscription push
+            const subClock = extractClockFromBoard(msg.param);
+            if (subClock) {
+                lastClock = subClock;
+                updateRelayClockDisplay(subClock);
+                log('⏱️ Clock from subscription: W=' + formatClock(subClock.white) + ' B=' + formatClock(subClock.black), 'success');
+            }
+            
+            // Extract FEN from subscription push
+            const subFen = msg.param.fen || (msg.param.board && typeof msg.param.board === 'string' && msg.param.board.includes('/') ? msg.param.board : null);
+            if (subFen) {
+                const fenChanged = handleBoardFen(subFen, subClock);
+                if (!fenChanged && subClock) {
+                    pushClockToServer(subClock);
+                }
+                return;
+            } else if (subClock) {
+                pushClockToServer(subClock);
+                return;
+            }
+        }
+        
         // Board data — try multiple field names from any message
         const fen = extractFenFromMsg(msg);
         if (fen) {
@@ -464,8 +498,8 @@
             return;
         }
         
-        // Log unhandled messages for debugging
-        log('Unhandled msg: ' + JSON.stringify(msg).substring(0, 150), 'info');
+        // Log ALL unhandled messages for debugging (important to see what LiveChess sends)
+        log('Unhandled msg id=' + msg.id + ': ' + JSON.stringify(msg).substring(0, 200), 'info');
     }
     
     // ─── WebSocket eboards polling ───────────────────────
