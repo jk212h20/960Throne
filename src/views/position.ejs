@@ -124,7 +124,7 @@
 
         <!-- Position Number -->
         <div class="card p-6 mb-4 text-center">
-            <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Chess960 Position</div>
+            <div class="text-xs text-gray-400 uppercase tracking-wider mb-1" id="pos-label">Chess960 Position</div>
             <div class="position-number" id="pos-number">—</div>
             <div class="text-sm text-gray-400 mt-2" id="pos-pieces"></div>
         </div>
@@ -188,7 +188,7 @@
             { name: 'Round 9',  date: '2026-03-17', time: '17:00', day: 'Mar 17' },
         ];
 
-        const LOCK_MINUTES = 5; // Lock position this many minutes before round start
+        const LOCK_MINUTES = 10; // Lock position this many minutes before round start
         const TZ_OFFSET = -6; // UTC-6
 
         // Convert schedule time to UTC timestamp
@@ -200,6 +200,7 @@
         }
 
         // Get current round status
+        // Lock starts 10 min before each round and stays locked until 10 min before the NEXT round.
         function getRoundStatus(now) {
             let nextRound = null;
             let lockedForRound = null;
@@ -207,16 +208,19 @@
 
             for (let i = 0; i < SCHEDULE.length; i++) {
                 const roundTime = scheduleToUtc(SCHEDULE[i]);
-                const lockTime = roundTime - (LOCK_MINUTES * 60 * 1000);
+                const lockStart = roundTime - (LOCK_MINUTES * 60 * 1000);
+                // Lock ends when the next round's lock starts, or never if last round
+                const nextLockStart = (i + 1 < SCHEDULE.length)
+                    ? scheduleToUtc(SCHEDULE[i + 1]) - (LOCK_MINUTES * 60 * 1000)
+                    : Infinity;
 
-                if (now >= lockTime && now < roundTime) {
-                    // We're in the lock window
+                if (now >= lockStart && now < nextLockStart) {
                     lockedForRound = SCHEDULE[i];
                     currentRoundIdx = i;
                     break;
                 }
-                if (now < lockTime) {
-                    nextRound = { ...SCHEDULE[i], lockTime, roundTime };
+                if (now < lockStart) {
+                    nextRound = { ...SCHEDULE[i], lockTime: lockStart, roundTime };
                     currentRoundIdx = i;
                     break;
                 }
@@ -370,8 +374,11 @@
             const countdownTimer = document.getElementById('countdown-timer');
             const countdownCard = document.getElementById('countdown-card');
 
+            // Update position label
+            const posLabel = document.getElementById('pos-label');
+
             if (lockedForRound) {
-                // LOCKED — position frozen
+                // LOCKED — position frozen for this round
                 if (!isLocked) {
                     isLocked = true;
                     lockedPosition = currentPosition;
@@ -380,11 +387,17 @@
                 statusText.textContent = 'Position locked for ' + lockedForRound.name;
                 lockBanner.style.display = 'block';
                 document.getElementById('lock-round-name').textContent = lockedForRound.name;
+                posLabel.textContent = 'Position for ' + lockedForRound.name;
 
                 const roundTime = scheduleToUtc(lockedForRound);
                 const timeLeft = roundTime - now;
-                countdownLabel.textContent = lockedForRound.name + ' starts in';
-                countdownTimer.textContent = formatCountdown(timeLeft);
+                if (timeLeft > 0) {
+                    countdownLabel.textContent = lockedForRound.name + ' starts in';
+                    countdownTimer.textContent = formatCountdown(timeLeft);
+                } else {
+                    countdownLabel.textContent = lockedForRound.name + ' in progress';
+                    countdownTimer.textContent = '🔒';
+                }
                 countdownCard.style.display = 'block';
             } else if (nextRound) {
                 // LIVE — position updating
@@ -395,6 +408,7 @@
                 statusDot.className = 'status-dot status-live';
                 statusText.textContent = 'Live — position updates with new Bitcoin blocks';
                 lockBanner.style.display = 'none';
+                posLabel.textContent = 'Chess960 Position';
 
                 const lockTime = nextRound.lockTime;
                 const timeToLock = lockTime - now;
@@ -410,6 +424,7 @@
                 statusDot.className = 'status-dot status-live';
                 statusText.textContent = 'Tournament schedule complete';
                 lockBanner.style.display = 'none';
+                posLabel.textContent = 'Chess960 Position';
                 countdownCard.style.display = 'none';
             }
 

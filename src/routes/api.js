@@ -1007,18 +1007,25 @@ const ROUND_SCHEDULE = [
     { name: 'Round 8', utcMs: Date.UTC(2026, 2, 17, 21, 30) },  // Mar 17 3:30 PM CST
     { name: 'Round 9', utcMs: Date.UTC(2026, 2, 17, 23, 0) },   // Mar 17 5:00 PM CST
 ];
-const ROUND_LOCK_MS = 5 * 60 * 1000; // 5 minutes before round
+const ROUND_LOCK_MS = 10 * 60 * 1000; // 10 minutes before round
 let _lockedRoundPosition = null; // { roundName, data }
 
 router.get('/round-position', async (req, res) => {
     try {
         const now = Date.now();
 
-        // Check if we're in a lock window
+        // Determine which round we're locked for.
+        // Lock starts 10 min before each round and stays locked until 10 min before the NEXT round.
+        // This means once locked for Round N, the position stays visible until Round N+1's lock begins.
         let lockedForRound = null;
-        for (const round of ROUND_SCHEDULE) {
-            const lockTime = round.utcMs - ROUND_LOCK_MS;
-            if (now >= lockTime && now < round.utcMs) {
+        for (let i = 0; i < ROUND_SCHEDULE.length; i++) {
+            const round = ROUND_SCHEDULE[i];
+            const lockStart = round.utcMs - ROUND_LOCK_MS;
+            // Lock ends when the next round's lock starts, or never if this is the last round
+            const nextLockStart = (i + 1 < ROUND_SCHEDULE.length)
+                ? ROUND_SCHEDULE[i + 1].utcMs - ROUND_LOCK_MS
+                : Infinity;
+            if (now >= lockStart && now < nextLockStart) {
                 lockedForRound = round;
                 break;
             }
