@@ -438,10 +438,12 @@
             if (blackEl) blackEl.textContent = formatClockTime(clock.white);
 
             // If serial relay provides activeSide, show which clock is running
-            // Note: white/black swapped because DGT left=white but our left=challenger(white pieces)=DGT black clock
+            // activeSide is NOT swapped — it indicates which physical side is active,
+            // and since we swapped values (white element shows black's time), the active
+            // highlight needs to follow the original activeSide mapping
             if (clock.activeSide) {
-                if (whiteEl) whiteEl.className = 'dgt-clock ' + (clock.activeSide === 'black' ? 'dgt-clock-active' : 'dgt-clock-inactive');
-                if (blackEl) blackEl.className = 'dgt-clock ' + (clock.activeSide === 'white' ? 'dgt-clock-active' : 'dgt-clock-inactive');
+                if (whiteEl) whiteEl.className = 'dgt-clock ' + (clock.activeSide === 'white' ? 'dgt-clock-active' : 'dgt-clock-inactive');
+                if (blackEl) blackEl.className = 'dgt-clock ' + (clock.activeSide === 'black' ? 'dgt-clock-active' : 'dgt-clock-inactive');
             } else if (clock.running === false) {
                 // Both stopped
                 if (whiteEl) whiteEl.className = 'dgt-clock dgt-clock-inactive';
