@@ -121,7 +121,12 @@ function joinQueue(playerId) {
 
 function leaveQueue(playerId) {
     db.removePlayerFromQueue(playerId);
-    broadcast('queue_updated', { queue: db.getQueue() });
+    const queue = db.getQueue();
+    broadcast('queue_updated', { queue });
+    // Notify new #1 in queue that they're next
+    if (queue.length > 0) {
+        telegram.notifyOnDeck(queue[0].player_id);
+    }
     return { success: true };
 }
 
@@ -867,7 +872,12 @@ function setEventActive(active) {
 
 function adminRemoveFromQueue(playerId) {
     db.removePlayerFromQueue(playerId);
-    broadcast('queue_updated', { queue: db.getQueue() });
+    const queue = db.getQueue();
+    broadcast('queue_updated', { queue });
+    // Notify new #1 in queue that they're next
+    if (queue.length > 0) {
+        telegram.notifyOnDeck(queue[0].player_id);
+    }
 }
 
 function adminAddToQueue(playerId) {
