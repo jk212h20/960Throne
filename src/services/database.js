@@ -860,6 +860,18 @@ function getPendingPayouts() {
     return rowsToObjects(result[0]);
 }
 
+function getReconciledFailedPayouts() {
+    const result = db.exec(`
+        SELECT p.*, pl.name as player_name
+        FROM payouts p
+        JOIN players pl ON p.player_id = pl.id
+        WHERE p.status = 'failed' AND p.error_message LIKE 'Reconciled%'
+        ORDER BY p.created_at ASC
+    `);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
 // ============================================================
 // Stats
 // ============================================================
@@ -1066,6 +1078,7 @@ module.exports = {
     getPlayerPayouts,
     getAllPayouts,
     getPendingPayouts,
+    getReconciledFailedPayouts,
     
     // Stats
     getEventStats,

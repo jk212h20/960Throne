@@ -713,32 +713,35 @@ router.get('/admin/payouts', requireAdmin, (req, res) => {
     res.json({ payouts: db.getAllPayouts() });
 });
 
-// Reconcile stuck pending payouts — checks LND for actual payment status
+// Reconcile stuck payouts — checks LND for actual payment status
+// Handles both pending payouts AND previously-wrongly-marked-failed payouts
 router.post('/admin/reconcile-payouts', requireAdmin, async (req, res) => {
     const pending = db.getPendingPayouts();
-    if (pending.length === 0) {
-        return res.json({ success: true, message: 'No pending payouts to reconcile.' });
+    const wronglyFailed = db.getReconciledFailedPayouts(); // payouts marked failed by old reconcile
+    const allToCheck = [...pending, ...wronglyFailed];
+    
+    if (allToCheck.length === 0) {
+        return res.json({ success: true, message: 'No payouts to reconcile.' });
     }
 
     let markedCompleted = 0;
     let markedFailed = 0;
-    let couldNotVerify = 0;
     const details = [];
 
     try {
         // Fetch recent payments from LND to cross-reference
         const lndPayments = await lightning.listPayments(200);
-        
-        // Build a lookup: amount_sat → array of successful payments
-        // LND payment status: SUCCEEDED, FAILED, IN_FLIGHT, UNKNOWN
         const succeededPayments = lndPayments.filter(p => p.status === 'SUCCEEDED');
         
-        for (const payout of pending) {
-            // Strategy 1: Match by amount + time window (±5 minutes of payout creation)
-            const payoutTime = new Date(payout.created_at + 'Z').getTime() / 1000; // unix seconds
-            const matchWindow = 300; // 5 minutes
+        // Track which LND payments we've already matched (prevent double-matching)
+        const usedPaymentHashes = new Set();
+        
+        for (const payout of allToCheck) {
+            const payoutTime = new Date(payout.created_at + 'Z').getTime() / 1000;
+            const matchWindow = 300; // ±5 minutes
             
             const match = succeededPayments.find(lndPay => {
+                if (usedPaymentHashes.has(lndPay.payment_hash)) return false;
                 const lndAmount = parseInt(lndPay.value_sat || lndPay.value || '0');
                 const lndTime = parseInt(lndPay.creation_date || '0');
                 return lndAmount === payout.amount_sats && 
@@ -746,29 +749,39 @@ router.post('/admin/reconcile-payouts', requireAdmin, async (req, res) => {
             });
 
             if (match) {
-                // Payment found in LND as SUCCEEDED — mark completed and deduct balance
+                usedPaymentHashes.add(match.payment_hash);
+                
+                // Only deduct balance if payout wasn't already completed (avoid double-deduction)
+                const wasAlreadyFailed = payout.status === 'failed';
+                
                 db.updatePayout(payout.id, {
                     payment_hash: match.payment_hash,
                     status: 'completed',
-                    completed_at: new Date().toISOString()
+                    completed_at: new Date().toISOString(),
+                    error_message: null
                 });
-                db.deductSatsFromPlayer(payout.player_id, payout.amount_sats);
+                
+                // Deduct sats — for wrongly-failed payouts the balance was never deducted
+                if (wasAlreadyFailed || payout.status === 'pending' || payout.status === 'paying') {
+                    db.deductSatsFromPlayer(payout.player_id, payout.amount_sats);
+                }
+                
                 markedCompleted++;
-                details.push(`✅ Payout #${payout.id}: ${payout.amount_sats} sats to ${payout.player_name} → COMPLETED (matched LND payment ${match.payment_hash.substring(0, 16)}...)`);
-                console.log(details[details.length - 1]);
-            } else {
-                // No matching LND payment found — mark as failed (payment never went through)
+                const label = wasAlreadyFailed ? '🔄 FIXED' : '✅ COMPLETED';
+                details.push(`${label} Payout #${payout.id}: ${payout.amount_sats} sats to ${payout.player_name} (LND: ${match.payment_hash.substring(0, 16)}...)`);
+                console.log(`🔧 ${details[details.length - 1]}`);
+            } else if (payout.status !== 'failed') {
+                // Only mark as failed if not already failed
                 db.updatePayout(payout.id, {
                     status: 'failed',
                     error_message: 'Reconciled: no matching successful LND payment found'
                 });
                 markedFailed++;
                 details.push(`❌ Payout #${payout.id}: ${payout.amount_sats} sats to ${payout.player_name} → FAILED (no matching LND payment)`);
-                console.log(details[details.length - 1]);
+                console.log(`🔧 ${details[details.length - 1]}`);
             }
         }
     } catch (err) {
-        // If LND is unreachable, don't mark anything — report the error
         console.error('🔧 Reconcile error — could not reach LND:', err.message);
         return res.status(502).json({
             success: false,
@@ -777,10 +790,12 @@ router.post('/admin/reconcile-payouts', requireAdmin, async (req, res) => {
         });
     }
 
-    const message = `Reconciled ${pending.length} pending payout(s): ${markedCompleted} completed, ${markedFailed} failed.`;
+    const message = `Reconciled ${allToCheck.length} payout(s): ${markedCompleted} completed, ${markedFailed} failed.`;
     res.json({
         success: true,
-        totalPending: pending.length,
+        totalChecked: allToCheck.length,
+        pendingChecked: pending.length,
+        failedRechecked: wronglyFailed.length,
         markedCompleted,
         markedFailed,
         details,
