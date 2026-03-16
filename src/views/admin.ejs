@@ -336,6 +336,45 @@
             </div>
         </div>
 
+        <!-- Payout History -->
+        <div class="card mt-4">
+            <h2 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'lightning', size: 20, cls: 'text-throne-gold' }) %> Payout History (<%= payouts.length %>)</h2>
+            <% if (payouts.length === 0) { %>
+            <p class="text-gray-500 text-sm">No payouts yet</p>
+            <% } else { %>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead><tr class="text-gray-500 border-b border-gray-700">
+                        <th class="py-1 text-left">Player</th>
+                        <th class="py-1 text-right">Sats</th>
+                        <th class="py-1 text-left">Status</th>
+                        <th class="py-1 text-left">Address</th>
+                        <th class="py-1 text-right">When</th>
+                    </tr></thead>
+                    <tbody>
+                    <% payouts.forEach(p => { %>
+                    <tr class="border-b border-gray-800">
+                        <td class="py-1"><%= p.player_name %></td>
+                        <td class="py-1 text-right text-throne-gold font-mono"><%= p.amount_sats.toLocaleString() %></td>
+                        <td class="py-1">
+                            <% if (p.status === 'completed') { %>
+                            <span class="text-green-400">✓ paid</span>
+                            <% } else if (p.status === 'failed') { %>
+                            <span class="text-red-400">✗ failed</span>
+                            <% } else { %>
+                            <span class="text-yellow-400">⏳ <%= p.status %></span>
+                            <% } %>
+                        </td>
+                        <td class="py-1 text-xs text-gray-500 max-w-[120px] truncate" title="<%= p.lightning_address || '' %>"><%= p.lightning_address || 'LNURL-withdraw' %></td>
+                        <td class="py-1 text-right text-xs text-gray-500"><%= p.created_at ? new Date(p.created_at + 'Z').toLocaleString() : '' %></td>
+                    </tr>
+                    <% }) %>
+                    </tbody>
+                </table>
+            </div>
+            <% } %>
+        </div>
+
         <div id="admin-status" class="hidden fixed bottom-4 right-4 p-3 rounded-lg text-sm max-w-xs"></div>
     </div>
 
