@@ -7,6 +7,13 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Throne Clock/Name Label Fix (Mar 15, 2026)
+- **Bug**: Player name boxes on throne display didn't follow board orientation. When king played black and board was flipped, the names/clocks stayed in fixed white-left/black-right positions, causing the wrong name to appear above the active clock.
+- **Fix**: Made player name boxes and clock element IDs dynamic based on `isKingWhite` — when king is white, left=white side; when king is black, left=black side. This matches the board flip so the king's name is always on the same side as their pieces.
+- **Key variables in throne.ejs**: `leftName`, `rightName`, `leftClockId`, `rightClockId`, `leftColorClass`, `rightColorClass` — all derived from `isKingWhite`.
+- **Note**: The clock element IDs (`dgt-clock-white`, `dgt-clock-black`) are now dynamically placed to match the layout side, ensuring `updateClockDisplay()` updates the correct visual position.
+- Status: **deployed to Railway** (commit 985876b)
+
 ### Setup Mode — Target Position with Overlay & Checkmarks (Mar 15, 2026)
 - **Problem**: When a new game starts, players need to set up the Chess960 position on the physical board. Previously the throne page showed the current DGT board position (or the target position statically) with no visual guidance.
 - **Fix**: Added a full "setup mode" to the throne display:

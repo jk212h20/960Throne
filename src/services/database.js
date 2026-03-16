@@ -591,8 +591,8 @@ function isPlayerInQueue(playerId) {
 // ============================================================
 
 function createGame(kingId, challengerId, chess960Position, reignId, kingColor = null) {
-    // Randomly assign king to white or black if not specified
-    if (!kingColor) kingColor = Math.random() < 0.5 ? 'white' : 'black';
+    // King always plays black
+    kingColor = 'black';
     db.run(`INSERT INTO games (king_id, challenger_id, chess960_position, reign_id, king_color) VALUES (?, ?, ?, ?, ?)`,
         [kingId, challengerId, chess960Position, reignId, kingColor]);
     const result = db.exec(`SELECT last_insert_rowid()`);
