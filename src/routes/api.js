@@ -1007,10 +1007,15 @@ router.post('/admin/open-channel', requireAdmin, async (req, res) => {
 
         // Open the channel
         const result = await lightning.openChannel(pubkey, amountSats);
+        const txid = result.funding_txid_str || result.funding_txid_bytes || null;
+        console.log('⚡ Channel open result:', JSON.stringify(result));
         res.json({
             success: true,
-            message: `Channel opening initiated! ${amountSats.toLocaleString()} sats. Needs 3 on-chain confirmations (~30 min).`,
-            fundingTxid: result.funding_txid_str || result.funding_txid_bytes,
+            message: txid 
+                ? `Channel opening initiated! ${amountSats.toLocaleString()} sats. Funding txid: ${txid}. Needs 3 on-chain confirmations (~30 min).`
+                : `Channel open request sent (${amountSats.toLocaleString()} sats). LND response: ${JSON.stringify(result).substring(0, 200)}`,
+            fundingTxid: txid,
+            rawResponse: result,
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
