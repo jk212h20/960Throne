@@ -154,3 +154,4 @@ class LightningAuth {
 }
 
 module.exports = LightningAuth;
+module.exports.encodeLnurl = encodeLnurl;

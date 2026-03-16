@@ -154,15 +154,63 @@
 
         <!-- ====== CLAIM SATS ====== -->
         <% if (player.sat_balance > 0) { %>
-        <div class="card mb-4">
+        <div class="card mb-4" id="claim-card">
             <h3 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'lightning', size: 20, cls: 'text-throne-gold' }) %> Cash Out</h3>
-            <p class="text-sm text-gray-400 mb-3">Send your <span class="text-throne-gold font-bold"><%= player.sat_balance.toLocaleString() %> sats</span> to your Lightning wallet</p>
-            <form id="claim-form" onsubmit="return handleClaim(event)">
-                <input type="text" id="ln-address" class="input mb-2" placeholder="Lightning address (e.g. you@walletofsatoshi.com)">
-                <input type="number" id="claim-amount" class="input mb-3" placeholder="Amount (leave blank for all)" max="<%= player.sat_balance %>">
-                <button type="submit" class="btn-gold w-full flex items-center justify-center gap-2"><%- include('partials/icon', { name: 'lightning', size: 20, cls: '' }) %> Send <%= player.sat_balance.toLocaleString() %> sats</button>
-            </form>
-            <div id="claim-result" class="hidden mt-3 p-3 rounded-lg text-sm"></div>
+            
+            <!-- Primary: One-tap LNURL-withdraw -->
+            <div id="claim-tap-section">
+                <p class="text-sm text-gray-400 mb-3">Tap to send sats straight to your Lightning wallet</p>
+                <button onclick="startWithdraw()" id="claim-btn" class="btn-gold w-full py-4 text-lg flex items-center justify-center gap-2">
+                    <%- include('partials/icon', { name: 'lightning', size: 24, cls: '' }) %> Claim <span id="claim-btn-amount"><%= player.sat_balance.toLocaleString() %></span> sats
+                </button>
+            </div>
+
+            <!-- Withdraw QR / Deep Link (shown after tap) -->
+            <div id="claim-withdraw-section" class="hidden">
+                <div class="text-center">
+                    <div class="text-sm text-gray-400 mb-3">Open in your wallet to receive <span class="text-throne-gold font-bold" id="withdraw-amount"></span> sats</div>
+                    
+                    <!-- QR Code (for scanning from another device) -->
+                    <div id="claim-qr-container" class="mb-3">
+                        <img id="claim-qr-img" src="" alt="Withdraw QR" class="mx-auto rounded-lg" style="max-width: 250px;">
+                    </div>
+
+                    <!-- Open in Wallet button (primary action on mobile) -->
+                    <a id="claim-deep-link" href="#" class="btn-gold w-full py-4 text-lg flex items-center justify-center gap-2 mb-3">
+                        <%- include('partials/icon', { name: 'lightning', size: 24, cls: '' }) %> Open in Wallet
+                    </a>
+
+                    <div id="claim-status" class="text-sm text-gray-500 flex items-center justify-center gap-2">
+                        <%- include('partials/icon', { name: 'hourglass', size: 16, cls: 'text-gray-500' }) %> Waiting for wallet...
+                    </div>
+                    
+                    <button onclick="cancelWithdraw()" class="text-xs text-gray-600 hover:text-gray-400 mt-3 transition-colors">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Success state -->
+            <div id="claim-success-section" class="hidden text-center py-4">
+                <div class="text-4xl mb-2">⚡</div>
+                <div class="text-xl font-bold text-green-400" id="claim-success-msg"></div>
+                <div class="text-sm text-gray-500 mt-2">Check your wallet — sats should arrive instantly</div>
+            </div>
+
+            <!-- Error state -->
+            <div id="claim-error-section" class="hidden">
+                <div class="bg-red-900/50 border border-red-700 rounded-lg p-3 text-sm text-red-300 text-center" id="claim-error-msg"></div>
+                <button onclick="resetClaim()" class="text-sm text-gray-400 hover:text-gray-200 mt-3 w-full text-center">Try Again</button>
+            </div>
+
+            <!-- Fallback: Lightning address (collapsed) -->
+            <details class="mt-4 border-t border-gray-800 pt-3">
+                <summary class="text-xs text-gray-600 cursor-pointer hover:text-gray-400 transition-colors">Send to Lightning address instead</summary>
+                <form id="claim-form" onsubmit="return handleClaim(event)" class="mt-3">
+                    <input type="text" id="ln-address" class="input mb-2" placeholder="Lightning address (e.g. you@walletofsatoshi.com)">
+                    <input type="number" id="claim-amount" class="input mb-3" placeholder="Amount (leave blank for all)" max="<%= player.sat_balance %>">
+                    <button type="submit" class="btn-gold w-full flex items-center justify-center gap-2"><%- include('partials/icon', { name: 'lightning', size: 20, cls: '' }) %> Send sats</button>
+                </form>
+                <div id="claim-result" class="hidden mt-3 p-3 rounded-lg text-sm"></div>
+            </details>
         </div>
         <% } %>
 
@@ -627,6 +675,113 @@
             location.reload();
         }
 
+        // ====== LNURL-withdraw (one-tap claim) ======
+        let withdrawK1 = null;
+        let withdrawPollInterval = null;
+
+        async function startWithdraw() {
+            const btn = document.getElementById('claim-btn');
+            const tapSection = document.getElementById('claim-tap-section');
+            const withdrawSection = document.getElementById('claim-withdraw-section');
+            const successSection = document.getElementById('claim-success-section');
+            const errorSection = document.getElementById('claim-error-section');
+
+            btn.disabled = true;
+            btn.textContent = 'Creating withdraw link...';
+
+            try {
+                const res = await fetch('/api/claim/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    btn.disabled = false;
+                    btn.innerHTML = '⚡ Claim sats';
+                    alert(data.error || 'Failed to create withdraw');
+                    return;
+                }
+
+                withdrawK1 = data.k1;
+
+                // Show the withdraw section
+                tapSection.classList.add('hidden');
+                successSection.classList.add('hidden');
+                errorSection.classList.add('hidden');
+                withdrawSection.classList.remove('hidden');
+
+                // Set QR and deep link
+                document.getElementById('claim-qr-img').src = data.qr;
+                document.getElementById('claim-deep-link').href = data.deepLink;
+                document.getElementById('withdraw-amount').textContent = data.amount.toLocaleString();
+
+                // On mobile, auto-open the deep link
+                if (/iPhone|iPad|Android/i.test(navigator.userAgent)) {
+                    window.location.href = data.deepLink;
+                }
+
+                // Start polling for completion
+                withdrawPollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await fetch('/api/claim/status/' + withdrawK1);
+                        const statusData = await statusRes.json();
+
+                        if (statusData.status === 'complete') {
+                            clearInterval(withdrawPollInterval);
+                            withdrawPollInterval = null;
+                            // Show success
+                            withdrawSection.classList.add('hidden');
+                            successSection.classList.remove('hidden');
+                            document.getElementById('claim-success-msg').textContent = statusData.message;
+                            setTimeout(() => location.reload(), 3000);
+                        } else if (statusData.status === 'failed') {
+                            clearInterval(withdrawPollInterval);
+                            withdrawPollInterval = null;
+                            // Show error
+                            withdrawSection.classList.add('hidden');
+                            errorSection.classList.remove('hidden');
+                            document.getElementById('claim-error-msg').textContent = statusData.error || 'Payment failed';
+                        } else if (statusData.status === 'expired') {
+                            clearInterval(withdrawPollInterval);
+                            withdrawPollInterval = null;
+                            resetClaim();
+                        }
+                    } catch { /* ignore polling errors */ }
+                }, 1500);
+
+            } catch (err) {
+                btn.disabled = false;
+                btn.innerHTML = '⚡ Claim sats';
+                alert('Connection error');
+            }
+        }
+
+        function cancelWithdraw() {
+            if (withdrawPollInterval) {
+                clearInterval(withdrawPollInterval);
+                withdrawPollInterval = null;
+            }
+            withdrawK1 = null;
+            resetClaim();
+        }
+
+        function resetClaim() {
+            const tapSection = document.getElementById('claim-tap-section');
+            const withdrawSection = document.getElementById('claim-withdraw-section');
+            const successSection = document.getElementById('claim-success-section');
+            const errorSection = document.getElementById('claim-error-section');
+            const btn = document.getElementById('claim-btn');
+
+            if (tapSection) tapSection.classList.remove('hidden');
+            if (withdrawSection) withdrawSection.classList.add('hidden');
+            if (successSection) successSection.classList.add('hidden');
+            if (errorSection) errorSection.classList.add('hidden');
+            if (btn) { btn.disabled = false; }
+        }
+
+        // ====== Lightning address claim (fallback) ======
         async function handleClaim(e) {
             e.preventDefault();
             const address = document.getElementById('ln-address').value.trim();
