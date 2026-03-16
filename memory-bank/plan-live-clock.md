@@ -1,44 +1,43 @@
-# Plan: Live Clock Display from DGT Board — ✅ IMPLEMENTED (needs venue laptop reload)
+# Plan: Live Clock Display from DGT Board — ✅ WORKING (Web Serial)
 
 ## Current Status (March 15, 2026)
-- **All code is deployed** — relay page extracts clock, server broadcasts it, throne displays it
-- **Root cause of "clocks stuck at full time":** The venue laptop running the relay page hadn't been reloaded after the clock code was deployed. It was running old code that only sent board FEN, no clock data.
-- **Fix:** Reload the relay page on the venue laptop. The new code subscribes with `clock: true` and has debug logging in the Activity Log.
+- **Working!** Relay page reads DGT board directly via Chrome Web Serial API
+- **No LiveChess needed** — Chrome talks to the DGT board over USB serial
+- **No installs needed** on venue laptop — just Chrome
+- **Clock shows per-second ticks** with correct active side from byte 9 status bits
 
 ## Architecture (how clock data flows)
 
 ```
-DGT Board + Clock → LiveChess Software → Relay Page (dgt-relay.ejs) → POST /api/dgt/board-state → dgtBoard.js → Socket.io 'dgt_board' → throne.ejs
+DGT Board + Clock → USB Serial → Chrome Web Serial API → Relay Page JS → POST /api/dgt/board-state → dgtBoard.js → Socket.io 'dgt_board' → throne.ejs
 ```
 
-### Relay Page (`dgt-relay.ejs`)
-- Connects to LiveChess WebSocket at `ws://localhost:1982/api/v1.0`
-- Subscribes with `{ board: true, clock: true }` for push events
-- Also polls `eboards` every 500ms as fallback
-- Tries extracting clock via `extractClockFromBoard()` — supports 4 field name formats
-- Logs RAW board object keys on first discovery for debugging
-- Pushes `{ fen, clock: { white, black }, source: 'relay-page' }` to server
+### Relay Page (`dgt-relay.ejs`) — Web Serial Mode (primary)
+- "Connect USB Board" button → `navigator.serial.requestPort()` → user picks port
+- Opens at 9600 baud, parses raw DGT protocol bytes in browser JS
+- Sends DGT_SEND_BRD (0x42) every 5s, DGT_SEND_CLK (0x41) every 1s
+- Enters UPDATE_NICE mode (0x4b) for field updates + clock on change
+- Parses DGT_MSG_BWTIME (0x8d) byte 9: D0=running, D3=white turn, D4=black turn
+- Sends `{ fen, clock: { white, black, running, activeSide }, source: 'relay-page' }`
+- **LiveChess must be QUIT** before connecting (it locks the serial port)
 
 ### Server (`dgtBoard.js`)
-- `setBoardState()` stores clock in `currentState.clock`
+- `setBoardState()` detects changes in white/black/activeSide/running
 - Broadcasts via `io.emit('dgt_board', { fen, board, clock, ... })`
 
 ### Throne Page (`throne.ejs`)
-- Listens for `dgt_board` event, calls `updateClockDisplay(data.clock)`
-- Pure pass-through: displays whatever the hardware reports (no local countdown)
-- Active/inactive styling based on which clock value changed
+- Displays clock values from server, uses `activeSide` for green/gray styling
+- `dgt-clock-active` (green) = this clock is ticking
+- `dgt-clock-inactive` (gray) = this clock is paused
 
-### Serial Relay (`dgt-relay-serial.js`) — alternative path
-- Uses DGT serial protocol directly (no LiveChess needed)
-- UPDATE_NICE mode (0x4b) + explicit DGT_SEND_CLK (0x41) every 1s
-- Parses DGT_MSG_BWTIME (0x8d) with BCD decoding
-- See `memory-bank/dgt-protocol-reference.md` for protocol details
+### LiveChess Fallback (still available, collapsed in UI)
+- LiveChess `run` field is just `true/false/null` — no turn info
+- Clock values only update on events (clock press), not per-second
+- **Not recommended** — Web Serial is strictly better
 
-## Unknown: LiveChess Clock Field Format
-We still don't know exactly what field names LiveChess 2.2.9 uses for clock data in the eboards response. The relay page now logs the raw object — check the Activity Log after connecting. The `extractClockFromBoard()` function handles these known formats:
-1. `{ clock: { white: 180, black: 180 } }` — seconds as numbers
-2. `{ whiteClockMs: 180000, blackClockMs: 180000 }` — milliseconds  
-3. `{ wtime: 180, btime: 180 }` — seconds
-4. `{ clock: "03:00 / 03:00" }` — string format
-
-If none of these match, the raw log will show what format to add.
+## Key Learnings
+- LiveChess 2.2.9 clock format: `{ white: 180, black: 180, run: true/false/null, time: timestamp }`
+- LiveChess `run` field does NOT indicate which side — just boolean running state
+- LiveChess subscribe API broken in 2.2.9: "expects 2 arguments, got 3"
+- Web Serial API requires Chrome 89+ desktop, HTTPS or localhost
+- DGT standard setup: right side (from front) = White, left = Black
