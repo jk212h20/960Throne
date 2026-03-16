@@ -8,6 +8,24 @@
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+        /* DGT Relay styles */
+        .board-square { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+        .piece-img { width: 85%; height: 85%; object-fit: contain; }
+        .sq-light { background: #f0d9b5; }
+        .sq-dark { background: #b58863; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .dot-green { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+        .dot-red { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+        .dot-yellow { background: #eab308; box-shadow: 0 0 6px #eab308; }
+        .log-entry { font-family: monospace; font-size: 11px; padding: 1px 0; border-bottom: 1px solid #1a1a2e; }
+        .log-entry.error { color: #ef4444; }
+        .log-entry.success { color: #22c55e; }
+        .log-entry.info { color: #94a3b8; }
+        .relay-section { background: #111827; border: 1px solid #374151; border-radius: 12px; margin-top: 24px; }
+        .relay-section summary { padding: 14px 18px; cursor: pointer; color: #9ca3af; font-size: 0.9rem; }
+        .relay-section summary:hover { color: #e5e7eb; }
+        .relay-section[open] summary { border-bottom: 1px solid #374151; color: #e5e7eb; }
+        .relay-inner { padding: 16px; }
         .result-btn {
             display: flex;
             flex-direction: column;
@@ -237,6 +255,577 @@
         socket.on('game_started', () => setTimeout(() => location.reload(), 500));
         socket.on('game_ended', () => setTimeout(() => location.reload(), 1000));
         socket.on('new_king', () => setTimeout(() => location.reload(), 1000));
+    </script>
+
+    <!-- DGT Board Relay (collapsible) — keeps relay alive in this tab -->
+    <div class="max-w-lg mx-auto px-4 pb-8">
+        <details class="relay-section">
+            <summary>♟️ DGT Board Relay — click to expand</summary>
+            <div class="relay-inner space-y-4">
+
+                <!-- Direct USB Connection -->
+                <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                    <h3 class="font-bold text-sm mb-2 flex items-center gap-2">
+                        <span class="status-dot dot-red" id="serial-dot"></span>
+                        DGT Board — Direct USB
+                    </h3>
+                    <button id="btn-serial" onclick="toggleSerial()"
+                        class="w-full bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-bold">
+                        🔌 Connect USB Board
+                    </button>
+                    <div class="text-xs text-gray-500 mt-2" id="serial-status">Click to connect via USB</div>
+                </div>
+
+                <!-- LiveChess Fallback -->
+                <details class="bg-gray-900 rounded-lg border border-gray-800">
+                    <summary class="p-4 cursor-pointer text-gray-500 text-xs">📡 LiveChess fallback</summary>
+                    <div class="px-4 pb-4 space-y-2">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="status-dot dot-red" id="lc-dot"></span>
+                            <span class="text-xs text-gray-400">LiveChess</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="lc-url" value="http://localhost:1982"
+                                class="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs font-mono text-white">
+                            <button id="btn-connect" onclick="toggleConnection()"
+                                class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs font-bold">
+                                Connect
+                            </button>
+                        </div>
+                        <div class="text-xs text-gray-500" id="lc-status">Not connected</div>
+                    </div>
+                </details>
+
+                <!-- Manual FEN -->
+                <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                    <h3 class="font-bold text-xs mb-2">📝 Manual FEN</h3>
+                    <div class="flex gap-2">
+                        <input type="text" id="fen-input" placeholder="rnbqkbnr/pppppppp/..."
+                            class="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs font-mono text-white">
+                        <button onclick="pushManualFen()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs font-bold">Push</button>
+                    </div>
+                </div>
+
+                <!-- Clock + Status -->
+                <div class="flex gap-3">
+                    <div class="flex-1 bg-gray-900 rounded-lg p-3 border border-gray-800 text-center">
+                        <div class="text-xs text-gray-500 mb-1">♔ White</div>
+                        <div class="text-xl font-mono font-bold text-white" id="relay-clock-white">--:--</div>
+                    </div>
+                    <div class="flex-1 bg-gray-900 rounded-lg p-3 border border-gray-800 text-center">
+                        <div class="text-xs text-gray-500 mb-1">♚ Black</div>
+                        <div class="text-xl font-mono font-bold text-white" id="relay-clock-black">--:--</div>
+                    </div>
+                </div>
+
+                <!-- Server Status -->
+                <div class="bg-gray-900 rounded-lg p-3 border border-gray-800">
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="status-dot dot-red" id="server-dot"></span>
+                        <span class="text-gray-400">Pushes: <span class="font-mono text-white" id="push-count">0</span></span>
+                        <span class="text-gray-400 ml-2">Changes: <span class="font-mono text-white" id="change-count">0</span></span>
+                        <span class="text-gray-400 ml-2">Errors: <span class="font-mono text-red-400" id="error-count">0</span></span>
+                    </div>
+                    <div class="text-xs text-gray-600 mt-1">Last push: <span id="last-push">—</span></div>
+                </div>
+
+                <!-- Board Preview -->
+                <div class="bg-gray-900 rounded-lg p-3 border border-gray-800">
+                    <div class="flex justify-center"><div id="preview-board" class="inline-block"></div></div>
+                    <div class="mt-2 text-center"><code class="text-xs text-gray-600 font-mono" id="current-fen">No board data</code></div>
+                </div>
+
+                <!-- Log -->
+                <div class="bg-gray-900 rounded-lg p-3 border border-gray-800">
+                    <div id="log" class="max-h-32 overflow-y-auto bg-gray-950 rounded p-2 space-y-0.5">
+                        <div class="log-entry info">Ready. Connect board or enter FEN.</div>
+                    </div>
+                </div>
+            </div>
+        </details>
+    </div>
+
+    <!-- DGT Relay JavaScript -->
+    <script>
+    // ─── Config ──────────────────────────────────────────
+    const RELAY_SECRET = '<%= relaySecret %>';
+    const SERVER_URL = '<%= serverUrl %>';
+
+    // ─── State ───────────────────────────────────────────
+    let ws = null;
+    let connected = false;
+    let polling = false;
+    let pollTimer = null;
+    let feedId = null;
+    let lastFen = null;
+    let pushCount = 0;
+    let changeCount = 0;
+    let errorCount = 0;
+    let lastClock = null;
+
+    const FEN_PIECES = {
+        'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
+        'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP',
+    };
+
+    function log(msg, type = 'info') {
+        const el = document.getElementById('log');
+        if (!el) return;
+        const time = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        entry.className = 'log-entry ' + type;
+        entry.textContent = `[${time}] ${msg}`;
+        el.appendChild(entry);
+        el.scrollTop = el.scrollHeight;
+        while (el.children.length > 100) el.removeChild(el.firstChild);
+    }
+
+    function renderBoard(fen) {
+        const container = document.getElementById('preview-board');
+        if (!container) return;
+        const placement = fen.split(' ')[0];
+        const ranks = placement.split('/');
+        let html = '';
+        for (let r = 0; r < 8; r++) {
+            html += '<div class="flex">';
+            let f = 0;
+            for (const ch of ranks[r]) {
+                if (ch >= '1' && ch <= '8') {
+                    const empty = parseInt(ch);
+                    for (let e = 0; e < empty; e++) {
+                        const light = (r + f) % 2 === 0;
+                        html += `<div class="board-square ${light ? 'sq-light' : 'sq-dark'}"></div>`;
+                        f++;
+                    }
+                } else {
+                    const light = (r + f) % 2 === 0;
+                    const piece = FEN_PIECES[ch];
+                    html += `<div class="board-square ${light ? 'sq-light' : 'sq-dark'}">`;
+                    if (piece) html += `<img src="${SERVER_URL}/pieces/${piece}.svg" class="piece-img" alt="${piece}">`;
+                    html += '</div>';
+                    f++;
+                }
+            }
+            html += '</div>';
+        }
+        container.innerHTML = html;
+        const fenEl = document.getElementById('current-fen');
+        if (fenEl) fenEl.textContent = placement;
+    }
+
+    renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
+
+    async function pushToServer(fen, clock) {
+        pushCount++;
+        const pcEl = document.getElementById('push-count');
+        const lpEl = document.getElementById('last-push');
+        if (pcEl) pcEl.textContent = pushCount;
+        if (lpEl) lpEl.textContent = new Date().toLocaleTimeString();
+        const payload = { fen, source: 'relay-page' };
+        if (clock) payload.clock = clock;
+        else if (lastClock) payload.clock = lastClock;
+        try {
+            const res = await fetch(SERVER_URL + '/api/dgt/board-state', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-relay-secret': RELAY_SECRET },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (data.error) {
+                errorCount++;
+                document.getElementById('error-count').textContent = errorCount;
+                log('Server error: ' + data.error, 'error');
+                return;
+            }
+            if (data.changed) {
+                changeCount++;
+                document.getElementById('change-count').textContent = changeCount;
+                log('Board updated ✓', 'success');
+            }
+            document.getElementById('server-dot').className = 'status-dot dot-green';
+        } catch (err) {
+            errorCount++;
+            document.getElementById('error-count').textContent = errorCount;
+            document.getElementById('server-dot').className = 'status-dot dot-red';
+            log('Push failed: ' + err.message, 'error');
+        }
+    }
+
+    function pushManualFen() {
+        const input = document.getElementById('fen-input');
+        const fen = input.value.trim();
+        if (!fen) return;
+        const placement = fen.split(' ')[0];
+        if ((placement.match(/\//g) || []).length !== 7) { log('Invalid FEN', 'error'); return; }
+        lastFen = placement;
+        renderBoard(fen);
+        pushToServer(fen);
+        log('Manual FEN pushed', 'info');
+    }
+    document.getElementById('fen-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') pushManualFen(); });
+
+    // ─── LiveChess Connection ────────────────────────────
+    function toggleConnection() {
+        if (connected || polling) { disconnect(); } else { connectLiveChess(); }
+    }
+
+    function disconnect() {
+        if (ws) { ws.close(); ws = null; }
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        if (eboardsPollTimer) { clearInterval(eboardsPollTimer); eboardsPollTimer = null; }
+        connected = false; polling = false; feedId = null;
+        updateConnectionUI(false, 'Disconnected');
+        log('Disconnected', 'info');
+    }
+
+    function updateConnectionUI(isConnected, statusText) {
+        const dot = document.getElementById('lc-dot');
+        const btn = document.getElementById('btn-connect');
+        const status = document.getElementById('lc-status');
+        if (dot) dot.className = isConnected ? 'status-dot dot-green' : 'status-dot dot-red';
+        if (btn) {
+            btn.textContent = isConnected ? 'Disconnect' : 'Connect';
+            btn.className = isConnected
+                ? 'bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded text-xs font-bold'
+                : 'bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs font-bold';
+        }
+        if (statusText && status) status.textContent = statusText;
+    }
+
+    function connectLiveChess() {
+        const baseUrl = document.getElementById('lc-url').value.trim().replace(/\/+$/, '');
+        if (!baseUrl) return;
+        log('Trying WebSocket...', 'info');
+        const lcDot = document.getElementById('lc-dot');
+        if (lcDot) lcDot.className = 'status-dot dot-yellow';
+        const lcStatus = document.getElementById('lc-status');
+        if (lcStatus) lcStatus.textContent = 'Connecting...';
+        const wsUrl = baseUrl.replace(/^http/, 'ws') + '/api/v1.0';
+        try { ws = new WebSocket(wsUrl); } catch (e) { startHttpPolling(baseUrl); return; }
+        const wsTimeout = setTimeout(() => { if (!connected) { if (ws) { ws.close(); ws = null; } startHttpPolling(baseUrl); } }, 3000);
+        ws.onopen = () => { clearTimeout(wsTimeout); connected = true; updateConnectionUI(true, 'WebSocket connected!'); log('WS connected ✓', 'success'); wsSend({ call: 'eboards', id: 1, param: {} }); };
+        ws.onmessage = (evt) => { try { handleLiveChessMsg(JSON.parse(evt.data)); } catch (e) {} };
+        ws.onclose = () => { clearTimeout(wsTimeout); if (connected) { connected = false; feedId = null; startHttpPolling(baseUrl); } };
+        ws.onerror = () => { clearTimeout(wsTimeout); if (ws) { ws.close(); ws = null; } startHttpPolling(baseUrl); };
+    }
+
+    function wsSend(msg) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
+
+    function handleLiveChessMsg(msg) {
+        if (msg.response === 'error') { log('LiveChess error: ' + (msg.param?.message || ''), 'error'); return; }
+        if (msg.param && (msg.id === 1 || msg.id >= 10)) {
+            let feeds = Array.isArray(msg.param) ? msg.param : (msg.param.feeds || null);
+            if (feeds && feeds.length > 0) {
+                const board = feeds[0];
+                const newFeedId = board.serialnr || board.id || board;
+                if (feedId !== newFeedId) {
+                    feedId = newFeedId;
+                    log('Board: ' + feedId, 'success');
+                    updateConnectionUI(true, '✅ Connected to board');
+                    wsSend({ call: 'subscribe', id: 2, param: { feed: feedId, param: { board: true, clock: true } } });
+                }
+                const clock = extractClockFromBoard(board);
+                if (clock) { lastClock = clock; onClockSnapshot(clock); }
+                const fen = board.fen || board.board;
+                if (fen && typeof fen === 'string' && fen.includes('/')) {
+                    const placement = fen.split(' ')[0];
+                    if (placement !== lastFen) { lastFen = placement; renderBoard(fen); document.getElementById('fen-input').value = placement; pushToServer(fen, lastClock); }
+                }
+                startEboardsPolling();
+            } else {
+                updateConnectionUI(true, 'No board. Retrying...');
+                setTimeout(() => wsSend({ call: 'eboards', id: 1, param: {} }), 5000);
+            }
+            return;
+        }
+        if (msg.id === 2) { log('Subscribed ✓', 'success'); return; }
+        if (msg.param) {
+            const subClock = extractClockFromBoard(msg.param);
+            if (subClock) { lastClock = subClock; onClockSnapshot(subClock); }
+            const subFen = msg.param.fen || (msg.param.board && typeof msg.param.board === 'string' && msg.param.board.includes('/') ? msg.param.board : null);
+            if (subFen) { handleBoardFen(subFen, subClock); return; }
+            if (subClock) return;
+        }
+        const fen = extractFenFromMsg(msg);
+        if (fen) { handleBoardFen(fen); }
+    }
+
+    let eboardsPollTimer = null;
+    let eboardsPollId = 10;
+    function startEboardsPolling() {
+        if (eboardsPollTimer) return;
+        eboardsPollTimer = setInterval(() => { eboardsPollId++; wsSend({ call: 'eboards', id: eboardsPollId, param: {} }); }, 500);
+    }
+
+    function startHttpPolling(baseUrl) {
+        if (polling) return;
+        polling = true;
+        log('HTTP polling ' + baseUrl, 'info');
+        updateConnectionUI(false, 'Trying HTTP...');
+        let consErrs = 0;
+        async function poll() {
+            try {
+                const boardsRes = await fetch(baseUrl + '/api/v1.0/eboards', { mode: 'cors', signal: AbortSignal.timeout(2000) });
+                const boardsData = await boardsRes.json();
+                consErrs = 0;
+                if (!connected) { connected = true; log('HTTP connected ✓', 'success'); }
+                let boards = Array.isArray(boardsData) ? boardsData : (boardsData.feeds || (boardsData.param && Array.isArray(boardsData.param) ? boardsData.param : []));
+                if (boards.length === 0) { updateConnectionUI(true, 'No board connected'); return; }
+                const boardId = boards[0].id || boards[0].serialnr || boards[0];
+                const stateRes = await fetch(baseUrl + '/api/v1.0/feed/' + boardId, { mode: 'cors', signal: AbortSignal.timeout(2000) });
+                const stateData = await stateRes.json();
+                const fen = extractFenFromMsg(stateData) || extractFenFromMsg({ param: stateData });
+                if (fen) { handleBoardFen(fen); updateConnectionUI(true, '✅ HTTP polling'); }
+            } catch (err) {
+                consErrs++;
+                if (consErrs <= 3) log('HTTP error: ' + err.message, 'error');
+                if (consErrs >= 3) { updateConnectionUI(false, 'Cannot reach LiveChess'); connected = false; }
+            }
+        }
+        poll();
+        pollTimer = setInterval(poll, 1500);
+    }
+
+    // ─── Clock Countdown ─────────────────────────────────
+    let clockState = { white: null, black: null, activeSide: null, running: false, lastSnapshotWhite: null, lastSnapshotBlack: null };
+    let clockTickTimer = null;
+
+    function onClockSnapshot(clock) {
+        const prevActiveSide = clockState.activeSide;
+        let activeSide = null, isRunning = false;
+        if (clock.run === 'white' || clock.run === 'White') { activeSide = 'white'; isRunning = true; }
+        else if (clock.run === 'black' || clock.run === 'Black') { activeSide = 'black'; isRunning = true; }
+        else if (clock.run === true || clock.run === 1) { isRunning = true; activeSide = clockState.activeSide; }
+        else { activeSide = clockState.activeSide; }
+
+        const sameValues = (clock.white === clockState.lastSnapshotWhite && clock.black === clockState.lastSnapshotBlack);
+        if (sameValues && clockTickTimer && clockState.running) {
+            if (activeSide !== clockState.activeSide) { clockState.activeSide = activeSide; stopClockTick(); if (isRunning && activeSide) startClockTick(); }
+            clockState.running = isRunning;
+            if (!isRunning) stopClockTick();
+            return;
+        }
+        clockState.lastSnapshotWhite = clock.white;
+        clockState.lastSnapshotBlack = clock.black;
+        clockState.white = clock.white;
+        clockState.black = clock.black;
+        clockState.activeSide = activeSide;
+        clockState.running = isRunning;
+        if (isRunning && activeSide) { if (prevActiveSide !== activeSide) stopClockTick(); startClockTick(); }
+        else if (!isRunning) stopClockTick();
+        updateRelayClockDisplay(clockState);
+        pushClockToServer({ white: clockState.white, black: clockState.black, activeSide: clockState.activeSide, running: clockState.running });
+    }
+
+    function startClockTick() {
+        if (clockTickTimer) return;
+        clockTickTimer = setInterval(() => {
+            if (!clockState.running || !clockState.activeSide) { stopClockTick(); return; }
+            if (clockState.activeSide === 'white') clockState.white = Math.max(0, clockState.white - 1);
+            else clockState.black = Math.max(0, clockState.black - 1);
+            updateRelayClockDisplay(clockState);
+            pushClockToServer({ white: clockState.white, black: clockState.black, activeSide: clockState.activeSide, running: clockState.running });
+        }, 1000);
+    }
+    function stopClockTick() { if (clockTickTimer) { clearInterval(clockTickTimer); clockTickTimer = null; } }
+
+    function formatClock(seconds) {
+        if (seconds == null) return '--:--';
+        const m = Math.floor(seconds / 60), s = seconds % 60;
+        return `${m}:${String(s).padStart(2, '0')}`;
+    }
+
+    function extractClockFromBoard(board) {
+        if (!board || typeof board !== 'object') return null;
+        if (board.clock && typeof board.clock === 'object' && board.clock.white !== undefined) {
+            const c = { white: Number(board.clock.white), black: Number(board.clock.black) };
+            if (board.clock.run !== undefined) c.run = board.clock.run;
+            return c;
+        }
+        if (board.whiteClockMs !== undefined) return { white: Math.floor(Number(board.whiteClockMs) / 1000), black: Math.floor(Number(board.blackClockMs) / 1000) };
+        if (board.wtime !== undefined) return { white: Number(board.wtime), black: Number(board.btime) };
+        if (board.clock && typeof board.clock === 'string') {
+            const parts = board.clock.split('/').map(s => s.trim());
+            if (parts.length === 2) { const parseMmSs = (str) => { const m = str.match(/(\d+):(\d+)/); return m ? parseInt(m[1]) * 60 + parseInt(m[2]) : null; }; const w = parseMmSs(parts[0]), b = parseMmSs(parts[1]); if (w !== null && b !== null) return { white: w, black: b }; }
+        }
+        return null;
+    }
+
+    function updateRelayClockDisplay(clock) {
+        const wEl = document.getElementById('relay-clock-white'), bEl = document.getElementById('relay-clock-black');
+        if (wEl) wEl.textContent = formatClock(clock.white);
+        if (bEl) bEl.textContent = formatClock(clock.black);
+    }
+
+    function extractFenFromMsg(msg) {
+        if (!msg) return null;
+        if (msg.fen) return msg.fen;
+        if (msg.param) { if (msg.param.fen) return msg.param.fen; if (msg.param.board) return boardArrayToFen(msg.param.board); }
+        if (msg.board) return boardArrayToFen(msg.board);
+        return null;
+    }
+
+    function handleBoardFen(fen, clock) {
+        const placement = fen.split(' ')[0];
+        if (placement === lastFen) return false;
+        lastFen = placement;
+        renderBoard(fen);
+        pushToServer(fen, clock);
+        const fenInput = document.getElementById('fen-input');
+        if (fenInput) fenInput.value = placement;
+        return true;
+    }
+
+    async function pushClockToServer(clock) {
+        if (!lastFen) return;
+        try { await fetch(SERVER_URL + '/api/dgt/board-state', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-relay-secret': RELAY_SECRET }, body: JSON.stringify({ fen: lastFen, clock, source: 'relay-page' }) }); } catch (err) {}
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // ─── WEB SERIAL: Direct DGT Protocol ─────────────────
+    // ═══════════════════════════════════════════════════════
+    let serialPort = null, serialReader = null, serialWriter = null, serialConnected = false;
+    let serialBuffer = new Uint8Array(0), serialBoard = new Array(64).fill(null);
+    let serialLastFen = null, serialLastClock = null, serialClockPollTimer = null, serialBoardPollTimer = null;
+
+    const DGT_SEND_CLK = 0x41, DGT_SEND_BRD = 0x42, DGT_SEND_UPDATE_NICE = 0x4b;
+    const DGT_MSG_BOARD_DUMP = 0x86, DGT_MSG_BWTIME = 0x8d, DGT_MSG_FIELD_UPDATE = 0x8e;
+    const DGT_PIECES = { 0x00: null, 0x01: 'wP', 0x02: 'wR', 0x03: 'wN', 0x04: 'wB', 0x05: 'wK', 0x06: 'wQ', 0x07: 'bP', 0x08: 'bR', 0x09: 'bN', 0x0A: 'bB', 0x0B: 'bK', 0x0C: 'bQ' };
+
+    function bcdToInt(byte) { return ((byte >> 4) & 0x0f) * 10 + (byte & 0x0f); }
+
+    async function toggleSerial() { if (serialConnected) await disconnectSerial(); else await connectSerial(); }
+
+    async function connectSerial() {
+        if (!('serial' in navigator)) { log('❌ Web Serial not supported. Use Chrome desktop.', 'error'); document.getElementById('serial-status').textContent = 'Not supported — use Chrome desktop'; return; }
+        try {
+            document.getElementById('serial-dot').className = 'status-dot dot-yellow';
+            document.getElementById('serial-status').textContent = 'Select DGT board...';
+            serialPort = await navigator.serial.requestPort();
+            await serialPort.open({ baudRate: 9600, dataBits: 8, parity: 'none', stopBits: 1 });
+            serialConnected = true;
+            document.getElementById('serial-dot').className = 'status-dot dot-green';
+            document.getElementById('serial-status').textContent = '✅ Connected!';
+            document.getElementById('btn-serial').textContent = '🔌 Disconnect';
+            document.getElementById('btn-serial').className = 'w-full bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-sm font-bold';
+            log('✅ Serial open', 'success');
+            serialWriter = serialPort.writable.getWriter();
+            await sendSerialCmd(DGT_SEND_BRD);
+            setTimeout(() => sendSerialCmd(DGT_SEND_UPDATE_NICE), 500);
+            setTimeout(() => sendSerialCmd(DGT_SEND_CLK), 1000);
+            serialBoardPollTimer = setInterval(() => sendSerialCmd(DGT_SEND_BRD), 5000);
+            serialClockPollTimer = setInterval(() => sendSerialCmd(DGT_SEND_CLK), 1000);
+            readSerialLoop();
+        } catch (err) {
+            log('Serial failed: ' + err.message, 'error');
+            document.getElementById('serial-dot').className = 'status-dot dot-red';
+            document.getElementById('serial-status').textContent = 'Failed: ' + err.message;
+        }
+    }
+
+    async function disconnectSerial() {
+        serialConnected = false;
+        if (serialClockPollTimer) { clearInterval(serialClockPollTimer); serialClockPollTimer = null; }
+        if (serialBoardPollTimer) { clearInterval(serialBoardPollTimer); serialBoardPollTimer = null; }
+        try { if (serialReader) { await serialReader.cancel(); serialReader = null; } if (serialWriter) { serialWriter.releaseLock(); serialWriter = null; } if (serialPort) { await serialPort.close(); serialPort = null; } } catch (e) {}
+        document.getElementById('serial-dot').className = 'status-dot dot-red';
+        document.getElementById('serial-status').textContent = 'Disconnected';
+        document.getElementById('btn-serial').textContent = '🔌 Connect USB Board';
+        document.getElementById('btn-serial').className = 'w-full bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-bold';
+        log('Serial disconnected', 'info');
+    }
+
+    async function sendSerialCmd(cmd) { if (serialWriter) try { await serialWriter.write(new Uint8Array([cmd])); } catch (e) {} }
+
+    async function readSerialLoop() {
+        while (serialPort && serialPort.readable && serialConnected) {
+            serialReader = serialPort.readable.getReader();
+            try { while (true) { const { value, done } = await serialReader.read(); if (done) break; if (value) { const nb = new Uint8Array(serialBuffer.length + value.length); nb.set(serialBuffer); nb.set(value, serialBuffer.length); serialBuffer = nb; parseSerialBuffer(); } } }
+            catch (err) { if (serialConnected) log('Read error: ' + err.message, 'error'); }
+            finally { try { serialReader.releaseLock(); } catch(e) {} }
+        }
+    }
+
+    function parseSerialBuffer() {
+        while (serialBuffer.length > 0) {
+            const msgType = serialBuffer[0];
+            if ((msgType & 0x80) === 0) { serialBuffer = serialBuffer.slice(1); continue; }
+            if (serialBuffer.length < 3) return;
+            const msgLen = ((serialBuffer[1] & 0x7f) << 7) | (serialBuffer[2] & 0x7f);
+            if (serialBuffer.length < msgLen) return;
+            const msg = serialBuffer.slice(0, msgLen);
+            serialBuffer = serialBuffer.slice(msgLen);
+            switch (msgType) {
+                case DGT_MSG_BOARD_DUMP: handleSerialBoardDump(msg); break;
+                case DGT_MSG_BWTIME: handleSerialBwTime(msg); break;
+                case DGT_MSG_FIELD_UPDATE: handleSerialFieldUpdate(msg); break;
+            }
+        }
+    }
+
+    function handleSerialBoardDump(msg) {
+        if (msg.length < 67) return;
+        for (let i = 0; i < 64; i++) serialBoard[i] = DGT_PIECES[msg[3 + i]] || null;
+        const fen = serialBoardToFen();
+        if (fen !== serialLastFen) { serialLastFen = fen; lastFen = fen; renderBoard(fen); document.getElementById('fen-input').value = fen; pushToServer(fen, serialLastClock); }
+    }
+
+    function handleSerialBwTime(msg) {
+        if (msg.length < 10) return;
+        if ((msg[3] & 0x0f) === 0x0a || (msg[6] & 0x0f) === 0x0a) return;
+        const status = msg[9];
+        if (status & 0x20) return;
+        const rH = msg[3] & 0x0f, rM = bcdToInt(msg[4]), rS = bcdToInt(msg[5]);
+        const lH = msg[6] & 0x0f, lM = bcdToInt(msg[7]), lS = bcdToInt(msg[8]);
+        const whiteTotal = rH * 3600 + rM * 60 + rS, blackTotal = lH * 3600 + lM * 60 + lS;
+        const clockRunning = !!(status & 0x01), rightTurn = !!(status & 0x08), leftTurn = !!(status & 0x10);
+        const clock = { white: whiteTotal, black: blackTotal, running: clockRunning, activeSide: rightTurn ? 'white' : (leftTurn ? 'black' : null) };
+        const changed = !serialLastClock || clock.white !== serialLastClock.white || clock.black !== serialLastClock.black || clock.running !== serialLastClock.running || clock.activeSide !== serialLastClock.activeSide;
+        if (changed) {
+            serialLastClock = clock; lastClock = clock;
+            log('⏱️ W=' + formatClock(clock.white) + ' B=' + formatClock(clock.black) + ' [' + (clock.activeSide || '?') + (clockRunning ? ' ▶' : ' ⏸') + ']', 'success');
+            updateRelayClockDisplay(clock);
+            if (serialLastFen) pushToServer(serialLastFen, clock); else pushClockToServer(clock);
+        }
+    }
+
+    function handleSerialFieldUpdate(msg) {
+        if (msg.length < 5) return;
+        serialBoard[msg[3]] = DGT_PIECES[msg[4]] || null;
+        const fen = serialBoardToFen();
+        if (fen !== serialLastFen) { serialLastFen = fen; lastFen = fen; renderBoard(fen); document.getElementById('fen-input').value = fen; pushToServer(fen, serialLastClock); }
+    }
+
+    function serialBoardToFen() {
+        let fen = '';
+        for (let rank = 0; rank < 8; rank++) {
+            let empty = 0;
+            for (let file = 0; file < 8; file++) {
+                const piece = serialBoard[rank * 8 + file];
+                if (!piece) { empty++; } else { if (empty > 0) { fen += empty; empty = 0; } const ch = piece[1]; fen += piece[0] === 'w' ? ch.toUpperCase() : ch.toLowerCase(); }
+            }
+            if (empty > 0) fen += empty;
+            if (rank < 7) fen += '/';
+        }
+        return fen;
+    }
+
+    function boardArrayToFen(board) {
+        if (!board) return null;
+        const squares = typeof board === 'string' ? board.split('') : board;
+        if (squares.length !== 64) return null;
+        let fen = '';
+        for (let rank = 0; rank < 8; rank++) {
+            let empty = 0;
+            for (let file = 0; file < 8; file++) {
+                const piece = squares[rank * 8 + file];
+                if (!piece || piece === '.' || piece === ' ') { empty++; } else { if (empty > 0) { fen += empty; empty = 0; } fen += piece; }
+            }
+            if (empty > 0) fen += empty;
+            if (rank < 7) fen += '/';
+        }
+        return fen;
+    }
     </script>
 <script src="/vscale.js"></script>
 </body>

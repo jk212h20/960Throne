@@ -194,7 +194,9 @@ router.get('/report', (req, res) => {
         return res.render('admin-login', { returnTo: '/report' });
     }
     const state = gameEngine.getThoneState();
-    res.render('report', { state });
+    const relaySecret = process.env.DGT_RELAY_SECRET || process.env.ADMIN_PASSWORD || 'changeme';
+    const serverUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    res.render('report', { state, relaySecret, serverUrl });
 });
 
 // Admin Users
