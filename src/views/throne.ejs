@@ -51,12 +51,12 @@
         </div>
         <div class="flex items-center gap-6">
             <div class="text-right">
-                <div class="text-sm text-gray-400 flex items-center gap-1"><%- include('partials/icon', { name: 'lightning', size: 14, cls: 'text-gray-400' }) %> Sats Earned</div>
-                <div class="text-lg font-mono font-bold text-throne-gold sats-glow" id="total-sats-earned"><%= state.stats.totalSatsDistributed.toLocaleString() %></div>
+                <div class="text-xl text-gray-400 flex items-center gap-1"><%- include('partials/icon', { name: 'lightning', size: 28, cls: 'text-gray-400' }) %> Sats Earned</div>
+                <div class="text-4xl font-mono font-bold text-throne-gold sats-glow" id="total-sats-earned"><%= state.stats.totalSatsDistributed.toLocaleString() %></div>
             </div>
             <div class="text-right">
-                <div class="text-sm text-gray-400">Time Control</div>
-                <div class="text-lg font-mono" id="time-control"><%= state.config.timeControl.base / 60 %>+<%= state.config.timeControl.increment %></div>
+                <div class="text-xl text-gray-400">Time Control</div>
+                <div class="text-4xl font-mono" id="time-control"><%= state.config.timeControl.base / 60 %>+<%= state.config.timeControl.increment %></div>
             </div>
         </div>
     </div>
@@ -123,8 +123,8 @@
                     </div>
                 </div>
                 <div class="text-right">
-                    <div class="text-3xl font-mono font-bold text-throne-gold sats-glow" id="sat-counter"><%= state.liveSats.toLocaleString() %></div>
-                    <div class="text-xs text-gray-500">sats this reign (<%= state.config.satRate %>/s)</div>
+                    <div class="text-6xl font-mono font-bold text-throne-gold sats-glow" id="sat-counter"><%= state.liveSats.toLocaleString() %></div>
+                    <div class="text-lg text-gray-500">sats this reign (<%= state.config.satRate %>/s)</div>
                 </div>
                 <% } else { %>
                 <div class="text-lg text-gray-500">No King on the Throne</div>
@@ -399,6 +399,22 @@
                 container.className = 'board-container';
                 boardEl.parentNode.insertBefore(container, boardEl);
                 container.appendChild(boardEl);
+            }
+
+            // "Challenger, set up the board" text above the board
+            let setupBanner = document.getElementById('setup-banner');
+            if (!pv) {
+                // No verification needed — remove overlay and banner
+                if (setupBanner) setupBanner.remove();
+            } else {
+                if (!setupBanner) {
+                    setupBanner = document.createElement('div');
+                    setupBanner.id = 'setup-banner';
+                    setupBanner.style.cssText = 'text-align:center; font-size:2.5rem; font-weight:800; color:#FFD700; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:12px; text-shadow:0 0 20px rgba(255,215,0,0.4);';
+                    setupBanner.textContent = 'Challenger, set up the board!';
+                    // Insert above the board container
+                    container.parentNode.insertBefore(setupBanner, container);
+                }
             }
 
             let overlay = container.querySelector('.board-overlay');
