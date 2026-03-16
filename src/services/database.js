@@ -474,6 +474,17 @@ function addToQueue(playerId) {
     return id;
 }
 
+function insertIntoQueue(playerId, position) {
+    // Bump all existing entries at or after the target position
+    db.run(`UPDATE queue SET position = position + 1 WHERE position >= ? AND status IN ('waiting', 'on_deck')`, [position]);
+    // Insert at the target position
+    db.run(`INSERT INTO queue (player_id, position, status, timeout_count) VALUES (?, ?, 'waiting', 0)`, [playerId, position]);
+    const result = db.exec(`SELECT last_insert_rowid()`);
+    const id = result[0].values[0][0];
+    save();
+    return id;
+}
+
 function getQueue() {
     const result = db.exec(`
         SELECT q.*, p.name as player_name 
@@ -584,6 +595,21 @@ function removePlayerFromQueue(playerId) {
 function isPlayerInQueue(playerId) {
     const result = db.exec(`SELECT id FROM queue WHERE player_id = ? AND status IN ('waiting', 'on_deck')`, [playerId]);
     return result.length > 0 && result[0].values.length > 0;
+}
+
+/**
+ * Replace the entire queue with a new ordered list of player IDs.
+ * Clears all existing queue entries and inserts the given players in order.
+ * @param {number[]} playerIds - Array of player IDs in desired queue order
+ */
+function reorderQueue(playerIds) {
+    // Clear the entire queue
+    db.run(`DELETE FROM queue WHERE status IN ('waiting', 'on_deck')`);
+    // Insert each player in order
+    playerIds.forEach((playerId, index) => {
+        db.run(`INSERT INTO queue (player_id, position, status, timeout_count) VALUES (?, ?, 'waiting', 0)`, [playerId, index + 1]);
+    });
+    save();
 }
 
 // ============================================================
@@ -1032,6 +1058,7 @@ module.exports = {
     
     // Queue
     addToQueue,
+    insertIntoQueue,
     getQueue,
     getQueueEntry,
     getNextInQueue,
@@ -1043,6 +1070,7 @@ module.exports = {
     resetOnDeckToWaiting,
     removePlayerFromQueue,
     isPlayerInQueue,
+    reorderQueue,
     
     // Games
     createGame,

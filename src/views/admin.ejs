@@ -208,8 +208,21 @@
                         <option value="<%= p.id %>"><%= p.name %></option>
                         <% }) %>
                     </select>
-                    <button onclick="addToQueue()" class="btn-purple text-sm">Add</button>
+                    <button onclick="addToQueue()" class="btn-purple text-sm">Add (end)</button>
                 </div>
+                <div class="flex gap-2 mt-2">
+                    <input type="number" id="insert-queue-pos" class="input text-sm w-16 text-center" placeholder="#" min="1" value="1">
+                    <button onclick="insertIntoQueue()" class="btn-purple text-sm flex-1">Insert at Position</button>
+                </div>
+
+                <!-- Reorder Button -->
+                <% if (state.king || state.queue.length > 0) { %>
+                <div class="mt-3 pt-3 border-t border-gray-700">
+                    <button onclick="openReorderModal()" class="btn-outline w-full text-sm flex items-center justify-center gap-2">
+                        ↕️ Reorder King + Queue
+                    </button>
+                </div>
+                <% } %>
             </div>
 
             <!-- Config -->
@@ -436,6 +449,13 @@
             const id = document.getElementById('add-queue-select').value;
             if (!id) return;
             if (await api('/api/admin/queue/add', { playerId: parseInt(id) })) setTimeout(() => location.reload(), 500);
+        }
+        async function insertIntoQueue() {
+            const id = document.getElementById('add-queue-select').value;
+            const pos = parseInt(document.getElementById('insert-queue-pos').value);
+            if (!id) return alert('Select a player first');
+            if (!pos || pos < 1) return alert('Enter a valid position (1+)');
+            if (await api('/api/admin/queue/insert', { playerId: parseInt(id), position: pos })) setTimeout(() => location.reload(), 500);
         }
         async function updateConfig(key, value) { await api('/api/admin/config', { key, value }); }
         async function mergeAccounts() {
@@ -801,7 +821,227 @@
         socket.on('event_reset', () => setTimeout(() => location.reload(), 1000));
         socket.on('reset_scheduled', () => setTimeout(() => location.reload(), 1000));
         socket.on('reset_cancelled', () => setTimeout(() => location.reload(), 1000));
+
+        // ============================================================
+        // Reorder Modal — drag-and-drop king + queue ordering
+        // ============================================================
+        let reorderList = []; // [{id, name}]
+
+        function openReorderModal() {
+            // Build the combined list: king first, then queue
+            reorderList = [];
+            <% if (state.king) { %>
+            reorderList.push({ id: <%= state.king.id %>, name: '<%= (state.king.name || "").replace(/'/g, "\\'") %>' });
+            <% } %>
+            <% state.queue.forEach(q => { %>
+            reorderList.push({ id: <%= q.player_id %>, name: '<%= (q.player_name || "").replace(/'/g, "\\'") %>' });
+            <% }) %>
+
+            if (reorderList.length === 0) return alert('No players to reorder');
+
+            document.getElementById('reorder-overlay').style.display = 'flex';
+            renderReorderList();
+        }
+
+        function closeReorderModal() {
+            document.getElementById('reorder-overlay').style.display = 'none';
+        }
+
+        function renderReorderList() {
+            const container = document.getElementById('reorder-items');
+            container.innerHTML = '';
+            reorderList.forEach((player, idx) => {
+                const div = document.createElement('div');
+                div.className = 'reorder-item';
+                div.dataset.index = idx;
+                div.draggable = true;
+                div.innerHTML = `
+                    <span class="reorder-handle">☰</span>
+                    <span class="reorder-pos">${idx === 0 ? '👑' : '#' + idx}</span>
+                    <span class="reorder-name">${player.name}</span>
+                    <span class="reorder-role">${idx === 0 ? 'KING' : ''}</span>
+                    <span class="reorder-arrows">
+                        <button onclick="reorderMove(${idx}, -1)" ${idx === 0 ? 'disabled' : ''}>▲</button>
+                        <button onclick="reorderMove(${idx}, 1)" ${idx === reorderList.length - 1 ? 'disabled' : ''}>▼</button>
+                    </span>
+                `;
+                // Drag events
+                div.addEventListener('dragstart', onDragStart);
+                div.addEventListener('dragover', onDragOver);
+                div.addEventListener('dragenter', onDragEnter);
+                div.addEventListener('dragleave', onDragLeave);
+                div.addEventListener('drop', onDrop);
+                div.addEventListener('dragend', onDragEnd);
+                // Touch events for mobile
+                div.addEventListener('touchstart', onTouchStart, { passive: false });
+                div.addEventListener('touchmove', onTouchMove, { passive: false });
+                div.addEventListener('touchend', onTouchEnd);
+                container.appendChild(div);
+            });
+        }
+
+        // Arrow button reorder
+        function reorderMove(fromIdx, direction) {
+            const toIdx = fromIdx + direction;
+            if (toIdx < 0 || toIdx >= reorderList.length) return;
+            const item = reorderList.splice(fromIdx, 1)[0];
+            reorderList.splice(toIdx, 0, item);
+            renderReorderList();
+        }
+
+        // Drag & drop
+        let dragIdx = null;
+        function onDragStart(e) {
+            dragIdx = parseInt(e.currentTarget.dataset.index);
+            e.currentTarget.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+        function onDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+        function onDragEnter(e) {
+            e.preventDefault();
+            const target = e.currentTarget;
+            if (target.classList.contains('reorder-item')) target.classList.add('drag-over');
+        }
+        function onDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+        function onDrop(e) {
+            e.preventDefault();
+            const targetIdx = parseInt(e.currentTarget.dataset.index);
+            e.currentTarget.classList.remove('drag-over');
+            if (dragIdx !== null && dragIdx !== targetIdx) {
+                const item = reorderList.splice(dragIdx, 1)[0];
+                reorderList.splice(targetIdx, 0, item);
+                renderReorderList();
+            }
+        }
+        function onDragEnd(e) {
+            e.currentTarget.classList.remove('dragging');
+            dragIdx = null;
+        }
+
+        // Touch drag for mobile
+        let touchDragIdx = null;
+        let touchClone = null;
+        let touchStartY = 0;
+
+        function onTouchStart(e) {
+            const target = e.currentTarget;
+            touchDragIdx = parseInt(target.dataset.index);
+            touchStartY = e.touches[0].clientY;
+            target.classList.add('dragging');
+
+            // Create floating clone
+            touchClone = target.cloneNode(true);
+            touchClone.className = 'reorder-item dragging';
+            touchClone.style.position = 'fixed';
+            touchClone.style.left = target.getBoundingClientRect().left + 'px';
+            touchClone.style.top = e.touches[0].clientY - 20 + 'px';
+            touchClone.style.width = target.offsetWidth + 'px';
+            touchClone.style.zIndex = '10000';
+            touchClone.style.pointerEvents = 'none';
+            document.body.appendChild(touchClone);
+        }
+
+        function onTouchMove(e) {
+            e.preventDefault();
+            if (touchClone) {
+                touchClone.style.top = e.touches[0].clientY - 20 + 'px';
+            }
+            // Highlight the item we're over
+            const items = document.querySelectorAll('.reorder-item');
+            items.forEach(item => item.classList.remove('drag-over'));
+            const touch = e.touches[0];
+            const overEl = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (overEl) {
+                const reorderItem = overEl.closest('.reorder-item');
+                if (reorderItem && parseInt(reorderItem.dataset.index) !== touchDragIdx) {
+                    reorderItem.classList.add('drag-over');
+                }
+            }
+        }
+
+        function onTouchEnd(e) {
+            if (touchClone) { touchClone.remove(); touchClone = null; }
+            const items = document.querySelectorAll('.reorder-item');
+            items.forEach(item => { item.classList.remove('dragging'); item.classList.remove('drag-over'); });
+
+            // Find target
+            const touch = e.changedTouches[0];
+            const overEl = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (overEl) {
+                const reorderItem = overEl.closest('.reorder-item');
+                if (reorderItem && touchDragIdx !== null) {
+                    const targetIdx = parseInt(reorderItem.dataset.index);
+                    if (targetIdx !== touchDragIdx) {
+                        const item = reorderList.splice(touchDragIdx, 1)[0];
+                        reorderList.splice(targetIdx, 0, item);
+                        renderReorderList();
+                    }
+                }
+            }
+            touchDragIdx = null;
+        }
+
+        async function confirmReorder() {
+            const order = reorderList.map(p => p.id);
+            const kingName = reorderList[0]?.name || '?';
+            if (!confirm(`Apply new order?\n\n👑 King: ${kingName}\nQueue: ${reorderList.slice(1).map((p,i) => '#' + (i+1) + ' ' + p.name).join(', ') || '(empty)'}\n\nIf there's an active game, it will be cancelled.`)) return;
+            const result = await api('/api/admin/reorder', { order });
+            if (result) {
+                closeReorderModal();
+                setTimeout(() => location.reload(), 500);
+            }
+        }
     </script>
+
+    <!-- Reorder Modal Overlay -->
+    <div id="reorder-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9998;align-items:center;justify-content:center;">
+        <div style="background:#1a1a2e;border-radius:12px;padding:20px;width:min(400px,90vw);max-height:80vh;display:flex;flex-direction:column;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <h2 style="font-size:18px;font-weight:bold;margin:0;">↕️ Reorder King + Queue</h2>
+                <button onclick="closeReorderModal()" style="background:none;border:none;color:#999;font-size:20px;cursor:pointer;">✕</button>
+            </div>
+            <p style="font-size:12px;color:#888;margin:0 0 12px;">Drag players or use arrows. First player becomes King.</p>
+            <div id="reorder-items" style="flex:1;overflow-y:auto;min-height:60px;"></div>
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <button onclick="closeReorderModal()" style="flex:1;padding:10px;border-radius:8px;background:#333;color:#ccc;border:none;font-size:14px;cursor:pointer;">Cancel</button>
+                <button onclick="confirmReorder()" style="flex:1;padding:10px;border-radius:8px;background:#7c3aed;color:#fff;border:none;font-size:14px;font-weight:bold;cursor:pointer;">✓ Apply Order</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .reorder-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            margin-bottom: 4px;
+            background: #0f0f1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            cursor: grab;
+            user-select: none;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .reorder-item:first-child {
+            border-color: #b8860b;
+            background: rgba(184, 134, 11, 0.1);
+        }
+        .reorder-item.dragging { opacity: 0.4; }
+        .reorder-item.drag-over { border-color: #7c3aed; background: rgba(124, 58, 237, 0.15); }
+        .reorder-handle { color: #555; font-size: 14px; cursor: grab; }
+        .reorder-pos { font-size: 13px; font-weight: bold; min-width: 28px; text-align: center; color: #aaa; }
+        .reorder-item:first-child .reorder-pos { color: #fbbf24; }
+        .reorder-name { flex: 1; font-size: 14px; color: #eee; }
+        .reorder-role { font-size: 10px; font-weight: bold; color: #fbbf24; min-width: 36px; text-align: right; }
+        .reorder-arrows { display: flex; flex-direction: column; gap: 0; }
+        .reorder-arrows button {
+            background: none; border: none; color: #666; font-size: 10px; cursor: pointer;
+            padding: 0 4px; line-height: 1.2;
+        }
+        .reorder-arrows button:hover:not(:disabled) { color: #fff; }
+        .reorder-arrows button:disabled { opacity: 0.2; cursor: default; }
+    </style>
 <script src="/vscale.js"></script>
 </body>
 </html>

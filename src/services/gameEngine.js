@@ -899,6 +899,77 @@ function adminAddToQueue(playerId) {
     return joinQueue(playerId);
 }
 
+function adminInsertIntoQueue(playerId, position) {
+    if (db.isPlayerInQueue(playerId)) {
+        return { error: 'Already in queue' };
+    }
+    const kingId = db.getConfig('current_king_id');
+    if (kingId && parseInt(kingId) === playerId) {
+        return { error: "You're the King! You can't queue against yourself." };
+    }
+    const queue = db.getQueue();
+    // Clamp position to valid range (1 to queue.length + 1)
+    const maxPos = queue.length + 1;
+    const pos = Math.max(1, Math.min(position, maxPos));
+    const queueId = db.insertIntoQueue(playerId, pos);
+    const updatedQueue = db.getQueue();
+    broadcast('queue_updated', { queue: updatedQueue });
+    return { success: true, queueId, position: pos };
+}
+
+/**
+ * Admin reorders the entire king + challenger list.
+ * order[0] becomes king, the rest become the queue in that order.
+ * If there's an active game, it gets cancelled (no_show) first.
+ * @param {number[]} order - Array of player IDs: [kingId, queue1, queue2, ...]
+ */
+async function adminReorder(order) {
+    if (!order || !Array.isArray(order) || order.length === 0) {
+        return { error: 'Order array is required and must not be empty' };
+    }
+
+    // Validate all player IDs exist
+    for (const pid of order) {
+        const player = db.getPlayerById(pid);
+        if (!player) return { error: `Player #${pid} not found` };
+    }
+
+    // Check for duplicates
+    const unique = new Set(order);
+    if (unique.size !== order.length) {
+        return { error: 'Duplicate player IDs in order' };
+    }
+
+    const newKingId = order[0];
+    const newQueueIds = order.slice(1);
+    const currentKingId = parseInt(db.getConfig('current_king_id') || '0');
+
+    // If there's an active game, finalize it as no_show first
+    const activeGame = db.getActiveGame();
+    if (activeGame && !activeGame.result) {
+        console.log(`🔧 Reorder: Cancelling active game #${activeGame.id} as no_show`);
+        finalizeGameResult(activeGame.id, 'no_show');
+    }
+
+    // Set the new queue (excluding the king)
+    db.reorderQueue(newQueueIds);
+
+    // If the king is changing, crown the new one
+    if (newKingId !== currentKingId) {
+        crownKing(newKingId);
+    } else {
+        // King stays the same — just broadcast the updated queue and start next game
+        broadcast('queue_updated', { queue: db.getQueue() });
+        // Start next game if there's a queue
+        if (newQueueIds.length > 0) {
+            await callNextChallenger();
+        }
+    }
+
+    console.log(`🔧 Admin reorder: King=#${newKingId}, Queue=[${newQueueIds.join(', ')}]`);
+    return { success: true, king: newKingId, queue: newQueueIds };
+}
+
 // ============================================================
 // Scheduled Reset — Admin sets a future time for a clean slate
 // ============================================================
@@ -1095,6 +1166,8 @@ module.exports = {
     setEventActive,
     adminRemoveFromQueue,
     adminAddToQueue,
+    adminInsertIntoQueue,
+    adminReorder,
     // Scheduled Reset
     scheduleReset,
     cancelReset,

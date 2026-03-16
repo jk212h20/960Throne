@@ -688,6 +688,25 @@ router.post('/admin/queue/add', requireAdmin, (req, res) => {
     res.json(result);
 });
 
+router.post('/admin/queue/insert', requireAdmin, (req, res) => {
+    const { playerId, position } = req.body;
+    if (!playerId) return res.status(400).json({ error: 'Player ID required' });
+    if (!position || position < 1) return res.status(400).json({ error: 'Valid position required (1+)' });
+    const result = gameEngine.adminInsertIntoQueue(parseInt(playerId), parseInt(position));
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+});
+
+router.post('/admin/reorder', requireAdmin, async (req, res) => {
+    const { order } = req.body;
+    if (!order || !Array.isArray(order) || order.length === 0) {
+        return res.status(400).json({ error: 'order array of player IDs is required' });
+    }
+    const result = await gameEngine.adminReorder(order.map(id => parseInt(id)));
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+});
+
 router.get('/admin/notifications', requireAdmin, (req, res) => {
     res.json({ notifications: db.getUnresolvedNotifications() });
 });
