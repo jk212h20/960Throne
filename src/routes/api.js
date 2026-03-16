@@ -551,9 +551,20 @@ router.post('/telegram/link', requirePlayer, (req, res) => {
     }
     const { code, deepLink } = telegram.generateLinkCode(req.player.id);
     const botUsername = telegram.getBotUsername();
+    
+    // Build deep link — botUsername is required for a valid t.me link
+    let finalDeepLink = deepLink; // from generateLinkCode (null if botUsername wasn't cached yet)
+    if (botUsername) {
+        finalDeepLink = `https://t.me/${botUsername}?start=${code}`;
+    }
+    
+    if (!finalDeepLink) {
+        return res.status(503).json({ error: 'Telegram bot is still initializing. Please try again in a few seconds.' });
+    }
+    
     res.json({ 
         code, 
-        deepLink: botUsername ? `https://t.me/${botUsername}?start=${code}` : deepLink,
+        deepLink: finalDeepLink,
         botUsername 
     });
 });

@@ -35,8 +35,9 @@ let pollTimer = null;
 /**
  * Initialize the Telegram service with the database module.
  * Starts polling for /getUpdates if bot token is configured.
+ * Awaits getBotInfo() so botUsername is available before any deep links are generated.
  */
-function init(dbModule) {
+async function init(dbModule) {
     db = dbModule;
 
     if (!BOT_TOKEN) {
@@ -44,6 +45,9 @@ function init(dbModule) {
         return;
     }
 
+    // Fetch bot username first (needed for deep links)
+    await getBotInfo();
+    
     // Start polling for incoming messages (link codes from players)
     startPolling();
     console.log('📱 Telegram: Bot polling started');
@@ -161,8 +165,8 @@ function generateLinkCode(playerId) {
     }
 
     // Deep link: t.me/BotUsername?start=CODE
-    // We need to extract the bot username — we'll cache it on first poll
-    const deepLink = BOT_TOKEN ? `https://t.me/${botUsername || 'bot'}?start=${code}` : null;
+    // If botUsername isn't cached yet, return null (API route will handle it)
+    const deepLink = (BOT_TOKEN && botUsername) ? `https://t.me/${botUsername}?start=${code}` : null;
 
     return { code, deepLink };
 }
@@ -186,8 +190,7 @@ function startPolling() {
     if (pollTimer) clearInterval(pollTimer);
     // Poll every 3 seconds
     pollTimer = setInterval(pollUpdates, 3000);
-    // Also do an immediate poll + get bot info
-    getBotInfo();
+    // Do an immediate poll (getBotInfo already called in init)
     pollUpdates();
 }
 
