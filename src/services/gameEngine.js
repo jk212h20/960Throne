@@ -13,7 +13,6 @@ let io = null; // Socket.io instance, set by index.js
 let gameStartTime = null; // When current game started (for sat calculation)
 let onDeckTimer = null; // Timer for on-deck timeout
 let winnerConfirmTimer = null; // Timer for auto-confirm when only winner reports
-let venueCodeTimer = null; // Timer for venue code rotation
 let satAccumulatorTimer = null; // Timer for periodic sat persistence
 let scheduledResetTimer = null; // Timer for scheduled event reset
 
@@ -30,8 +29,8 @@ function init(socketIo) {
         console.log('♟️  Resumed active game:', activeGame.id);
     }
 
-    // Start venue code rotation
-    startVenueCodeRotation();
+    // Ensure a venue code exists (no auto-rotation — admin rotates manually)
+    ensureVenueCode();
 
     // Clear any stale on-deck entries from before auto-start was implemented
     // (on-deck is no longer used — games auto-start from queue)
@@ -66,26 +65,19 @@ function generateVenueCode() {
 }
 
 function rotateVenueCode() {
-    const rotationMinutes = parseInt(db.getConfig('venue_code_rotation_minutes') || '30');
     const code = generateVenueCode();
-    const expiresAt = new Date(Date.now() + rotationMinutes * 60 * 1000).toISOString();
-    db.createVenueCode(code, expiresAt);
-    console.log(`🔑 New venue code: ${code} (expires in ${rotationMinutes}min)`);
-    broadcast('venue_code_updated', { code, expiresAt });
+    db.createVenueCode(code, null); // No expiry — manual rotation only
+    console.log(`🔑 New venue code: ${code} (manual rotation only)`);
+    broadcast('venue_code_updated', { code });
     return code;
 }
 
-function startVenueCodeRotation() {
-    // Generate initial code if none exists
+function ensureVenueCode() {
+    // Generate initial code if none exists — no automatic rotation
     const existing = db.getActiveVenueCode();
-    if (!existing || (existing.expires_at && new Date(existing.expires_at) < new Date())) {
+    if (!existing) {
         rotateVenueCode();
     }
-
-    // Rotate on interval
-    const rotationMinutes = parseInt(db.getConfig('venue_code_rotation_minutes') || '30');
-    if (venueCodeTimer) clearInterval(venueCodeTimer);
-    venueCodeTimer = setInterval(rotateVenueCode, rotationMinutes * 60 * 1000);
 }
 
 // ============================================================
@@ -869,7 +861,7 @@ function setEventActive(active) {
     db.setConfig('event_active', active ? 'true' : 'false');
     broadcast('event_status', { active });
     if (active) {
-        startVenueCodeRotation();
+        ensureVenueCode();
     }
 }
 
