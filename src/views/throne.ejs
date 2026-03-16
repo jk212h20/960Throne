@@ -273,16 +273,17 @@
         setInterval(updateCounters, 1000);
         updateCounters();
 
-        // Socket events — refresh on state changes (but NOT if DGT board is active)
+        // Socket events — refresh on state changes
+        // dgtActive only suppresses minor updates (on_deck). Structural changes always reload.
         let dgtActive = false;
+        function forceReload() { location.reload(); }
         function safeReload() {
             if (!dgtActive) location.reload();
-            // When DGT is active, skip reloads — the live board is what matters
         }
-        socket.on('new_king', safeReload);
-        socket.on('queue_updated', safeReload);
-        socket.on('on_deck', safeReload);
-        socket.on('player_removed_timeout', safeReload);
+        socket.on('new_king', forceReload);
+        socket.on('queue_updated', forceReload);
+        socket.on('on_deck', safeReload);           // minor — skip during DGT
+        socket.on('player_removed_timeout', forceReload);
 
         // DGT Board live updates
         function createDgtBoard() {
@@ -546,24 +547,9 @@
             }
         });
 
-        // Handle game lifecycle events
-        socket.on('game_started', (data) => {
-            if (dgtActive) {
-                // Reset clock display — DGT hardware will send real values
-                gameStart = Date.now();
-                const whiteEl = document.getElementById('dgt-clock-white');
-                const blackEl = document.getElementById('dgt-clock-black');
-                if (whiteEl) { whiteEl.textContent = '--:--'; whiteEl.className = 'dgt-clock dgt-clock-active'; }
-                if (blackEl) { blackEl.textContent = '--:--'; blackEl.className = 'dgt-clock dgt-clock-active'; }
-            } else {
-                safeReload();
-            }
-        });
-
-        socket.on('game_ended', (data) => {
-            if (!dgtActive) safeReload();
-            // When DGT is active, clocks just stop updating (hardware stops sending)
-        });
+        // Handle game lifecycle events — always reload to get fresh player names, positions, etc.
+        socket.on('game_started', forceReload);
+        socket.on('game_ended', forceReload);
 
         // Live QR code update — when admin rotates the venue code, update QR + code text immediately
         socket.on('venue_code_updated', (data) => {

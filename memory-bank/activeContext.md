@@ -7,6 +7,18 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Setup Mode — Target Position with Overlay & Checkmarks (Mar 15, 2026)
+- **Problem**: When a new game starts, players need to set up the Chess960 position on the physical board. Previously the throne page showed the current DGT board position (or the target position statically) with no visual guidance.
+- **Fix**: Added a full "setup mode" to the throne display:
+  - Board shows the **target/expected position** (not the live DGT position) during setup
+  - **"Set Up This Position"** overlay text displayed across the center of the board
+  - **Per-square green checkmarks** appear as each piece is placed correctly on the DGT board
+  - When all pieces match → overlay changes to **"Start White's Clock"** with green pulsing animation
+  - When White's clock is pressed (detected via `clock.running` or `clock.activeSide`), setup mode ends and the board transitions to showing live DGT positions
+- **dgtBoard.js**: `checkPositionMatch()` now returns `expectedBoard` (8×8 array) and `squareMatches` (64-boolean array). `setBoardState()` auto-detects clock start and calls `markGameStarted()`.
+- **throne.ejs**: New functions `renderExpectedBoard()`, `renderLiveBoard()`, `updateBoardOverlay()`. CSS for `.board-overlay`, `.overlay-setup`, `.overlay-ready`, `.sq-check`. Initial page load also checks for active position verification.
+- Status: **committed locally** (commit c9b73e6), not yet deployed
+
 ### Live DGT Clock — Pure Pass-Through (Mar 15, 2026)
 - **Problem**: Previous implementation ran a **software clock** that simulated countdown locally in JavaScript (100ms timer, turn toggling on board changes, increment logic). This was wrong — we want to read the clock the same way we read the board: directly from the DGT hardware.
 - **Fix**: Removed entire software clock system (~60 lines of simulation code). Throne page now purely displays clock values from DGT hardware via Socket.io `dgt_board` events. No local countdown, no turn tracking, no timers.
