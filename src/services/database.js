@@ -774,7 +774,10 @@ function validateVenueCode(code) {
     const active = getActiveVenueCode();
     if (!active) return false;
     if (active.code !== code) return false;
-    if (active.expires_at && new Date(active.expires_at) < new Date()) return false;
+    // Don't check expires_at here — if the code is is_active=1, it's valid.
+    // Expiry only controls when rotation happens, not validation.
+    // The throne page displays the active code's QR, so rejecting an active
+    // code due to expiry creates an impossible "invalid code" state.
     return true;
 }
 
