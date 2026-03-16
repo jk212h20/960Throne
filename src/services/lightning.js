@@ -284,6 +284,47 @@ async function createInvoice(amountSats, memo = '', expiry = 3600) {
 }
 
 /**
+ * List open channels.
+ */
+async function listChannels() {
+    const result = await lndRequest('/v1/channels');
+    return result.channels || [];
+}
+
+/**
+ * List pending channels (opening/closing).
+ */
+async function listPendingChannels() {
+    const result = await lndRequest('/v1/channels/pending');
+    return result;
+}
+
+/**
+ * Connect to a Lightning peer by pubkey@host:port.
+ */
+async function connectPeer(pubkey, host) {
+    return await lndRequest('/v1/peers', 'POST', {
+        addr: { pubkey, host },
+        perm: false,
+    });
+}
+
+/**
+ * Open a channel to a peer.
+ * @param {string} pubkey - Peer's public key
+ * @param {number} localFundingAmount - Amount in sats to fund the channel
+ * @param {number} pushSats - Amount to push to remote side (0 for normal)
+ */
+async function openChannel(pubkey, localFundingAmount, pushSats = 0) {
+    return await lndRequest('/v1/channels', 'POST', {
+        node_pubkey_string: pubkey,
+        local_funding_amount: String(localFundingAmount),
+        push_sat: String(pushSats),
+        spend_unconfirmed: false,
+    });
+}
+
+/**
  * List recent payments from LND.
  * Returns array of payment objects with payment_hash, value_sat, status, etc.
  * @param {number} maxPayments - Maximum number of payments to return (default 100)
@@ -301,6 +342,10 @@ module.exports = {
     listPayments,
     getNewAddress,
     createInvoice,
+    listChannels,
+    listPendingChannels,
+    connectPeer,
+    openChannel,
     resolveLightningAddress,
     requestInvoice,
     payLightningAddress,

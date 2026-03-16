@@ -965,6 +965,58 @@ router.get('/admin/lightning-address', requireAdmin, async (req, res) => {
     }
 });
 
+// List channels
+router.get('/admin/channels', requireAdmin, async (req, res) => {
+    try {
+        const channels = await lightning.listChannels();
+        const pending = await lightning.listPendingChannels();
+        res.json({ channels, pending });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Open a channel (moves on-chain sats into a Lightning channel)
+router.post('/admin/open-channel', requireAdmin, async (req, res) => {
+    const { peer, amount } = req.body;
+    if (!peer || !amount) {
+        return res.status(400).json({ error: 'Peer (pubkey@host:port) and amount (sats) required' });
+    }
+    const amountSats = parseInt(amount);
+    if (amountSats < 20000) {
+        return res.status(400).json({ error: 'Minimum channel size is 20,000 sats' });
+    }
+
+    // Parse peer string: pubkey@host:port
+    const atIdx = peer.indexOf('@');
+    if (atIdx === -1) {
+        return res.status(400).json({ error: 'Peer must be in format pubkey@host:port' });
+    }
+    const pubkey = peer.substring(0, atIdx);
+    const host = peer.substring(atIdx + 1);
+
+    try {
+        // Connect to the peer first (ignore "already connected" errors)
+        try {
+            await lightning.connectPeer(pubkey, host);
+        } catch (connectErr) {
+            if (!connectErr.message.includes('already connected')) {
+                throw new Error(`Could not connect to peer: ${connectErr.message}`);
+            }
+        }
+
+        // Open the channel
+        const result = await lightning.openChannel(pubkey, amountSats);
+        res.json({
+            success: true,
+            message: `Channel opening initiated! ${amountSats.toLocaleString()} sats. Needs 3 on-chain confirmations (~30 min).`,
+            fundingTxid: result.funding_txid_str || result.funding_txid_bytes,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Create a Lightning invoice to receive sats (with QR)
 router.post('/admin/lightning-invoice', requireAdmin, async (req, res) => {
     const { amount, memo } = req.body;
