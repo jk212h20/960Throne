@@ -184,6 +184,9 @@ router.post('/claim', requirePlayer, async (req, res) => {
             completed_at: new Date().toISOString()
         });
 
+        // Schedule auto-verify 60s later as safety net
+        schedulePaymentVerify(payoutId, player.id, player.name, claimAmount, payResult.paymentHash);
+
         res.json({
             success: true,
             amount: claimAmount,
@@ -195,6 +198,9 @@ router.post('/claim', requirePlayer, async (req, res) => {
             status: 'failed',
             error_message: err.message
         });
+        // 🚨 Alert admin immediately
+        telegram.notifyAdmin(`⚠️ PAYOUT FAILED: ${claimAmount} sats to ${player.name}\nAddress: ${lightningAddress}\nError: ${err.message}`);
+        db.createNotification('payout_failed', `Payout failed: ${claimAmount} sats to ${player.name} — ${err.message}`);
         res.status(500).json({
             error: `Payment failed: ${err.message}`,
             hint: err.message.includes('Bolt12') ? 'Try a different wallet (WoS, Alby, Coinos)' : undefined
@@ -380,6 +386,8 @@ async function processWithdrawPayment(k1, session, payoutId, invoice) {
         session.paymentHash = payResult.payment_hash;
 
         console.log(`⚡ LNURL-withdraw: ${session.amount} sats paid to ${session.playerName} (k1: ${k1.substring(0, 8)}...)`);
+        // Schedule auto-verify 60s later as safety net
+        schedulePaymentVerify(payoutId, session.playerId, session.playerName, session.amount, payResult.payment_hash);
     } catch (err) {
         session.status = 'failed';
         session.error = err.message;
@@ -387,8 +395,62 @@ async function processWithdrawPayment(k1, session, payoutId, invoice) {
             status: 'failed',
             error_message: err.message
         });
+        // 🚨 Alert admin immediately
+        telegram.notifyAdmin(`⚠️ PAYOUT FAILED: ${session.amount} sats to ${session.playerName}\nMethod: LNURL-withdraw\nError: ${err.message}`);
+        db.createNotification('payout_failed', `Payout failed: ${session.amount} sats to ${session.playerName} — ${err.message}`);
         console.error(`⚡ LNURL-withdraw failed for ${session.playerName}:`, err.message);
     }
+}
+
+// ============================================================
+// Auto-verify: 60s after each "completed" payment, check LND
+// ============================================================
+
+function normalizeHash(hash) {
+    if (!hash) return null;
+    if (/^[0-9a-f]{64}$/i.test(hash)) return hash.toLowerCase();
+    try { return Buffer.from(hash, 'base64').toString('hex').toLowerCase(); } catch { return hash.toLowerCase(); }
+}
+
+function schedulePaymentVerify(payoutId, playerId, playerName, amount, paymentHash) {
+    setTimeout(async () => {
+        try {
+            // Re-read payout — it may have already been reversed by manual reconcile
+            const payout = db.getPayoutById ? db.getPayoutById(payoutId) : null;
+            if (!payout || payout.status !== 'completed') return; // Already handled
+
+            const lndPayments = await lightning.listPayments(100);
+            const normalizedTarget = normalizeHash(paymentHash);
+
+            const lndPay = lndPayments.find(p => {
+                const nh = normalizeHash(p.payment_hash);
+                return nh === normalizedTarget || p.payment_hash === paymentHash;
+            });
+
+            if (lndPay && lndPay.status === 'SUCCEEDED') {
+                console.log(`✅ Auto-verify: Payout #${payoutId} confirmed SUCCEEDED on LND`);
+                return; // All good
+            }
+
+            if (lndPay && lndPay.status === 'FAILED') {
+                // Payment actually failed! Reverse it.
+                db.refundPayout(payoutId, amount, playerId,
+                    `Auto-reversed 60s after payment: LND says FAILED (${lndPay.failure_reason || 'unknown'})`);
+                const msg = `🚨 AUTO-REVERSED: Payout #${payoutId} — ${amount} sats to ${playerName}. LND says payment FAILED (${lndPay.failure_reason || 'unknown'}). Balance restored.`;
+                console.log(msg);
+                telegram.notifyAdmin(msg);
+                db.createNotification('payout_reversed', msg);
+                return;
+            }
+
+            // Payment not found or still IN_FLIGHT — log but don't alert (may still be routing)
+            if (!lndPay) {
+                console.log(`⚠️ Auto-verify: Payout #${payoutId} hash not found in LND (may still be routing)`);
+            }
+        } catch (err) {
+            console.error(`Auto-verify error for payout #${payoutId}:`, err.message);
+        }
+    }, 60 * 1000); // 60 seconds
 }
 
 // Step 4: Frontend polls this to know when payment completed

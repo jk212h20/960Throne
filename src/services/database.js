@@ -866,6 +866,16 @@ function updatePayout(payoutId, updates) {
     save();
 }
 
+function getPayoutById(payoutId) {
+    const result = db.exec(`SELECT * FROM payouts WHERE id = ?`, [payoutId]);
+    if (!result.length || !result[0].values.length) return null;
+    const cols = result[0].columns;
+    const row = result[0].values[0];
+    const obj = {};
+    cols.forEach((c, i) => obj[c] = row[i]);
+    return obj;
+}
+
 function getPlayerPayouts(playerId) {
     const result = db.exec(`SELECT * FROM payouts WHERE player_id = ? ORDER BY created_at DESC`, [playerId]);
     if (result.length === 0) return [];
@@ -1140,6 +1150,7 @@ module.exports = {
     // Payouts
     createPayout,
     updatePayout,
+    getPayoutById,
     getPlayerPayouts,
     getAllPayouts,
     getPendingPayouts,
