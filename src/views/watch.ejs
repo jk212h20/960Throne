@@ -16,7 +16,9 @@
         .main-content { flex: 1; display: flex; min-height: 0; }
         .video-area { flex: 65; min-width: 0; background: #000; display: flex; flex-direction: column; }
         .video-area iframe { width: 100%; flex: 1; border: none; min-height: 0; }
-        .video-names { display: flex; justify-content: space-between; align-items: center; padding: 6px 16px; background: #0a0a14; flex-shrink: 0; }
+        .video-names { display: flex; align-items: center; padding: 6px 16px; background: #0a0a14; flex-shrink: 0; }
+        .video-names > div:first-child { flex: 0 0 auto; }
+        .video-names > div:last-child { flex: 1; text-align: center; }
         .video-name-challenger { font-size: 1.3rem; font-weight: 800; color: #ffffff; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
         .video-name-king { font-size: 1.3rem; font-weight: 800; color: #FFD700; text-shadow: 0 0 10px rgba(255,215,0,0.4); }
         .video-name-label { font-size: 0.65rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -120,7 +122,7 @@
                         <div class="video-name-label">⚔️ Challenger</div>
                         <div class="video-name-challenger" id="video-challenger-name"><%= state.game.challenger_name %></div>
                     </div>
-                    <div style="text-align:right;">
+                    <div>
                         <div class="video-name-label">👑 King</div>
                         <div class="video-name-king" id="video-king-name"><%= state.game.king_name %></div>
                     </div>
@@ -129,7 +131,7 @@
                         <div class="video-name-label">⚔️ Challenger</div>
                         <div class="video-name-challenger" style="opacity:0.4;">Waiting...</div>
                     </div>
-                    <div style="text-align:right;">
+                    <div>
                         <div class="video-name-label">👑 King</div>
                         <div class="video-name-king"><%= state.king.name %></div>
                     </div>
