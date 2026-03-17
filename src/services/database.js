@@ -907,6 +907,30 @@ function getReconciledFailedPayouts() {
     return rowsToObjects(result[0]);
 }
 
+function getCompletedPayouts() {
+    const result = db.exec(`
+        SELECT p.*, pl.name as player_name
+        FROM payouts p
+        JOIN players pl ON p.player_id = pl.id
+        WHERE p.status = 'completed'
+        ORDER BY p.created_at ASC
+    `);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
+/**
+ * Reverse a payout that was falsely marked completed.
+ * Restores the player's sat_balance and total_sats_claimed, marks payout as 'reversed'.
+ */
+function refundPayout(payoutId, amountSats, playerId, reason) {
+    db.run(`UPDATE players SET sat_balance = sat_balance + ?, total_sats_claimed = total_sats_claimed - ? WHERE id = ?`,
+        [amountSats, amountSats, playerId]);
+    db.run(`UPDATE payouts SET status = 'reversed', error_message = ? WHERE id = ?`,
+        [reason || 'Reversed: LND payment actually failed', payoutId]);
+    save();
+}
+
 // ============================================================
 // Stats
 // ============================================================
@@ -1120,6 +1144,8 @@ module.exports = {
     getAllPayouts,
     getPendingPayouts,
     getReconciledFailedPayouts,
+    getCompletedPayouts,
+    refundPayout,
     
     // Stats
     getEventStats,

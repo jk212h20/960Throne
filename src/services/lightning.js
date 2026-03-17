@@ -66,6 +66,8 @@ async function getChannelBalance() {
 
 /**
  * Pay a BOLT11 invoice
+ * IMPORTANT: LND's /v1/channels/transactions returns HTTP 200 even when payment fails.
+ * The response contains a `payment_error` field on failure — we MUST check it.
  */
 async function payInvoice(payReq, amountSats = null) {
     const body = {
@@ -79,7 +81,14 @@ async function payInvoice(payReq, amountSats = null) {
         body.amt = String(amountSats);
     }
 
-    return await lndRequest('/v1/channels/transactions', 'POST', body);
+    const result = await lndRequest('/v1/channels/transactions', 'POST', body);
+
+    // LND returns HTTP 200 with payment_error field when payment fails (e.g., no route)
+    if (result.payment_error) {
+        throw new Error(`LND payment failed: ${result.payment_error}`);
+    }
+
+    return result;
 }
 
 /**
