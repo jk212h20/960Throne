@@ -366,7 +366,7 @@
         <div class="card mt-4">
             <div class="flex items-center justify-between mb-3">
                 <h2 class="text-lg font-bold flex items-center gap-2"><%- include('partials/icon', { name: 'lightning', size: 20, cls: 'text-throne-gold' }) %> Payout History (<%= payouts.length %>)</h2>
-                <button onclick="reconcilePayouts()" class="bg-yellow-600 hover:bg-yellow-500 text-black text-xs font-bold px-3 py-1 rounded">Reconcile Pending</button>
+                <button onclick="reconcilePayouts()" class="bg-yellow-600 hover:bg-yellow-500 text-black text-xs font-bold px-3 py-1 rounded">🔧 Reconcile All Payouts</button>
             </div>
             <% if (payouts.length === 0) { %>
             <p class="text-gray-500 text-sm">No payouts yet</p>
@@ -388,6 +388,8 @@
                         <td class="py-1">
                             <% if (p.status === 'completed') { %>
                             <span class="text-green-400">✓ paid</span>
+                            <% } else if (p.status === 'reversed') { %>
+                            <span class="text-orange-400" title="<%= p.error_message || '' %>">🔄 reversed</span>
                             <% } else if (p.status === 'failed') { %>
                             <span class="text-red-400">✗ failed</span>
                             <% } else { %>
@@ -492,10 +494,14 @@
         async function resolveNotification(id) { if (await api('/api/admin/notifications/resolve', { id })) setTimeout(() => location.reload(), 500); }
 
         async function reconcilePayouts() {
-            if (!confirm('Reconcile pending payouts? This will mark stuck payouts (without payment confirmation) as failed.')) return;
+            if (!confirm('Reconcile ALL payouts against LND?\n\nThis will:\n• Check pending payouts for LND matches\n• Deep-verify ALL "completed" payouts against LND\n• REVERSE any that LND says actually FAILED\n• Restore balances for affected players')) return;
             const result = await api('/api/admin/reconcile-payouts', {});
             if (result) {
-                alert(result.message);
+                let msg = result.message + '\n\n';
+                if (result.details && result.details.length > 0) {
+                    msg += 'Details:\n' + result.details.join('\n');
+                }
+                alert(msg);
                 setTimeout(() => location.reload(), 500);
             }
         }
