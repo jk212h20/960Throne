@@ -952,12 +952,14 @@ function getEventStats() {
     const totalPlayers = db.exec(`SELECT COUNT(*) FROM players WHERE games_played > 0`);
     const totalSats = db.exec(`SELECT COALESCE(SUM(total_sats_earned), 0) FROM players`);
     const totalReigns = db.exec(`SELECT COUNT(*) FROM reigns`);
+    const uniqueKings = db.exec(`SELECT COUNT(DISTINCT king_id) FROM reigns`);
     
     return {
         totalGames: totalGames[0]?.values[0][0] || 0,
         totalPlayers: totalPlayers[0]?.values[0][0] || 0,
         totalSatsDistributed: totalSats[0]?.values[0][0] || 0,
         totalReigns: totalReigns[0]?.values[0][0] || 0,
+        uniqueKings: uniqueKings[0]?.values[0][0] || 0,
     };
 }
 
