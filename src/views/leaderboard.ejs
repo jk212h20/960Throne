@@ -3,117 +3,475 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leaderboard — 960 Throne</title>
+    <title>Standings — 960 Throne</title>
     <link rel="stylesheet" href="/styles.css">
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; 
+            background: #0a0a0a; 
+            color: #e0e0e0; 
+            min-height: 100vh;
+        }
+
+        /* Hero Header */
+        .hero {
+            position: relative;
+            background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.85) 60%, #0a0a0a 100%),
+                        radial-gradient(ellipse at 50% 40%, rgba(107,142,35,0.15) 0%, transparent 70%);
+            padding: 2.5rem 1.5rem 2rem;
+            text-align: center;
+            overflow: hidden;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(255,255,255,0.02) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(255,255,255,0.02) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        .hero-back {
+            position: absolute;
+            top: 1rem;
+            left: 1.5rem;
+            color: #888;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+            z-index: 2;
+        }
+        .hero-back:hover { color: #7CB342; }
+        .hero-logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto 1rem;
+            display: block;
+            border: 2px solid rgba(124,179,66,0.3);
+            background: rgba(0,0,0,0.5);
+            object-fit: cover;
+        }
+        .hero-title {
+            font-size: clamp(1.8rem, 5vw, 3.2rem);
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            line-height: 1.1;
+            margin-bottom: 0.5rem;
+            color: #fff;
+        }
+        .hero-title .accent { color: #7CB342; font-style: italic; }
+        .hero-subtitle {
+            font-size: clamp(0.85rem, 2vw, 1.05rem);
+            color: #888;
+            font-style: italic;
+            margin-bottom: 0.3rem;
+        }
+        .hero-location {
+            font-size: 0.8rem;
+            color: #666;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        /* Stats Badges */
+        .stats-row {
+            display: flex;
+            justify-content: center;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem;
+            flex-wrap: wrap;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .stat-badge {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0.6rem 1.2rem;
+            border: 1px solid rgba(124,179,66,0.35);
+            border-radius: 8px;
+            background: rgba(124,179,66,0.06);
+            min-width: 100px;
+        }
+        .stat-badge.gold-border { border-color: rgba(255,215,0,0.4); background: rgba(255,215,0,0.05); }
+        .stat-badge.purple-border { border-color: rgba(168,85,247,0.4); background: rgba(168,85,247,0.05); }
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #7CB342;
+            font-variant-numeric: tabular-nums;
+        }
+        .stat-badge.gold-border .stat-value { color: #FFD700; }
+        .stat-badge.purple-border .stat-value { color: #a855f7; }
+        .stat-label {
+            font-size: 0.7rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-top: 2px;
+        }
+
+        /* Banner */
+        .banner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.7rem 1.5rem;
+            margin: 0.75rem auto;
+            max-width: 900px;
+            border: 1px solid rgba(124,179,66,0.3);
+            border-left: 3px solid #7CB342;
+            border-right: 3px solid #7CB342;
+            background: rgba(124,179,66,0.08);
+            font-weight: 700;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #7CB342;
+        }
+        .banner .icon { flex-shrink: 0; }
+
+        /* Section */
+        .section {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #7CB342;
+            margin: 1.5rem 0 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Standings Table */
+        .standings-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        .standings-table thead th {
+            text-align: left;
+            padding: 0.6rem 0.5rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #666;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .standings-table thead th.text-right { text-align: right; }
+        .standings-table tbody tr {
+            border-bottom: 1px solid #1a1a1a;
+            transition: background 0.15s;
+        }
+        .standings-table tbody tr:hover {
+            background: rgba(124,179,66,0.04);
+        }
+        .standings-table tbody td {
+            padding: 0.65rem 0.5rem;
+            vertical-align: middle;
+        }
+        .standings-table tbody td.text-right { text-align: right; }
+
+        /* Rank column */
+        .rank-cell {
+            font-weight: 800;
+            width: 2.5rem;
+            text-align: center;
+            color: #888;
+        }
+        .rank-1 { color: #FFD700; }
+        .rank-2 { color: #C0C0C0; }
+        .rank-3 { color: #CD7F32; }
+
+        /* Player name */
+        .player-name {
+            font-weight: 700;
+            color: #e0e0e0;
+        }
+        .top-3 .player-name { color: #fff; }
+
+        /* Sats column — key metric in green */
+        .sats-cell {
+            font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+            font-weight: 700;
+            color: #7CB342;
+            text-align: right;
+        }
+
+        /* Other data cells */
+        .data-cell {
+            font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+            text-align: right;
+            color: #888;
+        }
+        .data-cell.wins { color: #4ade80; }
+        .data-cell.losses { color: #f87171; }
+        .data-cell.draws { color: #666; }
+        .data-cell.throne-time { color: #aaa; }
+        .data-cell.streak { color: #ccc; }
+
+        /* Top 3 row highlighting */
+        .top-3 {
+            font-size: 0.95rem;
+        }
+        .top-3 .sats-cell {
+            font-size: 1rem;
+        }
+
+        /* Longest Reigns */
+        .reign-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            border: 1px solid #1a1a1a;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            background: #111;
+            transition: border-color 0.2s;
+        }
+        .reign-card:hover { border-color: #2a2a2a; }
+        .reign-card.active-reign {
+            border-color: rgba(124,179,66,0.4);
+            background: rgba(124,179,66,0.06);
+        }
+        .reign-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .reign-rank {
+            font-weight: 800;
+            font-size: 1.1rem;
+            color: #555;
+            min-width: 1.5rem;
+            text-align: center;
+        }
+        .reign-name {
+            font-weight: 700;
+            color: #e0e0e0;
+        }
+        .reign-active-tag {
+            font-size: 0.7rem;
+            color: #7CB342;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: rgba(124,179,66,0.15);
+            padding: 0.15rem 0.4rem;
+            border-radius: 3px;
+            margin-left: 0.5rem;
+        }
+        .reign-right {
+            text-align: right;
+        }
+        .reign-time {
+            font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+            font-weight: 700;
+            color: #7CB342;
+            font-size: 1rem;
+        }
+        .reign-meta {
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        /* Footer Nav */
+        .footer-nav {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            padding: 2rem 1rem 3rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .footer-nav a {
+            color: #555;
+            text-decoration: none;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: color 0.2s;
+        }
+        .footer-nav a:hover { color: #7CB342; }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            color: #555;
+            padding: 2rem;
+            border: 1px solid #1a1a1a;
+            border-radius: 8px;
+            background: #111;
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .hero { padding: 2rem 1rem 1.5rem; }
+            .hero-logo { width: 60px; height: 60px; }
+            .stats-row { gap: 0.5rem; padding: 0.75rem 1rem; }
+            .stat-badge { min-width: 70px; padding: 0.5rem 0.8rem; }
+            .stat-value { font-size: 1.1rem; }
+            .standings-table { font-size: 0.8rem; }
+            .standings-table thead th { font-size: 0.65rem; padding: 0.5rem 0.35rem; }
+            .standings-table tbody td { padding: 0.5rem 0.35rem; }
+            .banner { font-size: 0.75rem; padding: 0.5rem 1rem; }
+            .reign-card { padding: 0.6rem 0.75rem; }
+        }
+
+        /* Table scroll wrapper */
+        .table-wrap {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border: 1px solid #1a1a1a;
+            border-radius: 8px;
+            background: #0d0d0d;
+        }
     </style>
 </head>
-<body class="min-h-screen bg-throne-darker p-4">
-    <div class="max-w-2xl lg:max-w-4xl mx-auto">
-        <div class="flex items-center justify-between mb-6">
-            <h1 class="text-2xl lg:text-3xl font-bold flex items-center gap-2"><%- include('partials/icon', { name: 'trophy', size: 24, cls: 'text-throne-gold' }) %> Leaderboard</h1>
-            <a href="<%= player ? '/player' : '/' %>" class="text-gray-500 hover:text-throne-gold text-sm lg:text-base">← Back</a>
+<body>
+
+    <!-- Hero Header -->
+    <div class="hero">
+        <a href="<%= player ? '/player' : '/' %>" class="hero-back">← Back</a>
+        <h1 class="hero-title">960 <span class="accent">Throne</span> Standings</h1>
+        <p class="hero-subtitle">King of the Hill · Chess960</p>
+        <p class="hero-location">Próspera · Roatán · March 2026</p>
+    </div>
+
+    <!-- Stats Badges -->
+    <div class="stats-row">
+        <div class="stat-badge">
+            <span class="stat-value"><%= stats.totalGames %></span>
+            <span class="stat-label">Games</span>
+        </div>
+        <div class="stat-badge">
+            <span class="stat-value"><%= stats.totalPlayers %></span>
+            <span class="stat-label">Players</span>
+        </div>
+        <div class="stat-badge purple-border">
+            <span class="stat-value"><%= stats.totalReigns %></span>
+            <span class="stat-label">Kings</span>
+        </div>
+        <div class="stat-badge gold-border">
+            <span class="stat-value"><%= stats.totalSatsDistributed.toLocaleString() %></span>
+            <span class="stat-label">Sats Earned</span>
+        </div>
+    </div>
+
+    <!-- Banner -->
+    <% if (state.king) { %>
+    <div class="banner">
+        <%- include('partials/icon', { name: 'crossed-swords', size: 18, cls: '' }) %>
+        Current King: <span style="color:#fff; margin-left: 0.25rem;"><%= state.king.name %></span>
+        <% if (state.reign && !state.reign.dethroned_at) { %>
+        <span style="margin-left: 0.25rem;">· <%= state.reign.consecutive_wins %> defenses · <%= state.liveSats.toLocaleString() %> sats</span>
+        <% } %>
+    </div>
+    <% } %>
+
+    <!-- Top Earners Table -->
+    <div class="section">
+        <div class="section-title">
+            <%- include('partials/icon', { name: 'coins', size: 18, cls: '' }) %>
+            Top Earners
         </div>
 
-        <!-- Event Stats -->
-        <div class="grid grid-cols-4 gap-3 lg:gap-6 mb-6">
-            <div class="card text-center p-3 lg:p-5">
-                <div class="text-xl lg:text-3xl font-bold text-throne-gold"><%= stats.totalGames %></div>
-                <div class="text-xs lg:text-sm text-gray-400">Games</div>
-            </div>
-            <div class="card text-center p-3 lg:p-5">
-                <div class="text-xl lg:text-3xl font-bold text-throne-gold"><%= stats.totalPlayers %></div>
-                <div class="text-xs lg:text-sm text-gray-400">Players</div>
-            </div>
-            <div class="card text-center p-3 lg:p-5">
-                <div class="text-xl lg:text-3xl font-bold text-throne-gold"><%= stats.totalReigns %></div>
-                <div class="text-xs lg:text-sm text-gray-400">Kings</div>
-            </div>
-            <div class="card text-center p-3 lg:p-5">
-                <div class="text-xl lg:text-3xl font-bold text-throne-gold"><%= stats.totalSatsDistributed.toLocaleString() %></div>
-                <div class="text-xs lg:text-sm text-gray-400">Sats Paid</div>
-            </div>
-        </div>
-
-        <!-- Top Earners -->
-        <h2 class="text-lg lg:text-2xl font-bold mb-3 text-throne-gold flex items-center gap-2"><%- include('partials/icon', { name: 'coins', size: 20, cls: 'text-throne-gold' }) %> Top Earners</h2>
         <% if (leaderboard.length === 0) { %>
-        <div class="card text-center text-gray-500 mb-6">No games played yet</div>
+        <div class="empty-state">No games played yet</div>
         <% } else { %>
-        <div class="card mb-6 overflow-x-auto" id="leaderboard-table">
-            <table class="w-full text-sm lg:text-base">
+        <div class="table-wrap" id="leaderboard-table">
+            <table class="standings-table">
                 <thead>
-                    <tr class="text-gray-400 border-b border-gray-700">
-                        <th class="text-left py-2 lg:py-3 px-2 lg:px-3">#</th>
-                        <th class="text-left py-2 lg:py-3">Player</th>
-                        <th class="text-right py-2 lg:py-3 px-2 lg:px-3">Sats</th>
-                        <th class="text-right py-2 lg:py-3 px-2 lg:px-3">Throne</th>
-                        <th class="text-right py-2 lg:py-3 px-2 lg:px-3">W</th>
-                        <th class="text-right py-2 lg:py-3 px-2 lg:px-3">L</th>
-                        <th class="text-right py-2 lg:py-3 px-2 lg:px-3">D</th>
-                        <th class="text-right py-2 lg:py-3 px-2 lg:px-3">Streak</th>
+                    <tr>
+                        <th style="text-align:center; width:2.5rem;">RK</th>
+                        <th>Player</th>
+                        <th class="text-right">Sats</th>
+                        <th class="text-right">Throne</th>
+                        <th class="text-right">W</th>
+                        <th class="text-right">L</th>
+                        <th class="text-right">D</th>
+                        <th class="text-right">Streak</th>
                     </tr>
                 </thead>
                 <tbody>
                     <% leaderboard.forEach((p, i) => { %>
-                    <tr class="border-b border-gray-800 <%= i < 3 ? 'text-throne-gold' : '' %> <%= i < 3 ? 'text-base lg:text-xl font-semibold' : '' %>">
-                        <td class="py-2 lg:py-3 px-2 lg:px-3 font-bold"><% if (i === 0) { %><%- include('partials/icon', { name: 'crown', size: i < 3 ? 24 : 18, cls: 'text-throne-gold' }) %><% } else if (i === 1) { %><%- include('partials/icon', { name: 'medal', size: 24, cls: 'text-gray-300' }) %><% } else if (i === 2) { %><%- include('partials/icon', { name: 'medal', size: 24, cls: 'text-amber-600' }) %><% } else { %><%= i + 1 %><% } %></td>
-                        <td class="py-2 lg:py-3 font-bold"><%= p.name %></td>
-                        <td class="py-2 lg:py-3 px-2 lg:px-3 text-right font-mono"><%= p.total_sats_earned.toLocaleString() %></td>
-                        <% var _ts = Math.floor(p.total_sats_earned / 21); %><td class="py-2 lg:py-3 px-2 lg:px-3 text-right font-mono text-gray-300"><%= Math.floor(_ts / 3600) %>:<%= String(Math.floor((_ts % 3600) / 60)).padStart(2, '0') %>:<%= String(_ts % 60).padStart(2, '0') %></td>
-                        <td class="py-2 lg:py-3 px-2 lg:px-3 text-right text-green-400"><%= p.games_won %></td>
-                        <td class="py-2 lg:py-3 px-2 lg:px-3 text-right text-red-400"><%= p.games_lost %></td>
-                        <td class="py-2 lg:py-3 px-2 lg:px-3 text-right text-gray-400"><%= p.games_drawn %></td>
-                        <td class="py-2 lg:py-3 px-2 lg:px-3 text-right"><%= p.longest_win_streak %></td>
+                    <tr class="<%= i < 3 ? 'top-3' : '' %>">
+                        <td class="rank-cell <%= i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '' %>">
+                            <% if (i === 0) { %><%- include('partials/icon', { name: 'crown', size: 20, cls: '' }) %><% } else if (i === 1) { %><%- include('partials/icon', { name: 'medal', size: 20, cls: '' }) %><% } else if (i === 2) { %><%- include('partials/icon', { name: 'medal', size: 18, cls: '' }) %><% } else { %><%= i + 1 %><% } %>
+                        </td>
+                        <td class="player-name"><%= p.name %></td>
+                        <td class="sats-cell"><%= p.total_sats_earned.toLocaleString() %></td>
+                        <% var _ts = Math.floor(p.total_sats_earned / 21); %>
+                        <td class="data-cell throne-time"><%= Math.floor(_ts / 3600) %>:<%= String(Math.floor((_ts % 3600) / 60)).padStart(2, '0') %>:<%= String(_ts % 60).padStart(2, '0') %></td>
+                        <td class="data-cell wins"><%= p.games_won %></td>
+                        <td class="data-cell losses"><%= p.games_lost %></td>
+                        <td class="data-cell draws"><%= p.games_drawn %></td>
+                        <td class="data-cell streak"><%= p.longest_win_streak %></td>
                     </tr>
                     <% }) %>
                 </tbody>
             </table>
         </div>
         <% } %>
+    </div>
 
-        <!-- Longest Reigns -->
-        <h2 class="text-lg lg:text-2xl font-bold mb-3 text-throne-gold flex items-center gap-2"><%- include('partials/icon', { name: 'stopwatch', size: 20, cls: 'text-throne-gold' }) %> Longest Reigns</h2>
+    <!-- Longest Reigns -->
+    <div class="section">
+        <div class="section-title">
+            <%- include('partials/icon', { name: 'stopwatch', size: 18, cls: '' }) %>
+            Longest Reigns
+        </div>
 
         <% if (state.reign && !state.reign.dethroned_at) { %>
-        <div class="card flex items-center justify-between mb-2 border border-throne-gold/50 bg-throne-gold/10 lg:p-4">
-            <div class="flex items-center gap-3">
-                <%- include('partials/icon', { name: 'crown', size: 20, cls: 'text-throne-gold' }) %>
-                <span class="font-bold text-throne-gold lg:text-lg"><%= state.king ? state.king.name : 'Unknown' %></span>
-                <span class="text-xs lg:text-sm text-throne-gold/70">(active)</span>
+        <div class="reign-card active-reign">
+            <div class="reign-left">
+                <%- include('partials/icon', { name: 'crown', size: 18, cls: '' }) %>
+                <span class="reign-name" style="color:#7CB342;"><%= state.king ? state.king.name : 'Unknown' %></span>
+                <span class="reign-active-tag">active</span>
             </div>
-            <div class="text-right">
-                <div class="font-mono text-throne-gold lg:text-lg"><%= Math.floor(state.reignSeconds / 3600) %>:<%= String(Math.floor((state.reignSeconds % 3600) / 60)).padStart(2, '0') %>:<%= String(state.reignSeconds % 60).padStart(2, '0') %></div>
-                <div class="text-xs lg:text-sm text-gray-400"><%= state.reign.consecutive_wins %> wins · <%= state.liveSats.toLocaleString() %> sats</div>
+            <div class="reign-right">
+                <div class="reign-time"><%= Math.floor(state.reignSeconds / 3600) %>:<%= String(Math.floor((state.reignSeconds % 3600) / 60)).padStart(2, '0') %>:<%= String(state.reignSeconds % 60).padStart(2, '0') %></div>
+                <div class="reign-meta"><%= state.reign.consecutive_wins %> wins · <%= state.liveSats.toLocaleString() %> sats</div>
             </div>
         </div>
         <% } %>
 
         <% if (longestReigns.length === 0 && !(state.reign && !state.reign.dethroned_at)) { %>
-        <div class="card text-center text-gray-500">No completed reigns yet</div>
+        <div class="empty-state">No completed reigns yet</div>
         <% } else if (longestReigns.length > 0) { %>
-        <div class="space-y-2">
-            <% longestReigns.forEach((r, i) => { %>
-            <div class="card flex items-center justify-between lg:p-4">
-                <div class="flex items-center gap-3">
-                    <span class="text-lg lg:text-xl font-bold text-gray-500"><%= i + 1 %></span>
-                    <span class="font-bold lg:text-lg"><%= r.king_name %></span>
-                </div>
-                <div class="text-right">
-                    <div class="font-mono text-throne-gold lg:text-lg"><%= Math.floor(r.total_reign_seconds / 3600) %>:<%= String(Math.floor((r.total_reign_seconds % 3600) / 60)).padStart(2, '0') %>:<%= String(Math.floor(r.total_reign_seconds % 60)).padStart(2, '0') %></div>
-                    <div class="text-xs lg:text-sm text-gray-400"><%= r.consecutive_wins %> wins · <%= r.total_sats_earned.toLocaleString() %> sats</div>
-                </div>
+        <% longestReigns.forEach((r, i) => { %>
+        <div class="reign-card">
+            <div class="reign-left">
+                <span class="reign-rank"><%= i + 1 %></span>
+                <span class="reign-name"><%= r.king_name %></span>
             </div>
-            <% }) %>
+            <div class="reign-right">
+                <div class="reign-time"><%= Math.floor(r.total_reign_seconds / 3600) %>:<%= String(Math.floor((r.total_reign_seconds % 3600) / 60)).padStart(2, '0') %>:<%= String(Math.floor(r.total_reign_seconds % 60)).padStart(2, '0') %></div>
+                <div class="reign-meta"><%= r.consecutive_wins %> wins · <%= r.total_sats_earned.toLocaleString() %> sats</div>
+            </div>
         </div>
+        <% }) %>
         <% } %>
+    </div>
 
-        <div class="flex justify-center gap-6 mt-6 text-sm lg:text-base text-gray-500">
-            <a href="/live" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %> Throne</a>
-            <a href="/timeline" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'scroll', size: 16, cls: '' }) %> Timeline</a>
-            <a href="/queue" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'queue', size: 16, cls: '' }) %> Queue</a>
-        </div>
+    <!-- Footer Nav -->
+    <div class="footer-nav">
+        <a href="/live"><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %> Throne</a>
+        <a href="/timeline"><%- include('partials/icon', { name: 'scroll', size: 16, cls: '' }) %> Timeline</a>
+        <a href="/queue"><%- include('partials/icon', { name: 'queue', size: 16, cls: '' }) %> Queue</a>
     </div>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -147,7 +505,6 @@
             if (!rows[i]) return;
             const cells = rows[i].querySelectorAll('td');
             if (cells.length < 8) return;
-            // cells[0] = rank icon (skip), cells[1] = name
             cells[1].textContent = p.name;
             cells[2].textContent = p.total_sats_earned.toLocaleString();
             const ts = Math.floor(p.total_sats_earned / 21);

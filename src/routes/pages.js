@@ -112,7 +112,7 @@ router.get('/live', (req, res) => {
 router.get('/watch', (req, res) => {
     const state = gameEngine.getThoneState();
     const dgt = dgtBoard.getState();
-    const youtubeId = db.getConfig('youtube_stream_id') || '1ur2QAFmohA';
+    const youtubeId = db.getConfig('youtube_stream_id') || 'yPAvYs5Hj6c';
     res.render('watch', { state, dgt, youtubeId });
 });
 
@@ -210,6 +210,15 @@ router.get('/report', (req, res) => {
     const relaySecret = process.env.DGT_RELAY_SECRET || process.env.ADMIN_PASSWORD || 'changeme';
     const serverUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
     res.render('report', { state, relaySecret, serverUrl });
+});
+
+// Admin Stream Management
+router.get('/admin/stream', (req, res) => {
+    if (!req.isAdmin) {
+        return res.render('admin-login', { returnTo: '/admin/stream' });
+    }
+    const currentStreamId = db.getConfig('youtube_stream_id') || 'yPAvYs5Hj6c';
+    res.render('admin-stream', { currentStreamId });
 });
 
 // Admin Users
