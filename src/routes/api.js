@@ -773,6 +773,19 @@ router.get('/admin/payouts', requireAdmin, (req, res) => {
 
 // Reconcile stuck payouts — checks LND for actual payment status
 // Handles both pending payouts AND previously-wrongly-marked-failed payouts
+// Download database backup
+router.get('/admin/backup', requireAdmin, (req, res) => {
+    const buffer = db.getExportBuffer();
+    if (!buffer) return res.status(500).json({ error: 'Database not initialized' });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    res.set({
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="throne-backup-${timestamp}.db"`,
+        'Content-Length': buffer.length,
+    });
+    res.send(buffer);
+});
+
 router.post('/admin/reconcile-payouts', requireAdmin, async (req, res) => {
     const pending = db.getPendingPayouts();
     const wronglyFailed = db.getReconciledFailedPayouts(); // payouts marked failed by old reconcile

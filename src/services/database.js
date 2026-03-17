@@ -66,6 +66,15 @@ function backupDatabase(label = 'backup') {
 }
 
 /**
+ * Export the current in-memory database as a Buffer.
+ * Safe read-only operation — no disk writes, no locking.
+ */
+function getExportBuffer() {
+    if (!db) return null;
+    return Buffer.from(db.export());
+}
+
+/**
  * Reset all event data for a clean run.
  * Keeps: player accounts (name, auth), config settings
  * Resets: all stats, sats, games, reigns, queue, notifications, payouts
@@ -1112,4 +1121,7 @@ module.exports = {
     getEventStats,
     getAccountingAudit,
     getTimelineData,
+
+    // Backup
+    getExportBuffer,
 };
