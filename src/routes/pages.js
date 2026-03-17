@@ -108,6 +108,14 @@ router.get('/live', (req, res) => {
     res.render('throne', { state, dgt, showVenueCode: false });
 });
 
+// Watch — Public page with YouTube livestream + game info sidebar
+router.get('/watch', (req, res) => {
+    const state = gameEngine.getThoneState();
+    const dgt = dgtBoard.getState();
+    const youtubeId = db.getConfig('youtube_stream_id') || '1ur2QAFmohA';
+    res.render('watch', { state, dgt, youtubeId });
+});
+
 // Board — Just the live board, nothing else (public, embeddable)
 router.get('/board', (req, res) => {
     const dgt = dgtBoard.getState();

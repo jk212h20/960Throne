@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watch Live — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; overflow: hidden; height: 100vh; }
+
+        /* Layout */
+        .watch-layout { display: flex; flex-direction: column; height: 100vh; }
+        .top-bar { background: #111827; border-bottom: 1px solid #1f2937; padding: 8px 20px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+        .main-content { flex: 1; display: flex; min-height: 0; }
+        .video-area { flex: 65; min-width: 0; background: #000; display: flex; align-items: stretch; }
+        .video-area iframe { width: 100%; height: 100%; border: none; }
+        .info-sidebar { flex: 35; min-width: 280px; max-width: 420px; background: #111827; border-left: 1px solid #1f2937; display: flex; flex-direction: column; overflow-y: auto; }
+        .bottom-bar { background: #111827; border-top: 1px solid #1f2937; padding: 6px 20px; flex-shrink: 0; display: flex; align-items: center; gap: 16px; overflow-x: auto; white-space: nowrap; }
+
+        /* Top bar */
+        .brand { display: flex; align-items: center; gap: 10px; }
+        .brand-title { font-size: 1.5rem; font-weight: 800; color: #FFD700; }
+        .brand-chess { font-size: 1.8rem; }
+        .top-stat { text-align: right; }
+        .top-stat-label { font-size: 0.75rem; color: #6b7280; }
+        .top-stat-value { font-size: 1.3rem; font-weight: 700; font-family: 'Courier New', monospace; color: #FFD700; }
+
+        /* Sidebar sections */
+        .sidebar-section { padding: 14px 16px; border-bottom: 1px solid #1f2937; }
+        .sidebar-section:last-child { border-bottom: none; }
+        .section-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin-bottom: 6px; font-weight: 600; }
+
+        /* King info */
+        .king-name { font-size: 1.4rem; font-weight: 800; color: #FFD700; display: flex; align-items: center; gap: 6px; }
+        .king-stats { display: flex; gap: 16px; margin-top: 6px; }
+        .king-stat { font-size: 0.85rem; color: #9ca3af; }
+        .king-stat strong { color: #e5e7eb; font-family: 'Courier New', monospace; font-size: 1rem; }
+        .sat-counter { font-size: 2rem; font-weight: 800; font-family: 'Courier New', monospace; color: #FFD700; margin-top: 4px; }
+        @keyframes satsGlow { 0%,100% { text-shadow: 0 0 8px rgba(255,215,0,0.4); } 50% { text-shadow: 0 0 20px rgba(255,215,0,0.7); } }
+        .sats-glow { animation: satsGlow 2s ease-in-out infinite; }
+        .sat-rate { font-size: 0.75rem; color: #6b7280; }
+
+        /* Game matchup */
+        .matchup { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+        .color-badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-weight: 700; font-size: 0.9rem; }
+        .color-badge-white { background: #fff; color: #1a1a1a; border: 2px solid #fff; }
+        .color-badge-black { background: #1a1a1a; color: #fff; border: 2px solid #555; }
+        .vs-text { color: #6b7280; font-size: 0.85rem; }
+
+        /* Clocks */
+        .clocks { display: flex; gap: 12px; margin-top: 10px; }
+        .clock-box { flex: 1; text-align: center; }
+        .clock-label { font-size: 0.65rem; color: #6b7280; margin-bottom: 2px; }
+        .clock-value { font-family: 'Courier New', monospace; font-size: 1.6rem; font-weight: 700; padding: 6px 0; border-radius: 8px; }
+        .clock-active { background: rgba(34,197,94,0.15); border: 2px solid rgba(34,197,94,0.4); color: #22c55e; }
+        .clock-inactive { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); color: #6b7280; }
+
+        /* Queue */
+        .queue-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+        .queue-num { font-size: 0.85rem; font-weight: 700; color: #6b7280; min-width: 24px; }
+        .queue-name { font-size: 0.95rem; }
+        .queue-first { color: #FFD700; font-weight: 700; }
+        .queue-empty { color: #4b5563; font-size: 0.85rem; font-style: italic; }
+
+        /* No king / no game states */
+        .empty-state { color: #6b7280; font-size: 0.9rem; }
+
+        /* Bottom ticker */
+        .ticker-game { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; color: #9ca3af; }
+        .ticker-game .result-icon { font-size: 0.75rem; }
+
+        /* Responsive: stack on narrow screens */
+        @media (max-width: 900px) {
+            .main-content { flex-direction: column; }
+            .video-area { flex: none; height: 56vw; max-height: 50vh; }
+            .info-sidebar { flex: 1; max-width: none; min-width: 0; border-left: none; border-top: 1px solid #1f2937; }
+        }
+    </style>
+</head>
+<body>
+    <div class="watch-layout">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="brand">
+                <span class="brand-chess">♚</span>
+                <span class="brand-title">960 Throne</span>
+                <img src="/unahLogo.png" alt="UNAH" style="height: 36px; width: auto; filter: brightness(1.8); margin-left: 4px;">
+            </div>
+            <div style="display:flex;align-items:center;gap:24px;">
+                <div class="top-stat">
+                    <div class="top-stat-label">⚡ Total Sats Earned</div>
+                    <div class="top-stat-value" id="total-sats"><%= state.stats.totalSatsDistributed.toLocaleString() %></div>
+                </div>
+                <div class="top-stat">
+                    <div class="top-stat-label">Time Control</div>
+                    <div class="top-stat-value"><%= state.config.timeControl.base / 60 %>+<%= state.config.timeControl.increment %></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main: Video + Sidebar -->
+        <div class="main-content">
+            <!-- YouTube Embed -->
+            <div class="video-area">
+                <iframe
+                    src="https://www.youtube.com/embed/<%= typeof youtubeId !== 'undefined' && youtubeId ? youtubeId : '1ur2QAFmohA' %>?autoplay=1&mute=1&rel=0&modestbranding=1"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen>
+                </iframe>
+            </div>
+
+            <!-- Info Sidebar -->
+            <div class="info-sidebar">
+                <!-- King Section -->
+                <div class="sidebar-section">
+                    <div class="section-label">👑 King of the Throne</div>
+                    <% if (state.king) { %>
+                    <div class="king-name">
+                        <%- include('partials/icon', { name: 'crown', size: 22, cls: 'text-throne-gold' }) %>
+                        <span id="king-name"><%= state.king.name %></span>
+                    </div>
+                    <div class="king-stats">
+                        <div class="king-stat">Reign <strong id="reign-time"><%= Math.floor(state.reignSeconds / 3600) %>:<%= String(Math.floor((state.reignSeconds % 3600) / 60)).padStart(2, '0') %>:<%= String(state.reignSeconds % 60).padStart(2, '0') %></strong></div>
+                        <div class="king-stat">Streak <strong id="win-streak"><%= state.reign ? state.reign.consecutive_wins : 0 %></strong>W</div>
+                    </div>
+                    <div class="sat-counter sats-glow" id="sat-counter"><%= state.liveSats.toLocaleString() %></div>
+                    <div class="sat-rate">sats this reign (<%= state.config.satRate %>/s)</div>
+                    <% } else { %>
+                    <div class="empty-state">No King on the Throne yet</div>
+                    <% } %>
+                </div>
+
+                <!-- Current Game -->
+                <div class="sidebar-section">
+                    <div class="section-label">⚔️ Current Game</div>
+                    <% if (state.game) { %>
+                    <%
+                      const kc = state.game.king_color || 'black';
+                      const cc = kc === 'white' ? 'black' : 'white';
+                      const tcBase = state.config.timeControl.base;
+                      const fmtClock = (s) => Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+                    %>
+                    <div style="font-size:0.8rem;color:#6b7280;margin-bottom:4px;">Game #<%= state.game.id %> · Position #<%= state.game.chess960_position %></div>
+                    <div class="matchup">
+                        <span class="color-badge <%= kc === 'white' ? 'color-badge-white' : 'color-badge-black' %>">
+                            <%- include('partials/icon', { name: 'crown', size: 14, cls: '' }) %>
+                            <%= state.game.king_name %>
+                        </span>
+                        <span class="vs-text">vs</span>
+                        <span class="color-badge <%= cc === 'white' ? 'color-badge-white' : 'color-badge-black' %>">
+                            <%- include('partials/icon', { name: 'crossed-swords', size: 14, cls: '' }) %>
+                            <%= state.game.challenger_name %>
+                        </span>
+                    </div>
+                    <div class="clocks">
+                        <div class="clock-box">
+                            <div class="clock-label">♔ White (<%= kc === 'white' ? 'King' : 'Challenger' %>)</div>
+                            <div class="clock-value clock-active" id="clock-white"><%= fmtClock((dgt && dgt.clock) ? dgt.clock.white : tcBase) %></div>
+                        </div>
+                        <div class="clock-box">
+                            <div class="clock-label">♚ Black (<%= kc === 'black' ? 'King' : 'Challenger' %>)</div>
+                            <div class="clock-value clock-active" id="clock-black"><%= fmtClock((dgt && dgt.clock) ? dgt.clock.black : tcBase) %></div>
+                        </div>
+                    </div>
+                    <% } else if (state.king) { %>
+                    <div class="empty-state">Waiting for challenger...</div>
+                    <% } else { %>
+                    <div class="empty-state">No active game</div>
+                    <% } %>
+                </div>
+
+                <!-- Queue -->
+                <div class="sidebar-section" style="flex:1;">
+                    <div class="section-label">🗡️ Challengers (<span id="queue-count"><%= state.queue.length %></span>)</div>
+                    <div id="queue-list">
+                        <% if (state.queue.length === 0) { %>
+                        <div class="queue-empty">No challengers in line</div>
+                        <% } else { %>
+                        <% state.queue.forEach((entry, i) => { %>
+                        <div class="queue-item">
+                            <span class="queue-num">#<%= entry.position %></span>
+                            <span class="queue-name <%= i === 0 ? 'queue-first' : '' %>"><%= entry.player_name %></span>
+                        </div>
+                        <% }) %>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Ticker: Recent Games -->
+        <div class="bottom-bar">
+            <span style="font-size:0.75rem;color:#6b7280;font-weight:600;margin-right:8px;">Recent:</span>
+            <% if (state.recentGames && state.recentGames.length > 0) { %>
+            <% state.recentGames.forEach(g => { %>
+            <span class="ticker-game">
+                <% if (g.result === 'king_won') { %>
+                    <span style="color:#22c55e;">👑</span> <%= g.king_name %> def. <%= g.challenger_name %>
+                <% } else if (g.result === 'challenger_won') { %>
+                    <span style="color:#ef4444;">⚔️</span> <%= g.challenger_name %> dethroned <%= g.king_name %>
+                <% } else if (g.result === 'draw') { %>
+                    <span>🤝</span> <%= g.king_name %> drew <%= g.challenger_name %>
+                <% } else if (g.result === 'no_show') { %>
+                    <span style="color:#eab308;">⏭️</span> <%= g.challenger_name %> no-show
+                <% } %>
+                <span style="color:#374151;margin:0 4px;">·</span>
+            </span>
+            <% }) %>
+            <% } else { %>
+            <span style="font-size:0.8rem;color:#4b5563;">No games yet</span>
+            <% } %>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let reignStart = <%- state.reign ? `new Date('${state.reign.crowned_at}${state.reign.crowned_at.endsWith('Z') ? '' : 'Z'}').getTime()` : 'null' %>;
+        const satRate = <%- state.config.satRate %>;
+        const baseSatsFromDb = <%- state.stats.totalSatsDistributed %>;
+        const reignSatsAlreadyCounted = <%- state.reign ? state.liveSats : 0 %>;
+        const baseSats = baseSatsFromDb - reignSatsAlreadyCounted;
+
+        // Live counters
+        function updateCounters() {
+            const now = Date.now();
+            let currentReignSats = 0;
+            if (reignStart) {
+                const reignSec = Math.floor((now - reignStart) / 1000);
+                const el = document.getElementById('reign-time');
+                const h = Math.floor(reignSec / 3600);
+                const m = Math.floor((reignSec % 3600) / 60);
+                const s = reignSec % 60;
+                if (el) el.textContent = `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+                currentReignSats = reignSec * satRate;
+                const satEl = document.getElementById('sat-counter');
+                if (satEl) satEl.textContent = currentReignSats.toLocaleString();
+            }
+            const totalEl = document.getElementById('total-sats');
+            if (totalEl) totalEl.textContent = (baseSats + currentReignSats).toLocaleString();
+        }
+        setInterval(updateCounters, 1000);
+        updateCounters();
+
+        // Clock formatting
+        function fmtClock(s) {
+            if (s == null || s < 0) return '--:--';
+            return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+        }
+
+        // DGT clock updates
+        socket.on('dgt_board', (data) => {
+            if (data.clock) {
+                const wEl = document.getElementById('clock-white');
+                const bEl = document.getElementById('clock-black');
+                if (wEl) {
+                    wEl.textContent = fmtClock(data.clock.white);
+                    wEl.className = 'clock-value ' + (data.clock.activeSide === 'white' ? 'clock-active' : 'clock-inactive');
+                }
+                if (bEl) {
+                    bEl.textContent = fmtClock(data.clock.black);
+                    bEl.className = 'clock-value ' + (data.clock.activeSide === 'black' ? 'clock-active' : 'clock-inactive');
+                }
+            }
+        });
+
+        // Queue updates
+        socket.on('queue_updated', (data) => {
+            if (!data || !data.queue) return;
+            const list = document.getElementById('queue-list');
+            const count = document.getElementById('queue-count');
+            if (count) count.textContent = data.queue.length;
+            if (!list) return;
+            if (data.queue.length === 0) {
+                list.innerHTML = '<div class="queue-empty">No challengers in line</div>';
+            } else {
+                list.innerHTML = data.queue.map((entry, i) =>
+                    '<div class="queue-item">' +
+                    '<span class="queue-num">#' + entry.position + '</span>' +
+                    '<span class="queue-name ' + (i === 0 ? 'queue-first' : '') + '">' + entry.player_name + '</span>' +
+                    '</div>'
+                ).join('');
+            }
+        });
+
+        // Game lifecycle — reload to get fresh state
+        let transitionPending = false;
+        let transitionTimer = null;
+        socket.on('game_started', () => {
+            if (transitionTimer) clearTimeout(transitionTimer);
+            transitionPending = false;
+            location.reload();
+        });
+        socket.on('game_ended', () => {
+            transitionPending = true;
+            if (transitionTimer) clearTimeout(transitionTimer);
+            transitionTimer = setTimeout(() => { transitionPending = false; location.reload(); }, 5000);
+        });
+        socket.on('new_king', () => {
+            if (!transitionPending) location.reload();
+        });
+        socket.on('event_reset', () => location.reload());
+    </script>
+<script src="/vscale.js"></script>
+</body>
+</html>
