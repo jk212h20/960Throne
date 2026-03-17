@@ -5,65 +5,67 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leaderboard — 960 Throne</title>
     <link rel="stylesheet" href="/styles.css">
-    <style>body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }</style>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+    </style>
 </head>
 <body class="min-h-screen bg-throne-darker p-4">
-    <div class="max-w-2xl mx-auto">
+    <div class="max-w-2xl lg:max-w-4xl mx-auto">
         <div class="flex items-center justify-between mb-6">
-            <h1 class="text-2xl font-bold flex items-center gap-2"><%- include('partials/icon', { name: 'trophy', size: 24, cls: 'text-throne-gold' }) %> Leaderboard</h1>
-            <a href="<%= player ? '/player' : '/' %>" class="text-gray-500 hover:text-throne-gold text-sm">← Back</a>
+            <h1 class="text-2xl lg:text-3xl font-bold flex items-center gap-2"><%- include('partials/icon', { name: 'trophy', size: 24, cls: 'text-throne-gold' }) %> Leaderboard</h1>
+            <a href="<%= player ? '/player' : '/' %>" class="text-gray-500 hover:text-throne-gold text-sm lg:text-base">← Back</a>
         </div>
 
         <!-- Event Stats -->
-        <div class="grid grid-cols-4 gap-3 mb-6">
-            <div class="card text-center p-3">
-                <div class="text-xl font-bold text-throne-gold"><%= stats.totalGames %></div>
-                <div class="text-xs text-gray-400">Games</div>
+        <div class="grid grid-cols-4 gap-3 lg:gap-6 mb-6">
+            <div class="card text-center p-3 lg:p-5">
+                <div class="text-xl lg:text-3xl font-bold text-throne-gold"><%= stats.totalGames %></div>
+                <div class="text-xs lg:text-sm text-gray-400">Games</div>
             </div>
-            <div class="card text-center p-3">
-                <div class="text-xl font-bold text-throne-gold"><%= stats.totalPlayers %></div>
-                <div class="text-xs text-gray-400">Players</div>
+            <div class="card text-center p-3 lg:p-5">
+                <div class="text-xl lg:text-3xl font-bold text-throne-gold"><%= stats.totalPlayers %></div>
+                <div class="text-xs lg:text-sm text-gray-400">Players</div>
             </div>
-            <div class="card text-center p-3">
-                <div class="text-xl font-bold text-throne-gold"><%= stats.totalReigns %></div>
-                <div class="text-xs text-gray-400">Kings</div>
+            <div class="card text-center p-3 lg:p-5">
+                <div class="text-xl lg:text-3xl font-bold text-throne-gold"><%= stats.totalReigns %></div>
+                <div class="text-xs lg:text-sm text-gray-400">Kings</div>
             </div>
-            <div class="card text-center p-3">
-                <div class="text-xl font-bold text-throne-gold"><%= stats.totalSatsDistributed.toLocaleString() %></div>
-                <div class="text-xs text-gray-400">Sats Paid</div>
+            <div class="card text-center p-3 lg:p-5">
+                <div class="text-xl lg:text-3xl font-bold text-throne-gold"><%= stats.totalSatsDistributed.toLocaleString() %></div>
+                <div class="text-xs lg:text-sm text-gray-400">Sats Paid</div>
             </div>
         </div>
 
         <!-- Top Earners -->
-        <h2 class="text-lg font-bold mb-3 text-throne-gold flex items-center gap-2"><%- include('partials/icon', { name: 'coins', size: 20, cls: 'text-throne-gold' }) %> Top Earners</h2>
+        <h2 class="text-lg lg:text-2xl font-bold mb-3 text-throne-gold flex items-center gap-2"><%- include('partials/icon', { name: 'coins', size: 20, cls: 'text-throne-gold' }) %> Top Earners</h2>
         <% if (leaderboard.length === 0) { %>
         <div class="card text-center text-gray-500 mb-6">No games played yet</div>
         <% } else { %>
-        <div class="card mb-6 overflow-x-auto">
-            <table class="w-full text-sm">
+        <div class="card mb-6 overflow-x-auto" id="leaderboard-table">
+            <table class="w-full text-sm lg:text-base">
                 <thead>
                     <tr class="text-gray-400 border-b border-gray-700">
-                        <th class="text-left py-2 px-2">#</th>
-                        <th class="text-left py-2">Player</th>
-                        <th class="text-right py-2 px-2">Sats</th>
-                        <th class="text-right py-2 px-2">Throne</th>
-                        <th class="text-right py-2 px-2">W</th>
-                        <th class="text-right py-2 px-2">L</th>
-                        <th class="text-right py-2 px-2">D</th>
-                        <th class="text-right py-2 px-2">Streak</th>
+                        <th class="text-left py-2 lg:py-3 px-2 lg:px-3">#</th>
+                        <th class="text-left py-2 lg:py-3">Player</th>
+                        <th class="text-right py-2 lg:py-3 px-2 lg:px-3">Sats</th>
+                        <th class="text-right py-2 lg:py-3 px-2 lg:px-3">Throne</th>
+                        <th class="text-right py-2 lg:py-3 px-2 lg:px-3">W</th>
+                        <th class="text-right py-2 lg:py-3 px-2 lg:px-3">L</th>
+                        <th class="text-right py-2 lg:py-3 px-2 lg:px-3">D</th>
+                        <th class="text-right py-2 lg:py-3 px-2 lg:px-3">Streak</th>
                     </tr>
                 </thead>
                 <tbody>
                     <% leaderboard.forEach((p, i) => { %>
-                    <tr class="border-b border-gray-800 <%= i < 3 ? 'text-throne-gold' : '' %>">
-                        <td class="py-2 px-2 font-bold"><% if (i === 0) { %><%- include('partials/icon', { name: 'crown', size: 18, cls: 'text-throne-gold' }) %><% } else if (i === 1) { %><%- include('partials/icon', { name: 'medal', size: 18, cls: 'text-gray-300' }) %><% } else if (i === 2) { %><%- include('partials/icon', { name: 'medal', size: 18, cls: 'text-amber-600' }) %><% } else { %><%= i + 1 %><% } %></td>
-                        <td class="py-2 font-bold"><%= p.name %></td>
-                        <td class="py-2 px-2 text-right font-mono"><%= p.total_sats_earned.toLocaleString() %></td>
-                        <% var _ts = Math.floor(p.total_sats_earned / 21); %><td class="py-2 px-2 text-right font-mono text-gray-300"><%= Math.floor(_ts / 3600) %>:<%= String(Math.floor((_ts % 3600) / 60)).padStart(2, '0') %>:<%= String(_ts % 60).padStart(2, '0') %></td>
-                        <td class="py-2 px-2 text-right text-green-400"><%= p.games_won %></td>
-                        <td class="py-2 px-2 text-right text-red-400"><%= p.games_lost %></td>
-                        <td class="py-2 px-2 text-right text-gray-400"><%= p.games_drawn %></td>
-                        <td class="py-2 px-2 text-right"><%= p.longest_win_streak %></td>
+                    <tr class="border-b border-gray-800 <%= i < 3 ? 'text-throne-gold' : '' %> <%= i < 3 ? 'text-base lg:text-xl font-semibold' : '' %>">
+                        <td class="py-2 lg:py-3 px-2 lg:px-3 font-bold"><% if (i === 0) { %><%- include('partials/icon', { name: 'crown', size: i < 3 ? 24 : 18, cls: 'text-throne-gold' }) %><% } else if (i === 1) { %><%- include('partials/icon', { name: 'medal', size: 24, cls: 'text-gray-300' }) %><% } else if (i === 2) { %><%- include('partials/icon', { name: 'medal', size: 24, cls: 'text-amber-600' }) %><% } else { %><%= i + 1 %><% } %></td>
+                        <td class="py-2 lg:py-3 font-bold"><%= p.name %></td>
+                        <td class="py-2 lg:py-3 px-2 lg:px-3 text-right font-mono"><%= p.total_sats_earned.toLocaleString() %></td>
+                        <% var _ts = Math.floor(p.total_sats_earned / 21); %><td class="py-2 lg:py-3 px-2 lg:px-3 text-right font-mono text-gray-300"><%= Math.floor(_ts / 3600) %>:<%= String(Math.floor((_ts % 3600) / 60)).padStart(2, '0') %>:<%= String(_ts % 60).padStart(2, '0') %></td>
+                        <td class="py-2 lg:py-3 px-2 lg:px-3 text-right text-green-400"><%= p.games_won %></td>
+                        <td class="py-2 lg:py-3 px-2 lg:px-3 text-right text-red-400"><%= p.games_lost %></td>
+                        <td class="py-2 lg:py-3 px-2 lg:px-3 text-right text-gray-400"><%= p.games_drawn %></td>
+                        <td class="py-2 lg:py-3 px-2 lg:px-3 text-right"><%= p.longest_win_streak %></td>
                     </tr>
                     <% }) %>
                 </tbody>
@@ -72,18 +74,18 @@
         <% } %>
 
         <!-- Longest Reigns -->
-        <h2 class="text-lg font-bold mb-3 text-throne-gold flex items-center gap-2"><%- include('partials/icon', { name: 'stopwatch', size: 20, cls: 'text-throne-gold' }) %> Longest Reigns</h2>
+        <h2 class="text-lg lg:text-2xl font-bold mb-3 text-throne-gold flex items-center gap-2"><%- include('partials/icon', { name: 'stopwatch', size: 20, cls: 'text-throne-gold' }) %> Longest Reigns</h2>
 
         <% if (state.reign && !state.reign.dethroned_at) { %>
-        <div class="card flex items-center justify-between mb-2 border border-throne-gold/50 bg-throne-gold/10">
+        <div class="card flex items-center justify-between mb-2 border border-throne-gold/50 bg-throne-gold/10 lg:p-4">
             <div class="flex items-center gap-3">
                 <%- include('partials/icon', { name: 'crown', size: 20, cls: 'text-throne-gold' }) %>
-                <span class="font-bold text-throne-gold"><%= state.king ? state.king.name : 'Unknown' %></span>
-                <span class="text-xs text-throne-gold/70">(active)</span>
+                <span class="font-bold text-throne-gold lg:text-lg"><%= state.king ? state.king.name : 'Unknown' %></span>
+                <span class="text-xs lg:text-sm text-throne-gold/70">(active)</span>
             </div>
             <div class="text-right">
-                <div class="font-mono text-throne-gold"><%= Math.floor(state.reignSeconds / 3600) %>:<%= String(Math.floor((state.reignSeconds % 3600) / 60)).padStart(2, '0') %>:<%= String(state.reignSeconds % 60).padStart(2, '0') %></div>
-                <div class="text-xs text-gray-400"><%= state.reign.consecutive_wins %> wins · <%= state.liveSats.toLocaleString() %> sats</div>
+                <div class="font-mono text-throne-gold lg:text-lg"><%= Math.floor(state.reignSeconds / 3600) %>:<%= String(Math.floor((state.reignSeconds % 3600) / 60)).padStart(2, '0') %>:<%= String(state.reignSeconds % 60).padStart(2, '0') %></div>
+                <div class="text-xs lg:text-sm text-gray-400"><%= state.reign.consecutive_wins %> wins · <%= state.liveSats.toLocaleString() %> sats</div>
             </div>
         </div>
         <% } %>
@@ -93,26 +95,80 @@
         <% } else if (longestReigns.length > 0) { %>
         <div class="space-y-2">
             <% longestReigns.forEach((r, i) => { %>
-            <div class="card flex items-center justify-between">
+            <div class="card flex items-center justify-between lg:p-4">
                 <div class="flex items-center gap-3">
-                    <span class="text-lg font-bold text-gray-500"><%= i + 1 %></span>
-                    <span class="font-bold"><%= r.king_name %></span>
+                    <span class="text-lg lg:text-xl font-bold text-gray-500"><%= i + 1 %></span>
+                    <span class="font-bold lg:text-lg"><%= r.king_name %></span>
                 </div>
                 <div class="text-right">
-                    <div class="font-mono text-throne-gold"><%= Math.floor(r.total_reign_seconds / 3600) %>:<%= String(Math.floor((r.total_reign_seconds % 3600) / 60)).padStart(2, '0') %>:<%= String(Math.floor(r.total_reign_seconds % 60)).padStart(2, '0') %></div>
-                    <div class="text-xs text-gray-400"><%= r.consecutive_wins %> wins · <%= r.total_sats_earned.toLocaleString() %> sats</div>
+                    <div class="font-mono text-throne-gold lg:text-lg"><%= Math.floor(r.total_reign_seconds / 3600) %>:<%= String(Math.floor((r.total_reign_seconds % 3600) / 60)).padStart(2, '0') %>:<%= String(Math.floor(r.total_reign_seconds % 60)).padStart(2, '0') %></div>
+                    <div class="text-xs lg:text-sm text-gray-400"><%= r.consecutive_wins %> wins · <%= r.total_sats_earned.toLocaleString() %> sats</div>
                 </div>
             </div>
             <% }) %>
         </div>
         <% } %>
 
-        <div class="flex justify-center gap-6 mt-6 text-sm text-gray-500">
+        <div class="flex justify-center gap-6 mt-6 text-sm lg:text-base text-gray-500">
             <a href="/live" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'crown', size: 16, cls: '' }) %> Throne</a>
             <a href="/timeline" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'scroll', size: 16, cls: '' }) %> Timeline</a>
             <a href="/queue" class="hover:text-throne-gold transition-colors flex items-center gap-1"><%- include('partials/icon', { name: 'queue', size: 16, cls: '' }) %> Queue</a>
         </div>
     </div>
+
+<script src="/socket.io/socket.io.js"></script>
 <script src="/vscale.js"></script>
+<script>
+// Live update: refresh leaderboard data every 30s and on game events
+(function() {
+    let refreshTimer = null;
+
+    function formatTime(totalSecs) {
+        const h = Math.floor(totalSecs / 3600);
+        const m = String(Math.floor((totalSecs % 3600) / 60)).padStart(2, '0');
+        const s = String(totalSecs % 60).padStart(2, '0');
+        return h + ':' + m + ':' + s;
+    }
+
+    async function refreshLeaderboard() {
+        try {
+            const res = await fetch('/api/leaderboard');
+            if (!res.ok) return;
+            const data = await res.json();
+            updateTable(data.leaderboard);
+        } catch (e) { /* silent */ }
+    }
+
+    function updateTable(leaderboard) {
+        const tbody = document.querySelector('#leaderboard-table tbody');
+        if (!tbody || !leaderboard) return;
+        const rows = tbody.querySelectorAll('tr');
+        leaderboard.forEach((p, i) => {
+            if (!rows[i]) return;
+            const cells = rows[i].querySelectorAll('td');
+            if (cells.length < 8) return;
+            // cells[0] = rank icon (skip), cells[1] = name
+            cells[1].textContent = p.name;
+            cells[2].textContent = p.total_sats_earned.toLocaleString();
+            const ts = Math.floor(p.total_sats_earned / 21);
+            cells[3].textContent = formatTime(ts);
+            cells[4].textContent = p.games_won;
+            cells[5].textContent = p.games_lost;
+            cells[6].textContent = p.games_drawn;
+            cells[7].textContent = p.longest_win_streak;
+        });
+    }
+
+    // Periodic refresh
+    refreshTimer = setInterval(refreshLeaderboard, 30000);
+
+    // Socket.io live events — refresh on game end or new king
+    try {
+        const socket = io({ transports: ['websocket', 'polling'] });
+        socket.on('game_ended', refreshLeaderboard);
+        socket.on('new_king', refreshLeaderboard);
+    } catch (e) { /* socket not available, periodic refresh only */ }
+})();
+</script>
 </body>
 </html>
