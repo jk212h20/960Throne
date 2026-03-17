@@ -14,8 +14,12 @@
         .watch-layout { display: flex; flex-direction: column; height: 100vh; }
         .top-bar { background: #111827; border-bottom: 1px solid #1f2937; padding: 8px 20px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
         .main-content { flex: 1; display: flex; min-height: 0; }
-        .video-area { flex: 65; min-width: 0; background: #000; display: flex; align-items: stretch; }
-        .video-area iframe { width: 100%; height: 100%; border: none; }
+        .video-area { flex: 65; min-width: 0; background: #000; display: flex; flex-direction: column; }
+        .video-area iframe { width: 100%; flex: 1; border: none; min-height: 0; }
+        .video-names { display: flex; justify-content: space-between; align-items: center; padding: 6px 16px; background: #0a0a14; flex-shrink: 0; }
+        .video-name-challenger { font-size: 1.3rem; font-weight: 800; color: #ffffff; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
+        .video-name-king { font-size: 1.3rem; font-weight: 800; color: #FFD700; text-shadow: 0 0 10px rgba(255,215,0,0.4); }
+        .video-name-label { font-size: 0.65rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em; }
         .info-sidebar { flex: 35; min-width: 280px; max-width: 420px; background: #111827; border-left: 1px solid #1f2937; display: flex; flex-direction: column; overflow-y: auto; }
         .bottom-bar { background: #111827; border-top: 1px solid #1f2937; padding: 6px 20px; flex-shrink: 0; display: flex; align-items: center; gap: 16px; overflow-x: auto; white-space: nowrap; }
 
@@ -109,6 +113,28 @@
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowfullscreen>
                 </iframe>
+                <!-- Player names under video: Challenger (left) | King (right) -->
+                <div class="video-names" id="video-names">
+                    <% if (state.game) { %>
+                    <div>
+                        <div class="video-name-label">⚔️ Challenger</div>
+                        <div class="video-name-challenger" id="video-challenger-name"><%= state.game.challenger_name %></div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="video-name-label">👑 King</div>
+                        <div class="video-name-king" id="video-king-name"><%= state.game.king_name %></div>
+                    </div>
+                    <% } else if (state.king) { %>
+                    <div>
+                        <div class="video-name-label">⚔️ Challenger</div>
+                        <div class="video-name-challenger" style="opacity:0.4;">Waiting...</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="video-name-label">👑 King</div>
+                        <div class="video-name-king"><%= state.king.name %></div>
+                    </div>
+                    <% } %>
+                </div>
             </div>
 
             <!-- Info Sidebar -->
