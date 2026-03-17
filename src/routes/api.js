@@ -803,6 +803,19 @@ router.get('/admin/backup', requireAdmin, (req, res) => {
 });
 
 router.post('/admin/reconcile-payouts', requireAdmin, async (req, res) => {
+    // Helper: normalize a payment hash to hex (handles both base64 and hex formats from LND)
+    function normalizeHash(hash) {
+        if (!hash) return null;
+        // If it's already hex (64 chars, only hex chars), return as-is
+        if (/^[0-9a-f]{64}$/i.test(hash)) return hash.toLowerCase();
+        // Otherwise assume base64 — decode to hex
+        try {
+            return Buffer.from(hash, 'base64').toString('hex').toLowerCase();
+        } catch {
+            return hash.toLowerCase();
+        }
+    }
+
     // Phase 1: Check pending/paying payouts (original behavior)
     const pending = db.getPendingPayouts();
     const wronglyFailed = db.getReconciledFailedPayouts();
@@ -830,7 +843,10 @@ router.post('/admin/reconcile-payouts', requireAdmin, async (req, res) => {
         // Build lookup maps for efficient matching
         const lndByHash = new Map();
         for (const p of lndPayments) {
-            lndByHash.set(p.payment_hash, p);
+            const normalized = normalizeHash(p.payment_hash);
+            lndByHash.set(normalized, p);
+            // Also store original in case DB has exact match
+            if (p.payment_hash !== normalized) lndByHash.set(p.payment_hash, p);
         }
         
         // Track which LND payments we've already matched (prevent double-matching)
@@ -882,14 +898,16 @@ router.post('/admin/reconcile-payouts', requireAdmin, async (req, res) => {
         for (const payout of completedPayouts) {
             // Method 1: Check by payment_hash if we have one
             if (payout.payment_hash) {
-                const lndPay = lndByHash.get(payout.payment_hash);
+                // Normalize: DB may store base64 (from sendpayment) while listPayments returns hex
+                const normalizedDbHash = normalizeHash(payout.payment_hash);
+                const lndPay = lndByHash.get(normalizedDbHash) || lndByHash.get(payout.payment_hash);
                 if (lndPay && lndPay.status === 'SUCCEEDED') {
                     continue; // Genuinely completed — all good
                 }
                 if (lndPay && lndPay.status === 'FAILED') {
                     // LND says this payment FAILED but our DB says "completed"!
                     db.refundPayout(payout.id, payout.amount_sats, payout.player_id,
-                        `Reversed: LND payment_hash ${payout.payment_hash.substring(0, 16)}... status=${lndPay.status}, reason=${lndPay.failure_reason || 'unknown'}`);
+                        `Reversed: LND payment FAILED (${lndPay.failure_reason || 'unknown'}), hash=${normalizedDbHash.substring(0, 16)}...`);
                     reversed++;
                     details.push(`🔄 REVERSED Payout #${payout.id}: ${payout.amount_sats} sats to ${payout.player_name} — LND says FAILED (${lndPay.failure_reason || 'unknown'}). Balance restored.`);
                     console.log(`🔧 ${details[details.length - 1]}`);
@@ -898,7 +916,7 @@ router.post('/admin/reconcile-payouts', requireAdmin, async (req, res) => {
                 // If payment_hash not found in LND at all, it might be very old or pruned
                 // Don't reverse these — only reverse confirmed FAILED ones
                 if (!lndPay) {
-                    details.push(`⚠️ Payout #${payout.id}: ${payout.amount_sats} sats to ${payout.player_name} — payment_hash not found in LND (may be old/pruned). Left as-is.`);
+                    details.push(`⚠️ Payout #${payout.id}: ${payout.amount_sats} sats to ${payout.player_name} — payment_hash ${normalizedDbHash.substring(0, 16)}... not found in LND. Left as-is.`);
                     continue;
                 }
             }
