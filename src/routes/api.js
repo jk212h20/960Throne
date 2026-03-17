@@ -209,6 +209,80 @@ router.post('/claim', requirePlayer, async (req, res) => {
 });
 
 // ============================================================
+// On-chain Bitcoin cashout (for large balances ≥ 200k sats)
+// ============================================================
+
+const ONCHAIN_MIN_SATS = 200000; // 200k sats minimum for on-chain
+
+router.post('/claim/onchain', requirePlayer, async (req, res) => {
+    const { bitcoinAddress, amount } = req.body;
+    const player = req.player;
+
+    if (!bitcoinAddress) {
+        return res.status(400).json({ error: 'Bitcoin address required' });
+    }
+
+    // Basic Bitcoin address validation (mainnet: bc1, 1, 3)
+    const btcAddrRegex = /^(bc1[a-zA-HJ-NP-Z0-9]{25,62}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})$/;
+    if (!btcAddrRegex.test(bitcoinAddress)) {
+        return res.status(400).json({ error: 'Invalid Bitcoin address. Must be a mainnet address (bc1..., 1..., or 3...)' });
+    }
+
+    // Flush sats so balance is current
+    gameEngine.flushAccumulatedSats();
+    const freshPlayer = db.getPlayerById(player.id);
+    const claimAmount = amount ? parseInt(amount) : freshPlayer.sat_balance;
+
+    if (claimAmount < ONCHAIN_MIN_SATS) {
+        return res.status(400).json({ error: `On-chain cashout requires at least ${ONCHAIN_MIN_SATS.toLocaleString()} sats.` });
+    }
+    if (claimAmount > freshPlayer.sat_balance) {
+        return res.status(400).json({ error: `Insufficient balance. You have ${freshPlayer.sat_balance.toLocaleString()} sats.` });
+    }
+
+    // Check if Lightning (LND node) is configured
+    const lnStatus = await lightning.isConfigured();
+    if (!lnStatus.configured) {
+        return res.status(503).json({ error: 'Bitcoin payments not available right now.' });
+    }
+
+    // Create payout record
+    const payoutId = db.createPayout(player.id, claimAmount, `onchain:${bitcoinAddress}`);
+
+    try {
+        const txResult = await lightning.sendOnChain(bitcoinAddress, claimAmount);
+
+        // Success — deduct from balance
+        db.deductSatsFromPlayer(player.id, claimAmount);
+        db.updatePayout(payoutId, {
+            payment_hash: txResult.txid,
+            status: 'completed',
+            completed_at: new Date().toISOString()
+        });
+
+        console.log(`⛓️ On-chain payout: ${claimAmount} sats to ${bitcoinAddress} (txid: ${txResult.txid})`);
+
+        res.json({
+            success: true,
+            amount: claimAmount,
+            txid: txResult.txid,
+            message: `⛓️ ${claimAmount.toLocaleString()} sats sent on-chain to ${bitcoinAddress}! Transaction may take ~10-60 minutes to confirm.`
+        });
+    } catch (err) {
+        db.updatePayout(payoutId, {
+            status: 'failed',
+            error_message: err.message
+        });
+        // Alert admin
+        telegram.notifyAdmin(`⚠️ ON-CHAIN PAYOUT FAILED: ${claimAmount} sats to ${player.name}\nAddress: ${bitcoinAddress}\nError: ${err.message}`);
+        db.createNotification('payout_failed', `On-chain payout failed: ${claimAmount} sats to ${player.name} — ${err.message}`);
+        res.status(500).json({
+            error: `On-chain payment failed: ${err.message}`
+        });
+    }
+});
+
+// ============================================================
 // LNURL-withdraw — One-tap sat claim (LUD-03)
 // ============================================================
 

@@ -334,6 +334,55 @@ async function openChannel(pubkey, localFundingAmount, pushSats = 0) {
 }
 
 /**
+ * Send on-chain Bitcoin to an address.
+ * Uses LND's SendCoins RPC. Fees are paid by the node (not deducted from amount).
+ * @param {string} address - Bitcoin address (bc1..., 1..., or 3...)
+ * @param {number} amountSats - Amount in satoshis to send
+ * @param {number} satPerVbyte - Fee rate (optional, LND estimates if omitted)
+ * @returns {{ txid: string }} Transaction ID
+ */
+async function sendOnChain(address, amountSats, satPerVbyte = null) {
+    const body = {
+        addr: address,
+        amount: String(amountSats),
+        send_all: false,
+    };
+    if (satPerVbyte) {
+        body.sat_per_vbyte = String(satPerVbyte);
+    }
+
+    console.log(`⛓️ Sending ${amountSats} sats on-chain to ${address}...`);
+    const result = await lndRequest('/v1/transactions', 'POST', body);
+
+    if (!result.txid) {
+        throw new Error(`On-chain send returned no txid: ${JSON.stringify(result).substring(0, 200)}`);
+    }
+
+    console.log(`⛓️ On-chain tx broadcast: ${result.txid}`);
+    return { txid: result.txid };
+}
+
+/**
+ * Estimate on-chain fee for a transaction.
+ * @param {string} address - Target Bitcoin address
+ * @param {number} amountSats - Amount in satoshis
+ * @param {number} targetConfs - Target confirmations (default 6)
+ * @returns {{ fee_sat: string, feerate_sat_per_byte: string }}
+ */
+async function estimateOnChainFee(address, amountSats, targetConfs = 6) {
+    const params = new URLSearchParams({
+        AddrToAmount: JSON.stringify({ [address]: String(amountSats) }),
+        target_conf: String(targetConfs),
+    });
+    // LND estimatefee endpoint
+    const result = await lndRequest(`/v1/transactions/fee?addr=${encodeURIComponent(address)}&amount=${amountSats}&target_conf=${targetConfs}`);
+    return {
+        feeSat: parseInt(result.fee_sat || '0'),
+        feerateSatPerByte: parseInt(result.feerate_sat_per_byte || result.sat_per_vbyte || '0'),
+    };
+}
+
+/**
  * List recent payments from LND.
  * Returns array of payment objects with payment_hash, value_sat, status, etc.
  * @param {number} maxPayments - Maximum number of payments to return (default 100)
@@ -358,5 +407,7 @@ module.exports = {
     resolveLightningAddress,
     requestInvoice,
     payLightningAddress,
+    sendOnChain,
+    estimateOnChainFee,
     isConfigured,
 };

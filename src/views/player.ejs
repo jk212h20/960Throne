@@ -158,9 +158,37 @@
         <div class="card mb-4" id="claim-card">
             <h3 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'lightning', size: 20, cls: 'text-throne-gold' }) %> Cash Out</h3>
             
-            <!-- Primary: One-tap LNURL-withdraw -->
+            <% if (player.sat_balance >= 200000) { %>
+            <!-- ===== ON-CHAIN BITCOIN CASHOUT (≥200k sats) — PRIMARY ===== -->
+            <div id="onchain-section">
+                <p class="text-sm text-gray-400 mb-3">Send <span class="text-throne-gold font-bold"><%= player.sat_balance.toLocaleString() %></span> sats to your Bitcoin wallet (on-chain)</p>
+                <input type="text" id="btc-address" class="input mb-3" placeholder="Bitcoin address (bc1...)">
+                <button onclick="sendOnChain()" id="onchain-btn" class="w-full py-4 text-lg flex items-center justify-center gap-2 rounded-lg font-bold bg-orange-600 hover:bg-orange-500 text-white transition-colors">
+                    ⛓️ Send Bitcoin
+                </button>
+                <div class="text-xs text-gray-600 mt-2 text-center">On-chain transaction — may take ~10-60 min to confirm. Fees paid by us.</div>
+            </div>
+            <div id="onchain-success-section" class="hidden text-center py-4">
+                <div class="text-4xl mb-2">⛓️</div>
+                <div class="text-xl font-bold text-green-400" id="onchain-success-msg"></div>
+                <div class="text-sm text-gray-500 mt-2" id="onchain-txid-link"></div>
+            </div>
+            <div id="onchain-error-section" class="hidden">
+                <div class="bg-red-900/50 border border-red-700 rounded-lg p-3 text-sm text-red-300 text-center" id="onchain-error-msg"></div>
+                <button onclick="resetOnChain()" class="text-sm text-gray-400 hover:text-gray-200 mt-3 w-full text-center">Try Again</button>
+            </div>
+
+            <!-- Lightning withdraw as secondary option for large balances -->
+            <details class="mt-4 border-t border-gray-800 pt-3">
+                <summary class="text-xs text-gray-600 cursor-pointer hover:text-gray-400 transition-colors">Use Lightning instead</summary>
+                <div class="mt-3">
+            <% } %>
+
+            <!-- Primary (or secondary if ≥200k): One-tap LNURL-withdraw -->
             <div id="claim-tap-section">
+                <% if (player.sat_balance < 200000) { %>
                 <p class="text-sm text-gray-400 mb-3">Tap to send sats straight to your Lightning wallet</p>
+                <% } %>
                 <button onclick="startWithdraw()" id="claim-btn" class="btn-gold w-full py-4 text-lg flex items-center justify-center gap-2">
                     <%- include('partials/icon', { name: 'lightning', size: 24, cls: '' }) %> Claim <span id="claim-btn-amount"><%= player.sat_balance.toLocaleString() %></span> sats
                 </button>
@@ -212,6 +240,11 @@
                 </form>
                 <div id="claim-result" class="hidden mt-3 p-3 rounded-lg text-sm"></div>
             </details>
+
+            <% if (player.sat_balance >= 200000) { %>
+                </div><!-- close Lightning fallback inner div -->
+            </details><!-- close "Use Lightning instead" details -->
+            <% } %>
         </div>
         <% } %>
 
@@ -674,6 +707,59 @@
             if (!confirm('Unlink Telegram? You won\'t get notifications anymore.')) return;
             await fetch('/api/telegram/unlink', { method: 'POST' });
             location.reload();
+        }
+
+        // ====== On-chain Bitcoin cashout ======
+        async function sendOnChain() {
+            const addressInput = document.getElementById('btc-address');
+            const btn = document.getElementById('onchain-btn');
+            const address = addressInput ? addressInput.value.trim() : '';
+
+            if (!address) { alert('Enter a Bitcoin address'); return; }
+
+            btn.disabled = true;
+            btn.textContent = '⛓️ Sending...';
+
+            try {
+                const res = await fetch('/api/claim/onchain', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bitcoinAddress: address })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    document.getElementById('onchain-section').classList.add('hidden');
+                    document.getElementById('onchain-error-section').classList.remove('hidden');
+                    document.getElementById('onchain-error-msg').textContent = data.error;
+                    return;
+                }
+
+                // Success
+                document.getElementById('onchain-section').classList.add('hidden');
+                document.getElementById('onchain-success-section').classList.remove('hidden');
+                document.getElementById('onchain-success-msg').textContent = data.message;
+                if (data.txid) {
+                    document.getElementById('onchain-txid-link').innerHTML = 
+                        '<a href="https://mempool.space/tx/' + data.txid + '" target="_blank" class="text-blue-400 hover:text-blue-300 underline">View on mempool.space →</a>';
+                }
+                setTimeout(() => location.reload(), 5000);
+            } catch (err) {
+                document.getElementById('onchain-section').classList.add('hidden');
+                document.getElementById('onchain-error-section').classList.remove('hidden');
+                document.getElementById('onchain-error-msg').textContent = 'Connection error';
+            }
+        }
+
+        function resetOnChain() {
+            const section = document.getElementById('onchain-section');
+            const successSection = document.getElementById('onchain-success-section');
+            const errorSection = document.getElementById('onchain-error-section');
+            const btn = document.getElementById('onchain-btn');
+            if (section) section.classList.remove('hidden');
+            if (successSection) successSection.classList.add('hidden');
+            if (errorSection) errorSection.classList.add('hidden');
+            if (btn) { btn.disabled = false; btn.textContent = '⛓️ Send Bitcoin'; }
         }
 
         // ====== LNURL-withdraw (one-tap claim) ======

@@ -7,6 +7,16 @@ MVP is **deployed to Railway** and live at https://960throne-production.up.railw
 **Railway project**: https://railway.com/project/640d9f08-a87f-4658-8fa0-21df70003fbf
 
 ## What Was Just Done
+### Payout Reliability Overhaul — Silent Failure Bug Fix (Mar 17, 2026)
+- **Root cause**: `payInvoice()` in `lightning.js` only checked HTTP status. LND returns HTTP 200 even when payment fails — error is in `payment_error` field of JSON body. Our code saw "200 OK" and recorded the payment as "completed" even though no sats moved.
+- **Fix 1 — payInvoice bug**: Now checks `payment_error` field and throws on failure. Future failed payments will be immediately detected.
+- **Fix 2 — Deep reconciler**: New "Reconcile All Payouts" button in admin that cross-references ALL completed payouts against LND's `listPayments`. Reversed 3 falsely-completed payouts (including Diana's 17,304 sats). Key challenge: LND `sendpayment` returns payment_hash as base64 but `listPayments` returns hex — added `normalizeHash()` to convert.
+- **Fix 3 — Telegram alerts**: Immediate `notifyAdmin()` on every payout failure (both `/api/claim` and LNURL-withdraw paths) + DB admin notification record.
+- **Fix 4 — Auto-verify**: `schedulePaymentVerify()` runs 60s after every "completed" payment. Re-checks LND, and if payment actually FAILED, auto-reverses payout + sends Telegram alert. No manual reconcile needed.
+- **New DB functions**: `getCompletedPayouts()`, `refundPayout()`, `getPayoutById()`, `getReconciledFailedPayouts()`
+- **Files changed**: `lightning.js`, `api.js`, `database.js`, `admin.ejs`
+- Status: **deployed** (commits 3e3df00, b96d4eb, cec4756)
+
 ### Admin Reorder — Drag-and-Drop King + Queue (Mar 16, 2026)
 - **Problem**: No way to arbitrarily reorder the king and queue list. Admin had to remove/re-add players one by one.
 - **Solution**: New "↕️ Reorder King + Queue" button in admin Queue Management section. Opens a modal showing all players (king first, then queue) in a unified draggable list.
