@@ -87,12 +87,28 @@ router.get('/queue', (req, res) => {
 // Game
 // ============================================================
 
+// Debounce: track last accepted report per player to prevent accidental double-reports
+const lastReportTime = new Map(); // playerId → timestamp (ms)
+const REPORT_DEBOUNCE_MS = 30 * 1000; // 30 seconds
+
 router.post('/game/report', requirePlayer, (req, res) => {
     const { result } = req.body;
     if (!result) return res.status(400).json({ error: 'Result is required' });
 
+    // Check debounce — reject if this player reported less than 30s ago
+    const now = Date.now();
+    const lastTime = lastReportTime.get(req.player.id);
+    if (lastTime && (now - lastTime) < REPORT_DEBOUNCE_MS) {
+        const waitSec = Math.ceil((REPORT_DEBOUNCE_MS - (now - lastTime)) / 1000);
+        return res.status(429).json({ error: `Please wait ${waitSec}s before reporting again.` });
+    }
+
     const outcome = gameEngine.reportResult(req.player.id, result);
     if (outcome.error) return res.status(400).json(outcome);
+
+    // Record successful report time
+    lastReportTime.set(req.player.id, now);
+
     res.json(outcome);
 });
 
