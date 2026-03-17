@@ -991,9 +991,11 @@ function getAccountingAudit(satRate) {
         }
     }
 
-    // Expected total = all throne-occupied seconds × rate
+    // Expected total = sum of per-reign sats (each reign floors seconds individually)
+    // This matches how sats are actually credited: Math.floor(reignSeconds) * satRate per reign.
+    // Using Math.floor(totalSeconds) * satRate would overestimate due to accumulated fractional seconds.
     const totalThroneSeconds = completedReignSeconds + activeReignSeconds;
-    const expectedTotalSats = Math.floor(totalThroneSeconds) * satRate;
+    const expectedTotalSats = completedReignSats + activeReignSats;
 
     // Discrepancy = expected - actual (positive = player got too few)
     const discrepancy = expectedTotalSats - totalPlayerSats;
@@ -1009,7 +1011,7 @@ function getAccountingAudit(satRate) {
         totalThroneSeconds: Math.floor(totalThroneSeconds),
         expectedTotalSats,
         discrepancy,
-        isClean: discrepancy === 0, // with whole-second accounting, there should be zero discrepancy
+        isClean: discrepancy === 0, // with per-reign accounting, there should be zero discrepancy
     };
 }
 

@@ -290,7 +290,7 @@
             <!-- Accounting Audit -->
             <div class="card" id="accounting-card">
                 <h2 class="text-lg font-bold mb-3 flex items-center gap-2"><%- include('partials/icon', { name: 'chart', size: 20, cls: '' }) %> Sat Accounting</h2>
-                <p class="text-xs text-gray-500 mb-3">Verifies total sats credited = throne-occupied seconds × rate. Discrepancy should be ≤1 sat per reign transition (rounding).</p>
+                <p class="text-xs text-gray-500 mb-3">Verifies total sats credited to players matches sum of per-reign sats. Discrepancy should be 0.</p>
                 <div id="accounting-data" class="text-sm space-y-1">
                     <button onclick="loadAccounting()" class="btn-outline w-full text-sm">🔍 Run Audit</button>
                 </div>
@@ -687,7 +687,7 @@
                 <div class="grid grid-cols-2 gap-x-4 gap-y-1">
                     <span class="text-gray-400">Total player sats (credited)</span><span class="text-right font-mono">${d.totalPlayerSats.toLocaleString()}</span>
                     <span class="text-gray-400">Total sats paid out</span><span class="text-right font-mono text-green-400">${d.totalSatsClaimed.toLocaleString()} ✓</span>
-                    <span class="text-gray-400">Expected sats (time × rate)</span><span class="text-right font-mono">${d.expectedTotalSats.toLocaleString()}</span>
+                    <span class="text-gray-400">Expected sats (reign totals)</span><span class="text-right font-mono">${d.expectedTotalSats.toLocaleString()}</span>
                     <span class="text-gray-400">Throne-occupied time</span><span class="text-right font-mono">${Math.floor(d.totalThroneSeconds / 60)}m ${d.totalThroneSeconds % 60}s</span>
                     <span class="text-gray-400">Completed reigns</span><span class="text-right font-mono">${d.completedReignCount}</span>
                     <span class="text-gray-400">Active reign sats (live)</span><span class="text-right font-mono">${d.activeReignSats.toLocaleString()}</span>
