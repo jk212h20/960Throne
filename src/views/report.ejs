@@ -190,8 +190,68 @@
 
     <script>
         const socket = io();
+        const REPORT_COOLDOWN_MS = 30000; // 30 seconds between reports
+        const COOLDOWN_STORAGE_KEY = 'report_last_accepted_at';
+
+        // ─── Cooldown logic ──────────────────────────────
+        let cooldownTimer = null;
+
+        function getCooldownRemaining() {
+            const lastReport = parseInt(localStorage.getItem(COOLDOWN_STORAGE_KEY) || '0');
+            if (!lastReport) return 0;
+            const elapsed = Date.now() - lastReport;
+            return Math.max(0, REPORT_COOLDOWN_MS - elapsed);
+        }
+
+        function startCooldownUI() {
+            const buttons = document.getElementById('report-buttons');
+            if (!buttons) return;
+
+            function tick() {
+                const remaining = getCooldownRemaining();
+                if (remaining <= 0) {
+                    // Cooldown expired — re-enable buttons
+                    buttons.style.opacity = '1';
+                    buttons.style.pointerEvents = 'auto';
+                    const overlay = document.getElementById('cooldown-overlay');
+                    if (overlay) overlay.style.display = 'none';
+                    if (cooldownTimer) { clearInterval(cooldownTimer); cooldownTimer = null; }
+                    return;
+                }
+                // Show cooldown state
+                buttons.style.opacity = '0.3';
+                buttons.style.pointerEvents = 'none';
+                const secs = Math.ceil(remaining / 1000);
+                let overlay = document.getElementById('cooldown-overlay');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'cooldown-overlay';
+                    overlay.style.cssText = 'text-align:center;padding:16px;color:#fbbf24;font-size:1.1rem;font-weight:700;';
+                    buttons.parentNode.insertBefore(overlay, buttons);
+                }
+                overlay.style.display = 'block';
+                overlay.textContent = `⏳ Wait ${secs}s before reporting again`;
+            }
+
+            tick();
+            if (cooldownTimer) clearInterval(cooldownTimer);
+            cooldownTimer = setInterval(tick, 500);
+        }
+
+        // On page load, check if cooldown is active
+        if (getCooldownRemaining() > 0) {
+            startCooldownUI();
+        }
 
         async function reportResult(result) {
+            // Check cooldown (persists across page reloads via localStorage)
+            const remaining = getCooldownRemaining();
+            if (remaining > 0) {
+                const secs = Math.ceil(remaining / 1000);
+                showToast(`Please wait ${secs}s before reporting again`, false);
+                return;
+            }
+
             const buttons = document.getElementById('report-buttons');
 
             // Disable buttons
@@ -213,6 +273,9 @@
                         buttons.style.pointerEvents = 'auto';
                         return;
                     }
+                    // Success — start cooldown
+                    localStorage.setItem(COOLDOWN_STORAGE_KEY, String(Date.now()));
+                    startCooldownUI();
                     showToast('Challenger removed — next game starting...', true);
                     return;
                 }
@@ -233,6 +296,9 @@
                     buttons.style.pointerEvents = 'auto';
                     return;
                 }
+                // Success — start cooldown
+                localStorage.setItem(COOLDOWN_STORAGE_KEY, String(Date.now()));
+                startCooldownUI();
                 showToast('Result recorded!', true);
             } catch (err) {
                 showToast('Connection error. Try again.', false);
