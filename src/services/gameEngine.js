@@ -369,15 +369,15 @@ function startGame() {
 
 function reportResult(playerId, result) {
     const gameId = parseInt(db.getConfig('current_game_id') || '0');
-    if (!gameId) return { error: 'No active game' };
+    if (!gameId) return { success: true, status: 'ignored', message: 'No active game — report ignored.' };
 
     const game = db.getActiveGame();
-    if (!game) return { error: 'Game not found' };
-    if (game.result) return { error: 'Game already finalized' };
+    if (!game) return { success: true, status: 'ignored', message: 'Game not found — report ignored.' };
+    if (game.result) return { success: true, status: 'ignored', message: 'Game already finalized — report ignored.' };
 
-    // Validate reporter is in this game
+    // Validate reporter is in this game (may be reporting for an old game)
     if (playerId !== game.king_id && playerId !== game.challenger_id) {
-        return { error: 'You are not in this game' };
+        return { success: true, status: 'ignored', message: 'You are not in the current game — report ignored.' };
     }
 
     // Validate result value

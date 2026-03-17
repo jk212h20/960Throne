@@ -46,6 +46,7 @@
                         <th class="text-left py-2 px-2">#</th>
                         <th class="text-left py-2">Player</th>
                         <th class="text-right py-2 px-2">Sats</th>
+                        <th class="text-right py-2 px-2">Throne</th>
                         <th class="text-right py-2 px-2">W</th>
                         <th class="text-right py-2 px-2">L</th>
                         <th class="text-right py-2 px-2">D</th>
@@ -58,6 +59,7 @@
                         <td class="py-2 px-2 font-bold"><% if (i === 0) { %><%- include('partials/icon', { name: 'crown', size: 18, cls: 'text-throne-gold' }) %><% } else if (i === 1) { %><%- include('partials/icon', { name: 'medal', size: 18, cls: 'text-gray-300' }) %><% } else if (i === 2) { %><%- include('partials/icon', { name: 'medal', size: 18, cls: 'text-amber-600' }) %><% } else { %><%= i + 1 %><% } %></td>
                         <td class="py-2 font-bold"><%= p.name %></td>
                         <td class="py-2 px-2 text-right font-mono"><%= p.total_sats_earned.toLocaleString() %></td>
+                        <td class="py-2 px-2 text-right font-mono text-gray-300"><%= Math.floor(p.total_sats_earned / 21).toLocaleString() %>s</td>
                         <td class="py-2 px-2 text-right text-green-400"><%= p.games_won %></td>
                         <td class="py-2 px-2 text-right text-red-400"><%= p.games_lost %></td>
                         <td class="py-2 px-2 text-right text-gray-400"><%= p.games_drawn %></td>
