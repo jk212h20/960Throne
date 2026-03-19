@@ -857,10 +857,13 @@
             // Build the combined list: king first, then queue
             reorderList = [];
             <% if (state.king) { %>
-            reorderList.push({ id: <%= state.king.id %>, name: '<%= (state.king.name || "").replace(/'/g, "\\'") %>' });
+            reorderList.push({ id: <%= state.king.id %>, name: '<%= (state.king.name || "").replace(/'/g, "\\'") %>', role: 'king' });
+            <% } %>
+            <% if (state.game && !state.game.result) { %>
+            reorderList.push({ id: <%= state.game.challenger_id %>, name: '<%= (state.game.challenger_name || "").replace(/'/g, "\\'") %>', role: 'challenger' });
             <% } %>
             <% state.queue.forEach(q => { %>
-            reorderList.push({ id: <%= q.player_id %>, name: '<%= (q.player_name || "").replace(/'/g, "\\'") %>' });
+            reorderList.push({ id: <%= q.player_id %>, name: '<%= (q.player_name || "").replace(/'/g, "\\'") %>', role: 'queue' });
             <% }) %>
 
             if (reorderList.length === 0) return alert('No players to reorder');
@@ -881,11 +884,16 @@
                 div.className = 'reorder-item';
                 div.dataset.index = idx;
                 div.draggable = true;
+                const isKing = idx === 0;
+                const isChallenger = idx === 1 && player.role === 'challenger';
+                const posLabel = isKing ? '👑' : isChallenger ? '⚔️' : '#' + (isChallenger ? idx : idx);
+                const roleLabel = isKing ? 'KING' : isChallenger ? 'PLAYING' : '';
+                const roleColor = isChallenger ? 'color:#f87171;' : '';
                 div.innerHTML = `
                     <span class="reorder-handle">☰</span>
-                    <span class="reorder-pos">${idx === 0 ? '👑' : '#' + idx}</span>
+                    <span class="reorder-pos">${posLabel}</span>
                     <span class="reorder-name">${player.name}</span>
-                    <span class="reorder-role">${idx === 0 ? 'KING' : ''}</span>
+                    <span class="reorder-role" style="${roleColor}">${roleLabel}</span>
                     <span class="reorder-arrows">
                         <button onclick="reorderMove(${idx}, -1)" ${idx === 0 ? 'disabled' : ''}>▲</button>
                         <button onclick="reorderMove(${idx}, 1)" ${idx === reorderList.length - 1 ? 'disabled' : ''}>▼</button>
@@ -1010,7 +1018,18 @@
         async function confirmReorder() {
             const order = reorderList.map(p => p.id);
             const kingName = reorderList[0]?.name || '?';
-            if (!confirm(`Apply new order?\n\n👑 King: ${kingName}\nQueue: ${reorderList.slice(1).map((p,i) => '#' + (i+1) + ' ' + p.name).join(', ') || '(empty)'}\n\nIf there's an active game, it will be cancelled.`)) return;
+            // Check if king and challenger stayed in place (game will be preserved)
+            const originalKingId = reorderList.find(p => p.role === 'king')?.id;
+            const originalChallengerId = reorderList.find(p => p.role === 'challenger')?.id;
+            const kingStays = order[0] === originalKingId;
+            const challengerStays = originalChallengerId && order[1] === originalChallengerId;
+            const gamePreserved = kingStays && challengerStays;
+            const gameWarning = gamePreserved
+                ? '✅ Active game will continue (only queue reordered).'
+                : originalChallengerId
+                    ? '⚠️ Active game will be CANCELLED (king or challenger moved).'
+                    : '';
+            if (!confirm(`Apply new order?\n\n👑 King: ${kingName}\n${reorderList.slice(1).map((p,i) => '#' + (i+1) + ' ' + p.name + (p.role === 'challenger' ? ' ⚔️' : '')).join('\n') || '(empty queue)'}\n\n${gameWarning}`)) return;
             const result = await api('/api/admin/reorder', { order });
             if (result) {
                 closeReorderModal();

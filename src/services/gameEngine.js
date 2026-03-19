@@ -941,12 +941,34 @@ async function adminReorder(order) {
     }
 
     const newKingId = order[0];
-    const newQueueIds = order.slice(1);
     const currentKingId = parseInt(db.getConfig('current_king_id') || '0');
-
-    // If there's an active game, finalize it as no_show first
     const activeGame = db.getActiveGame();
-    if (activeGame && !activeGame.result) {
+    const hasActiveGame = activeGame && !activeGame.result;
+
+    // Determine if the active game's challenger is still in position 2 (right after king)
+    let challengerStaysInPlace = false;
+    if (hasActiveGame) {
+        const currentChallengerId = activeGame.challenger_id;
+        // Challenger is in position 2 if order[1] === challengerId
+        challengerStaysInPlace = order.length > 1 && order[1] === currentChallengerId;
+    }
+
+    const kingStays = newKingId === currentKingId;
+
+    if (hasActiveGame && kingStays && challengerStaysInPlace) {
+        // Safe reorder — only queue players below king+challenger are changing
+        // Don't touch the active game at all
+        const newQueueIds = order.slice(2); // Skip king (0) and challenger (1)
+        db.reorderQueue(newQueueIds);
+        broadcast('queue_updated', { queue: db.getQueue() });
+        console.log(`🔧 Admin reorder (game preserved): King=#${newKingId}, Challenger=#${activeGame.challenger_id}, Queue=[${newQueueIds.join(', ')}]`);
+        return { success: true, king: newKingId, queue: newQueueIds, gamePreserved: true };
+    }
+
+    // Disruptive reorder — king or challenger changed, must cancel active game
+    const newQueueIds = order.slice(1);
+
+    if (hasActiveGame) {
         console.log(`🔧 Reorder: Cancelling active game #${activeGame.id} as no_show`);
         finalizeGameResult(activeGame.id, 'no_show');
     }
@@ -955,7 +977,7 @@ async function adminReorder(order) {
     db.reorderQueue(newQueueIds);
 
     // If the king is changing, crown the new one
-    if (newKingId !== currentKingId) {
+    if (!kingStays) {
         crownKing(newKingId);
     } else {
         // King stays the same — just broadcast the updated queue and start next game
