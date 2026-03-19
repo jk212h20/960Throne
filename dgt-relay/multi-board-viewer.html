@@ -112,13 +112,14 @@
         .sq-light { background: #f0d9b5; }
         .sq-dark { background: #b58863; }
 
+        /* Piece images */
+        .piece-img { width: 85%; height: 85%; object-fit: contain; }
+
         /* Grid boards: small */
         .board-small .sq { width: 40px; height: 40px; }
-        .board-small .piece { font-size: 28px; line-height: 1; }
 
         /* Single board: large */
         .board-large .sq { width: 80px; height: 80px; }
-        .board-large .piece { font-size: 58px; line-height: 1; }
 
         /* ─── Clocks ─── */
         .clocks { display: flex; gap: 20px; }
@@ -190,10 +191,11 @@
 </div>
 
 <script>
-// ─── Unicode Chess Pieces ────────────────────────────────────
-const PIECES = {
-    'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
-    'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟',
+// ─── SVG Piece Images (same as throne board) ─────────────────
+const SERVER = 'https://960throne-production.up.railway.app';
+const FEN_PIECES = {
+    'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
+    'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP',
 };
 
 // ─── State ───────────────────────────────────────────────────
@@ -331,9 +333,25 @@ function handleMessage(msg) {
     });
     
     if (navChanged) {
+        // Re-sort boards by serial number and re-assign labels
+        reassignBoardNumbers();
         rebuildNav();
         rebuildGrid();
     }
+}
+
+// Sort boards by serial number so the order is deterministic
+function reassignBoardNumbers() {
+    const sorted = [...boards.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+    sorted.forEach(([feedId, board], i) => {
+        board.num = i + 1;
+        board.label = 'Board ' + (i + 1);
+    });
+}
+
+// Helper: get boards sorted by serial number
+function sortedBoards() {
+    return [...boards.entries()].sort((a, b) => a[1].num - b[1].num);
 }
 
 // ─── FEN Conversion ──────────────────────────────────────────
@@ -386,9 +404,9 @@ function renderBoardHTML(fen, sizeClass) {
                     col++;
                 }
             } else {
-                const piece = PIECES[ch] || '';
+                const piece = FEN_PIECES[ch];
                 html += '<div class="sq ' + ((r+col)%2===0?'sq-light':'sq-dark') + '">';
-                if (piece) html += '<span class="piece">' + piece + '</span>';
+                if (piece) html += '<img src="' + SERVER + '/pieces/' + piece + '.svg" class="piece-img" alt="' + piece + '">';
                 html += '</div>';
                 col++;
             }
@@ -410,7 +428,7 @@ function formatClock(sec) {
 function rebuildNav() {
     const container = document.getElementById('board-buttons');
     container.innerHTML = '';
-    for (const [feedId, board] of boards) {
+    for (const [feedId, board] of sortedBoards()) {
         const btn = document.createElement('button');
         btn.className = 'nav-btn' + (currentView === feedId ? ' active' : '');
         btn.textContent = board.label;
@@ -432,7 +450,7 @@ function rebuildGrid() {
     }
     noBoards.style.display = 'none';
 
-    for (const [feedId, board] of boards) {
+    for (const [feedId, board] of sortedBoards()) {
         const card = document.createElement('div');
         card.className = 'board-card';
         card.id = 'card-' + feedId;
