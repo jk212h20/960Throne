@@ -1544,12 +1544,15 @@ router.get('/dgt/boards/:boardId', (req, res) => {
     res.json(state);
 });
 
-// Push board state for a specific board (from multi-board relay)
+// Push board state for a specific board (from multi-board relay OR browser viewer)
 router.post('/dgt/boards/:boardId/state', (req, res) => {
-    // Auth: relay secret or admin token
+    // Auth: relay secret, admin token, OR board viewer cookie
     const secret = process.env.DGT_RELAY_SECRET || process.env.ADMIN_PASSWORD || 'changeme';
+    const boardPw = process.env.BOARD_PASSWORD || 'MarioWins';
     const provided = req.headers['x-relay-secret'] || req.headers['x-admin-token'];
-    if (provided !== secret) {
+    const hasBoardCookie = req.cookies?.board_token === boardPw;
+    const hasAdminCookie = req.cookies?.admin_token === (db.getConfig('admin_password_override') || process.env.ADMIN_PASSWORD || 'changeme');
+    if (provided !== secret && !hasBoardCookie && !hasAdminCookie) {
         return res.status(401).json({ error: 'Invalid relay secret' });
     }
 

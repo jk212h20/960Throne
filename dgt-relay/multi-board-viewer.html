@@ -229,6 +229,39 @@ let boardCounter = 0;
 let pollTimer = null;
 let customOrder = {}; // serialNr → sortPosition from server
 
+// ─── Server Relay ────────────────────────────────────────────
+// Push board data to the 960 Throne server so /board1, /board2, etc.
+// can display it via Socket.io. Uses same-origin fetch (cookie auth).
+const pushQueue = new Map(); // boardId → pending push data
+let pushTimer = null;
+
+function schedulePush(boardId, fen, clock, label) {
+    pushQueue.set(boardId, { fen, clock, label });
+    if (!pushTimer) {
+        pushTimer = setTimeout(flushPushQueue, 200); // batch pushes every 200ms
+    }
+}
+
+function flushPushQueue() {
+    pushTimer = null;
+    for (const [boardId, data] of pushQueue) {
+        pushToServer(boardId, data.fen, data.clock, data.label);
+    }
+    pushQueue.clear();
+}
+
+function pushToServer(boardId, fen, clock, label) {
+    if (!fen) return;
+    const body = { fen, source: 'multi-board-viewer' };
+    if (clock) body.clock = clock;
+    if (label) body.label = label;
+    fetch('/api/dgt/boards/' + encodeURIComponent(boardId) + '/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    }).catch(err => console.warn('Push failed for', boardId, err.message));
+}
+
 // ─── LiveChess Connection ────────────────────────────────────
 // Strategy: connect via WebSocket, then POLL eboards every 500ms.
 // LiveChess subscribe is broken in many versions (2.2.9+), so polling
@@ -341,6 +374,8 @@ function handleMessage(msg) {
         if (fen && fen !== board.fen) {
             board.fen = fen;
             updateUI(feedId);
+            // Relay to server so /board1, /board2 etc. get live data
+            schedulePush(board.boardId, board.fen, board.clock, board.label);
         }
         
         // Extract player names from tournament data
@@ -376,8 +411,15 @@ function handleMessage(msg) {
                 black: feed.clock.black != null ? Number(feed.clock.black) : null,
                 run: feed.clock.run,
             };
+            const clockChanged = !board.clock ||
+                clock.white !== board.clock.white ||
+                clock.black !== board.clock.black;
             board.clock = clock;
             updateClockUI(feedId);
+            // Relay clock changes to server
+            if (clockChanged && board.fen) {
+                schedulePush(board.boardId, board.fen, board.clock, board.label);
+            }
         }
     });
     
