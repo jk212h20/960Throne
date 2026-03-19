@@ -86,6 +86,27 @@
         }
         .card-label { font-weight: bold; font-size: 1.1rem; }
         .card-serial { font-size: 0.7rem; color: #555; font-family: monospace; }
+        .player-input {
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid #333;
+            color: #ccc;
+            font-size: 0.8rem;
+            padding: 2px 4px;
+            width: 120px;
+            text-align: center;
+            outline: none;
+        }
+        .player-input:focus { border-bottom-color: #FFD700; color: #fff; }
+        .player-input::placeholder { color: #444; }
+        .player-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 6px;
+            font-size: 0.8rem;
+        }
 
         /* ─── Single Board View ─── */
         #single-view {
@@ -308,6 +329,7 @@ function handleMessage(msg) {
                 fen: null,
                 clock: null,
             });
+            loadSavedNames(feedId);
             navChanged = true;
         }
         
@@ -488,7 +510,15 @@ function rebuildGrid() {
                 <span class="card-serial">${board.boardId}</span>
             </div>
             <div id="card-board-${feedId}">${renderBoardHTML(board.fen, 'board-small')}</div>
-            <div style="margin-top:6px;text-align:center;font-size:0.8rem;color:#999;min-height:18px" id="card-players-${feedId}">${board.white || board.black ? '♔ ' + (board.white||'?') + ' vs ♚ ' + (board.black||'?') : ''}</div>
+            <div class="player-row" onclick="event.stopPropagation()">
+                <span style="color:#f0d9b5">♔</span>
+                <input class="player-input" placeholder="White" value="${board.white||''}" 
+                    id="inp-w-${feedId}" onchange="setPlayerName('${feedId}','white',this.value)">
+                <span style="color:#666">vs</span>
+                <span style="color:#b58863">♚</span>
+                <input class="player-input" placeholder="Black" value="${board.black||''}"
+                    id="inp-b-${feedId}" onchange="setPlayerName('${feedId}','black',this.value)">
+            </div>
             <div class="clocks" style="margin-top:4px;justify-content:center">
                 <div class="clock-box clock-white clock-sm" id="card-cw-${feedId}">♔ --:--</div>
                 <div class="clock-box clock-black clock-sm" id="card-cb-${feedId}">♚ --:--</div>
@@ -588,6 +618,37 @@ function showSingle(feedId) {
     const newBoard = temp.firstChild;
     newBoard.id = 'single-board';
     container.parentNode.replaceChild(newBoard, container);
+}
+
+// ─── Player Name Management ──────────────────────────────────
+// Names typed by the stream operator, saved to localStorage
+
+function setPlayerName(feedId, color, name) {
+    const board = boards.get(feedId);
+    if (!board) return;
+    board[color] = name.trim();
+    // Save to localStorage keyed by serial number
+    const stored = JSON.parse(localStorage.getItem('boardNames') || '{}');
+    if (!stored[feedId]) stored[feedId] = {};
+    stored[feedId][color] = name.trim();
+    localStorage.setItem('boardNames', JSON.stringify(stored));
+    // Update single view if showing this board
+    if (currentView === feedId) {
+        const hasNames = board.white || board.black;
+        document.getElementById('single-label').textContent = hasNames 
+            ? board.label + ' — ' + (board.white||'?') + ' vs ' + (board.black||'?') 
+            : board.label;
+    }
+}
+
+// Load saved names when a board is first registered
+function loadSavedNames(feedId) {
+    const stored = JSON.parse(localStorage.getItem('boardNames') || '{}');
+    const board = boards.get(feedId);
+    if (stored[feedId] && board) {
+        board.white = stored[feedId].white || '';
+        board.black = stored[feedId].black || '';
+    }
 }
 
 // ─── Start ───────────────────────────────────────────────────
