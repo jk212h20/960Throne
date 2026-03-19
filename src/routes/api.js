@@ -1482,8 +1482,14 @@ router.get('/board-names/:boardNum', (req, res) => {
     res.json(names || { board_num: parseInt(req.params.boardNum), white_name: '', black_name: '' });
 });
 
-// Set board names (admin only)
-router.post('/board-names/:boardNum', requireAdmin, (req, res) => {
+// Set board names (admin or board viewer password)
+function requireBoardAccess(req, res, next) {
+    const boardPw = process.env.BOARD_PASSWORD || 'MarioWins';
+    if (req.cookies?.board_token === boardPw) return next();
+    return requireAdmin(req, res, next);
+}
+
+router.post('/board-names/:boardNum', requireBoardAccess, (req, res) => {
     const boardNum = parseInt(req.params.boardNum);
     const { white_name, black_name, serial_nr } = req.body;
     db.setBoardNames(boardNum, white_name || '', black_name || '', serial_nr || '');

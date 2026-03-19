@@ -204,10 +204,29 @@ router.get('/leaderboard', (req, res) => {
     res.render('leaderboard', { leaderboard, longestReigns, stats, player: req.player, state });
 });
 
-// Multi-board LiveChess viewer — admin protected, connects to localhost LiveChess on the laptop
+// Multi-board LiveChess viewer — separate password ("MarioWins"), not admin
+const BOARD_PASSWORD = process.env.BOARD_PASSWORD || 'MarioWins';
+
 router.get('/multi-board', (req, res) => {
-    if (!req.isAdmin) {
-        return res.render('admin-login', { returnTo: '/multi-board' });
+    // Check for password in query param (sets cookie) or existing cookie
+    if (req.query.pw === BOARD_PASSWORD) {
+        res.cookie('board_token', BOARD_PASSWORD, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000, path: '/' });
+        return res.redirect('/multi-board');
+    }
+    const hasAccess = req.cookies?.board_token === BOARD_PASSWORD || req.isAdmin;
+    if (!hasAccess) {
+        return res.send(`<!DOCTYPE html><html><head><title>Board Viewer Login</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0f0f1a;color:#fff;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh}
+.box{background:#1a1a2e;border:2px solid #333;border-radius:16px;padding:40px;text-align:center;max-width:400px}
+h2{color:#FFD700;margin-bottom:16px}input{background:#0f0f1a;border:2px solid #333;color:#fff;padding:12px 20px;border-radius:8px;font-size:1rem;width:100%;margin:12px 0}
+input:focus{border-color:#FFD700;outline:none}button{background:#FFD700;color:#0f0f1a;border:none;padding:12px 32px;border-radius:8px;font-size:1rem;font-weight:bold;cursor:pointer}
+button:hover{background:#ffec80}.err{color:#ef4444;font-size:0.85rem;margin-top:8px;display:none}</style></head>
+<body><div class="box"><h2>♟️ Board Viewer</h2><p style="color:#888;margin-bottom:16px">Enter the board viewer password</p>
+<form method="GET" action="/multi-board"><input type="password" name="pw" placeholder="Password" autofocus>
+<button type="submit">Enter</button></form>
+<div class="err" id="err">${req.query.pw ? 'Wrong password' : ''}</div>
+${req.query.pw ? '<script>document.getElementById("err").style.display="block"</script>' : ''}
+</div></body></html>`);
     }
     res.sendFile(require('path').join(__dirname, '../../dgt-relay/multi-board-viewer.html'));
 });
