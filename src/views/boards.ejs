@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Boards — 960 Throne</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #fff; margin: 0; }
+        .board-square { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
+        .piece-img { width: 85%; height: 85%; object-fit: contain; }
+        .sq-light { background: #f0d9b5; }
+        .sq-dark { background: #b58863; }
+        .board-card { background: #1a1a2e; border: 2px solid #333; border-radius: 16px; padding: 20px; transition: border-color 0.3s, box-shadow 0.3s; cursor: pointer; }
+        .board-card:hover { border-color: #FFD700; box-shadow: 0 0 20px rgba(255,215,0,0.15); }
+        .board-card.connected { border-color: #22c55e; }
+        .board-card.disconnected { border-color: #555; opacity: 0.6; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .dot-green { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+        .dot-red { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+        .dot-gray { background: #666; }
+        .clock-display { font-family: 'Courier New', monospace; font-size: 1.3rem; font-weight: bold; padding: 6px 12px; border-radius: 8px; }
+        .clock-active { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .clock-inactive { background: rgba(255,255,255,0.05); color: #6b7280; }
+    </style>
+</head>
+<body class="min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-yellow-400 mb-2">♟️ All Boards</h1>
+            <p class="text-gray-500">Click any board to open its full-screen stream view</p>
+            <p class="text-sm text-gray-600 mt-1" id="board-count">
+                <% const boardIds = Object.keys(boards); %>
+                <%= boardIds.length %> board<%= boardIds.length !== 1 ? 's' : '' %> connected
+            </p>
+        </div>
+
+        <!-- Board Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="board-grid">
+            <% if (boardIds.length === 0) { %>
+            <div class="col-span-full text-center text-gray-600 py-16">
+                <div class="text-6xl mb-4">📡</div>
+                <div class="text-xl">No boards connected yet</div>
+                <div class="text-sm mt-2">Open the multi-board relay on the venue laptop to start</div>
+            </div>
+            <% } else { %>
+            <% boardIds.forEach((id, index) => { const b = boards[id]; %>
+            <a href="/boards/<%= id %>" class="board-card <%= b.connected ? 'connected' : 'disconnected' %>" id="card-<%= id %>" data-board-id="<%= id %>">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="status-dot <%= b.connected ? 'dot-green' : 'dot-red' %>" id="dot-<%= id %>"></span>
+                        <span class="text-lg font-bold">Board <%= index + 1 %></span>
+                    </div>
+                    <span class="text-xs text-gray-500 font-mono"><%= id.length > 12 ? id.substring(0,12)+'…' : id %></span>
+                </div>
+                <!-- Mini board -->
+                <div class="flex justify-center mb-3" id="miniboard-<%= id %>">
+                    <div class="inline-block rounded overflow-hidden">
+                        <% if (b.board) { b.board.forEach((row, r) => { %>
+                        <div class="flex">
+                            <% row.forEach((sq, c) => { %>
+                            <div class="board-square <%= (r + c) % 2 === 0 ? 'sq-light' : 'sq-dark' %>">
+                                <% if (sq.piece) { %>
+                                <img src="/pieces/<%= sq.color %><%= sq.piece %>.svg" class="piece-img" alt="">
+                                <% } %>
+                            </div>
+                            <% }) %>
+                        </div>
+                        <% }) } else { %>
+                        <div class="text-gray-600 text-sm p-8">No board data</div>
+                        <% } %>
+                    </div>
+                </div>
+                <!-- Clock -->
+                <% if (b.clock) { %>
+                <div class="flex items-center justify-center gap-4">
+                    <div class="clock-display <%= b.clock.activeSide === 'white' ? 'clock-active' : 'clock-inactive' %>">
+                        ♔ <%= Math.floor(b.clock.white/60) %>:<%= String(b.clock.white%60).padStart(2,'0') %>
+                    </div>
+                    <div class="clock-display <%= b.clock.activeSide === 'black' ? 'clock-active' : 'clock-inactive' %>">
+                        ♚ <%= Math.floor(b.clock.black/60) %>:<%= String(b.clock.black%60).padStart(2,'0') %>
+                    </div>
+                </div>
+                <% } else { %>
+                <div class="text-center text-gray-600 text-sm">No clock data</div>
+                <% } %>
+                <% if (b.label) { %>
+                <div class="text-center text-sm text-gray-400 mt-2"><%= b.label %></div>
+                <% } %>
+            </a>
+            <% }) %>
+            <% } %>
+        </div>
+    </div>
+
+    <script>
+    const socket = io();
+    const knownBoards = new Set(<%= JSON.stringify(Object.keys(boards)) %>);
+
+    // When a new board update arrives, reload the page to show it
+    // (simpler than dynamically adding cards with mini-boards)
+    socket.on('dgt_multi_board', (data) => {
+        if (!knownBoards.has(data.boardId)) {
+            // New board appeared — reload to show it
+            location.reload();
+            return;
+        }
+
+        // Update existing card's status dot
+        const dot = document.getElementById('dot-' + data.boardId);
+        if (dot) {
+            dot.className = 'status-dot ' + (data.connected ? 'dot-green' : 'dot-red');
+        }
+        const card = document.getElementById('card-' + data.boardId);
+        if (card) {
+            card.className = 'board-card ' + (data.connected ? 'connected' : 'disconnected');
+        }
+
+        // Update mini-board pieces
+        if (data.board) {
+            const container = document.getElementById('miniboard-' + data.boardId);
+            if (container) {
+                let html = '<div class="inline-block rounded overflow-hidden">';
+                data.board.forEach((row, r) => {
+                    html += '<div class="flex">';
+                    row.forEach((sq, c) => {
+                        const sqClass = (r + c) % 2 === 0 ? 'sq-light' : 'sq-dark';
+                        html += '<div class="board-square ' + sqClass + '">';
+                        if (sq.piece) {
+                            html += '<img src="/pieces/' + sq.color + sq.piece + '.svg" class="piece-img" alt="">';
+                        }
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            }
+        }
+    });
+
+    // Auto-refresh every 30s to pick up disconnected boards
+    setInterval(() => location.reload(), 30000);
+    </script>
+</body>
+</html>

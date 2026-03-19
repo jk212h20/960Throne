@@ -1467,4 +1467,37 @@ router.post('/dgt/board-state', (req, res) => {
     res.json(result);
 });
 
+// ============================================================
+// Multi-board DGT endpoints — for stream display of multiple boards
+// ============================================================
+
+// List all active boards
+router.get('/dgt/boards', (req, res) => {
+    const boards = dgtBoard.getAllMultiBoardStates();
+    res.json({ boards });
+});
+
+// Get a specific board's state
+router.get('/dgt/boards/:boardId', (req, res) => {
+    const state = dgtBoard.getMultiBoardState(req.params.boardId);
+    if (!state) return res.status(404).json({ error: 'Board not found' });
+    res.json(state);
+});
+
+// Push board state for a specific board (from multi-board relay)
+router.post('/dgt/boards/:boardId/state', (req, res) => {
+    // Auth: relay secret or admin token
+    const secret = process.env.DGT_RELAY_SECRET || process.env.ADMIN_PASSWORD || 'changeme';
+    const provided = req.headers['x-relay-secret'] || req.headers['x-admin-token'];
+    if (provided !== secret) {
+        return res.status(401).json({ error: 'Invalid relay secret' });
+    }
+
+    const result = dgtBoard.setMultiBoardState(req.params.boardId, req.body);
+    if (result.error) {
+        return res.status(400).json(result);
+    }
+    res.json(result);
+});
+
 module.exports = router;

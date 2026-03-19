@@ -15,7 +15,7 @@ const chess960 = require('./chess960');
 let io = null;
 let db = null;
 
-// Current state — what we last broadcast
+// Current state — what we last broadcast (single-board, used by throne/game views)
 let currentState = {
     connected: false,
     fen: null,
@@ -27,6 +27,23 @@ let currentState = {
     error: null,
     source: null,      // 'relay-page' | 'livechess' | 'serial' | 'fen'
 };
+
+// ============================================================
+// Multi-board state — keyed by board serial number / ID
+// ============================================================
+const multiBoards = new Map(); // boardId → { connected, fen, board, clock, label, lastUpdate }
+
+function createBoardState() {
+    return {
+        connected: false,
+        fen: null,
+        board: null,
+        clock: null,
+        label: null,
+        source: null,
+        lastUpdate: null,
+    };
+}
 
 // Position verification state — expected Chess960 starting position for current game
 let expectedPosition = {
@@ -357,6 +374,97 @@ function formatClock(seconds) {
     return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+// ============================================================
+// Multi-board API — for stream display of multiple DGT boards
+// ============================================================
+
+/**
+ * Set board state for a specific board (identified by serial number or ID).
+ * Used by multi-board relay to push state for each individual board.
+ */
+function setMultiBoardState(boardId, data) {
+    let board = data.board || null;
+    if (!board && data.fen) {
+        board = fenToBoard(data.fen);
+    }
+    if (!board) {
+        return { error: 'No board or fen provided' };
+    }
+
+    let existing = multiBoards.get(boardId);
+    if (!existing) {
+        existing = createBoardState();
+        multiBoards.set(boardId, existing);
+    }
+
+    const boardChanged = !existing.board ||
+        JSON.stringify(board) !== JSON.stringify(existing.board);
+    const clockChanged = data.clock && (!existing.clock ||
+        data.clock.white !== existing.clock.white ||
+        data.clock.black !== existing.clock.black ||
+        data.clock.activeSide !== existing.clock?.activeSide ||
+        data.clock.running !== existing.clock?.running);
+
+    if (boardChanged || clockChanged) {
+        existing.connected = true;
+        existing.fen = data.fen || null;
+        existing.board = board;
+        existing.clock = data.clock || existing.clock;
+        existing.label = data.label || existing.label;
+        existing.source = data.source || 'relay';
+        existing.lastUpdate = Date.now();
+
+        // Broadcast to clients watching this specific board
+        if (io) {
+            io.emit('dgt_multi_board', {
+                boardId,
+                fen: existing.fen,
+                board: existing.board,
+                clock: existing.clock,
+                label: existing.label,
+                connected: existing.connected,
+            });
+        }
+    }
+
+    return { success: true, changed: boardChanged || clockChanged };
+}
+
+/**
+ * Get state for a specific board.
+ */
+function getMultiBoardState(boardId) {
+    return multiBoards.get(boardId) || null;
+}
+
+/**
+ * Get all multi-board states (for index page).
+ */
+function getAllMultiBoardStates() {
+    const result = {};
+    for (const [id, state] of multiBoards) {
+        result[id] = { ...state };
+    }
+    return result;
+}
+
+/**
+ * List all known board IDs.
+ */
+function getMultiBoardIds() {
+    return Array.from(multiBoards.keys());
+}
+
+// Clean up boards that haven't sent data in 5 minutes
+setInterval(() => {
+    const cutoff = Date.now() - 5 * 60 * 1000;
+    for (const [id, state] of multiBoards) {
+        if (state.lastUpdate && state.lastUpdate < cutoff) {
+            state.connected = false;
+        }
+    }
+}, 30 * 1000);
+
 module.exports = {
     init,
     setBoardState,
@@ -367,4 +475,10 @@ module.exports = {
     markGameStarted,
     skipSetupMode,
     checkPositionMatch,
+    // Multi-board
+    setMultiBoardState,
+    getMultiBoardState,
+    getAllMultiBoardStates,
+    getMultiBoardIds,
+    fenToBoard,
 };

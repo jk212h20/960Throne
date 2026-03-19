@@ -123,6 +123,19 @@ router.get('/board', (req, res) => {
     res.render('board', { dgt, game: state.game });
 });
 
+// Multi-board index — shows all connected DGT boards (public)
+router.get('/boards', (req, res) => {
+    const boards = dgtBoard.getAllMultiBoardStates();
+    res.render('boards', { boards });
+});
+
+// Single board stream view — clean full-screen board + clock for OBS capture (public)
+router.get('/boards/:boardId', (req, res) => {
+    const boardId = req.params.boardId;
+    const boardState = dgtBoard.getMultiBoardState(boardId);
+    res.render('board-stream', { boardId, boardState });
+});
+
 // Game — Active game view (for players in the current game)
 router.get('/game', (req, res) => {
     if (!req.player) return res.redirect('/');
