@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DGT Multi-Board Viewer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0f0f1a;
+            color: #fff;
+            font-family: system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+        }
+
+        /* ─── Navigation ─── */
+        .nav-bar {
+            background: #1a1a2e;
+            border-bottom: 1px solid #333;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .nav-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #FFD700;
+            margin-right: 16px;
+        }
+        .nav-btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 2px solid #333;
+            background: #0f0f1a;
+            color: #ccc;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .nav-btn:hover { border-color: #FFD700; color: #FFD700; }
+        .nav-btn.active { border-color: #22c55e; color: #22c55e; background: rgba(34,197,94,0.1); }
+        .nav-status {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+        .status-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot-green { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+        .dot-red { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+        .dot-yellow { background: #eab308; box-shadow: 0 0 6px #eab308; }
+
+        /* ─── Views ─── */
+        .view { display: none; }
+        .view.active { display: flex; }
+
+        /* ─── Grid View (all boards) ─── */
+        #grid-view {
+            flex-wrap: wrap;
+            gap: 20px;
+            padding: 24px;
+            justify-content: center;
+        }
+        .board-card {
+            background: #1a1a2e;
+            border: 2px solid #333;
+            border-radius: 16px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .board-card:hover { border-color: #FFD700; box-shadow: 0 0 20px rgba(255,215,0,0.15); }
+        .board-card .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .card-label { font-weight: bold; font-size: 1.1rem; }
+        .card-serial { font-size: 0.7rem; color: #555; font-family: monospace; }
+
+        /* ─── Single Board View ─── */
+        #single-view {
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: calc(100vh - 56px);
+            gap: 12px;
+        }
+        .single-label {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #FFD700;
+        }
+
+        /* ─── Chess Board ─── */
+        .chess-board { display: inline-block; border-radius: 4px; overflow: hidden; }
+        .board-row { display: flex; }
+        .sq {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sq-light { background: #f0d9b5; }
+        .sq-dark { background: #b58863; }
+
+        /* Grid boards: small */
+        .board-small .sq { width: 40px; height: 40px; }
+        .board-small .piece { font-size: 28px; line-height: 1; }
+
+        /* Single board: large */
+        .board-large .sq { width: 80px; height: 80px; }
+        .board-large .piece { font-size: 58px; line-height: 1; }
+
+        /* ─── Clocks ─── */
+        .clocks { display: flex; gap: 20px; }
+        .clock-box {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            padding: 6px 18px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .clock-white { background: #f0d9b5; color: #1a1a1a; }
+        .clock-black { background: #333; color: #f0d9b5; }
+        .clock-sm { font-size: 1.1rem; min-width: 90px; }
+        .clock-lg { font-size: 2rem; min-width: 150px; padding: 10px 28px; }
+        .clock-active-w { box-shadow: 0 0 10px rgba(240,217,181,0.6); }
+        .clock-active-b { box-shadow: 0 0 10px rgba(181,136,99,0.6); }
+
+        /* ─── Empty State ─── */
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: #555;
+            width: 100%;
+        }
+        .empty-state .icon { font-size: 4rem; margin-bottom: 16px; }
+
+        /* ─── No boards yet on grid ─── */
+        #no-boards { width: 100%; }
+
+        @media (max-width: 700px) {
+            .board-small .sq { width: 30px; height: 30px; }
+            .board-small .piece { font-size: 20px; }
+            .board-large .sq { width: 44px; height: 44px; }
+            .board-large .piece { font-size: 32px; }
+            .clock-lg { font-size: 1.4rem; min-width: 100px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Nav Bar -->
+<div class="nav-bar">
+    <span class="nav-title">♟️ Boards</span>
+    <button class="nav-btn active" id="btn-all" onclick="showGrid()">All Boards</button>
+    <div id="board-buttons"></div>
+    <div class="nav-status">
+        <span class="status-dot dot-red" id="ws-dot"></span>
+        <span id="ws-status">Connecting to LiveChess...</span>
+    </div>
+</div>
+
+<!-- Grid View -->
+<div class="view active" id="grid-view">
+    <div class="empty-state" id="no-boards">
+        <div class="icon">📡</div>
+        <div style="font-size:1.2rem">Waiting for boards...</div>
+        <div style="margin-top:8px;font-size:0.85rem">Make sure DGT LiveChess is running with boards connected</div>
+    </div>
+</div>
+
+<!-- Single Board View -->
+<div class="view" id="single-view">
+    <div class="single-label" id="single-label">Board</div>
+    <div class="chess-board board-large" id="single-board"></div>
+    <div class="clocks" id="single-clocks">
+        <div class="clock-box clock-white clock-lg" id="single-clock-w">♔ --:--</div>
+        <div class="clock-box clock-black clock-lg" id="single-clock-b">♚ --:--</div>
+    </div>
+</div>
+
+<script>
+// ─── Unicode Chess Pieces ────────────────────────────────────
+const PIECES = {
+    'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+    'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟',
+};
+
+// ─── State ───────────────────────────────────────────────────
+let ws = null;
+let reconnectTimer = null;
+let nextMsgId = 10;
+const pendingCalls = new Map();
+const boards = new Map(); // feedId → { boardId, fen, clock, label }
+let currentView = 'grid'; // 'grid' | feedId
+let boardCounter = 0;
+
+// ─── LiveChess Connection ────────────────────────────────────
+
+function connect() {
+    const url = 'ws://localhost:1982/api/v1.0';
+    setStatus('yellow', 'Connecting...');
+    
+    try {
+        ws = new WebSocket(url);
+    } catch (e) {
+        setStatus('red', 'WebSocket error');
+        scheduleReconnect();
+        return;
+    }
+
+    ws.onopen = () => {
+        setStatus('green', 'Connected to LiveChess');
+        boards.clear();
+        boardCounter = 0;
+        const id = nextMsgId++;
+        pendingCalls.set(id, { action: 'eboards' });
+        ws.send(JSON.stringify({ call: 'eboards', id, param: {} }));
+    };
+
+    ws.onmessage = (evt) => {
+        try {
+            handleMessage(JSON.parse(evt.data));
+        } catch (e) {}
+    };
+
+    ws.onclose = () => {
+        setStatus('red', 'Disconnected. Reconnecting...');
+        scheduleReconnect();
+    };
+
+    ws.onerror = () => {
+        setStatus('red', 'LiveChess not found. Is it running?');
+        scheduleReconnect();
+    };
+}
+
+function send(msg) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(msg));
+    }
+}
+
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+    }, 3000);
+}
+
+function setStatus(color, text) {
+    document.getElementById('ws-dot').className = 'status-dot dot-' + color;
+    document.getElementById('ws-status').textContent = text;
+}
+
+// ─── Message Handling ────────────────────────────────────────
+
+function handleMessage(msg) {
+    const pending = pendingCalls.get(msg.id);
+
+    // eboards response
+    if (pending && pending.action === 'eboards') {
+        pendingCalls.delete(msg.id);
+        let feeds = [];
+        if (msg.param) {
+            if (Array.isArray(msg.param)) feeds = msg.param;
+            else if (msg.param.feeds) feeds = msg.param.feeds;
+        }
+
+        if (feeds.length === 0) {
+            setTimeout(() => {
+                const id = nextMsgId++;
+                pendingCalls.set(id, { action: 'eboards' });
+                send({ call: 'eboards', id, param: {} });
+            }, 3000);
+            return;
+        }
+
+        setStatus('green', feeds.length + ' board(s) connected');
+
+        feeds.forEach((feed, i) => {
+            const feedId = feed.id || feed.serialnr || String(feed);
+            if (boards.has(feedId)) return; // Already known
+
+            boardCounter++;
+            const boardId = feed.serialnr || feedId;
+            boards.set(feedId, {
+                boardId: String(boardId),
+                num: boardCounter,
+                label: 'Board ' + boardCounter,
+                fen: null,
+                clock: null,
+            });
+
+            // Subscribe
+            const subId = nextMsgId++;
+            pendingCalls.set(subId, { action: 'subscribe', feedId });
+            send({ call: 'subscribe', id: subId, param: { feed: feedId, param: { board: true, san: false } } });
+        });
+
+        rebuildNav();
+        rebuildGrid();
+        return;
+    }
+
+    // subscribe response
+    if (pending && pending.action === 'subscribe') {
+        pendingCalls.delete(msg.id);
+        // Request current state
+        const feedReqId = nextMsgId++;
+        pendingCalls.set(feedReqId, { action: 'feed', feedId: pending.feedId });
+        send({ call: 'feed', id: feedReqId, param: { id: pending.feedId } });
+        return;
+    }
+
+    // feed response
+    if (pending && pending.action === 'feed') {
+        pendingCalls.delete(msg.id);
+        if (msg.param) {
+            const fen = msg.param.fen || boardToFen(msg.param.board);
+            const board = boards.get(pending.feedId);
+            if (fen && board) {
+                board.fen = fen;
+                updateUI(pending.feedId);
+            }
+        }
+        return;
+    }
+
+    // Subscription push (live update)
+    if (msg.param && (msg.param.board || msg.param.fen)) {
+        const feedId = msg.param.feed || msg.param.id;
+        let board = boards.get(feedId);
+        if (!board && boards.size === 1) {
+            board = boards.values().next().value;
+        }
+        if (board) {
+            const fen = msg.param.fen || boardToFen(msg.param.board);
+            if (fen) {
+                board.fen = fen;
+                updateUI(feedId || boards.keys().next().value);
+            }
+        }
+        return;
+    }
+}
+
+// ─── FEN Conversion ──────────────────────────────────────────
+
+function boardToFen(board) {
+    if (!board) return null;
+    const sq = typeof board === 'string' ? board.split('') : board;
+    if (sq.length !== 64) return null;
+    let fen = '';
+    for (let r = 0; r < 8; r++) {
+        let empty = 0;
+        for (let f = 0; f < 8; f++) {
+            const p = sq[r * 8 + f];
+            if (!p || p === '.' || p === ' ') { empty++; }
+            else { if (empty) { fen += empty; empty = 0; } fen += p; }
+        }
+        if (empty) fen += empty;
+        if (r < 7) fen += '/';
+    }
+    return fen;
+}
+
+// ─── Board Rendering ─────────────────────────────────────────
+
+function renderBoardHTML(fen, sizeClass) {
+    if (!fen) {
+        // Empty board
+        let html = '<div class="chess-board ' + sizeClass + '">';
+        for (let r = 0; r < 8; r++) {
+            html += '<div class="board-row">';
+            for (let c = 0; c < 8; c++) {
+                html += '<div class="sq ' + ((r+c)%2===0?'sq-light':'sq-dark') + '"></div>';
+            }
+            html += '</div>';
+        }
+        return html + '</div>';
+    }
+
+    const placement = fen.split(' ')[0];
+    const rows = placement.split('/');
+    let html = '<div class="chess-board ' + sizeClass + '">';
+    
+    for (let r = 0; r < rows.length; r++) {
+        html += '<div class="board-row">';
+        let col = 0;
+        for (const ch of rows[r]) {
+            if (ch >= '1' && ch <= '8') {
+                for (let i = 0; i < parseInt(ch); i++) {
+                    html += '<div class="sq ' + ((r+col)%2===0?'sq-light':'sq-dark') + '"></div>';
+                    col++;
+                }
+            } else {
+                const piece = PIECES[ch] || '';
+                html += '<div class="sq ' + ((r+col)%2===0?'sq-light':'sq-dark') + '">';
+                if (piece) html += '<span class="piece">' + piece + '</span>';
+                html += '</div>';
+                col++;
+            }
+        }
+        html += '</div>';
+    }
+    return html + '</div>';
+}
+
+function formatClock(sec) {
+    if (sec == null) return '--:--';
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m + ':' + String(s).padStart(2, '0');
+}
+
+// ─── UI Updates ──────────────────────────────────────────────
+
+function rebuildNav() {
+    const container = document.getElementById('board-buttons');
+    container.innerHTML = '';
+    for (const [feedId, board] of boards) {
+        const btn = document.createElement('button');
+        btn.className = 'nav-btn' + (currentView === feedId ? ' active' : '');
+        btn.textContent = board.label;
+        btn.onclick = () => showSingle(feedId);
+        btn.id = 'nav-' + feedId;
+        container.appendChild(btn);
+    }
+}
+
+function rebuildGrid() {
+    const grid = document.getElementById('grid-view');
+    // Remove old cards
+    grid.querySelectorAll('.board-card').forEach(c => c.remove());
+    
+    const noBoards = document.getElementById('no-boards');
+    if (boards.size === 0) {
+        noBoards.style.display = '';
+        return;
+    }
+    noBoards.style.display = 'none';
+
+    for (const [feedId, board] of boards) {
+        const card = document.createElement('div');
+        card.className = 'board-card';
+        card.id = 'card-' + feedId;
+        card.onclick = () => showSingle(feedId);
+
+        card.innerHTML = `
+            <div class="card-header">
+                <span class="card-label">${board.label}</span>
+                <span class="card-serial">${board.boardId}</span>
+            </div>
+            <div id="card-board-${feedId}">${renderBoardHTML(board.fen, 'board-small')}</div>
+            <div class="clocks" style="margin-top:8px;justify-content:center">
+                <div class="clock-box clock-white clock-sm" id="card-cw-${feedId}">♔ --:--</div>
+                <div class="clock-box clock-black clock-sm" id="card-cb-${feedId}">♚ --:--</div>
+            </div>
+        `;
+        grid.appendChild(card);
+    }
+}
+
+function updateUI(feedId) {
+    const board = boards.get(feedId);
+    if (!board) return;
+
+    // Update grid card
+    const cardBoard = document.getElementById('card-board-' + feedId);
+    if (cardBoard) {
+        cardBoard.innerHTML = renderBoardHTML(board.fen, 'board-small');
+    }
+
+    // Update single view if showing this board
+    if (currentView === feedId) {
+        document.getElementById('single-board').innerHTML = renderBoardHTML(board.fen, 'board-large').replace('<div class="chess-board board-large">', '').replace(/<\/div>$/, '');
+        // Actually just replace the whole thing properly
+        const container = document.getElementById('single-board');
+        const temp = document.createElement('div');
+        temp.innerHTML = renderBoardHTML(board.fen, 'board-large');
+        const newBoard = temp.firstChild;
+        container.parentNode.replaceChild(newBoard, container);
+        newBoard.id = 'single-board';
+    }
+}
+
+function showGrid() {
+    currentView = 'grid';
+    document.getElementById('grid-view').classList.add('active');
+    document.getElementById('single-view').classList.remove('active');
+    document.getElementById('btn-all').classList.add('active');
+    document.querySelectorAll('#board-buttons .nav-btn').forEach(b => b.classList.remove('active'));
+    rebuildGrid();
+}
+
+function showSingle(feedId) {
+    const board = boards.get(feedId);
+    if (!board) return;
+
+    currentView = feedId;
+    document.getElementById('grid-view').classList.remove('active');
+    document.getElementById('single-view').classList.add('active');
+    
+    // Update nav
+    document.getElementById('btn-all').classList.remove('active');
+    document.querySelectorAll('#board-buttons .nav-btn').forEach(b => b.classList.remove('active'));
+    const navBtn = document.getElementById('nav-' + feedId);
+    if (navBtn) navBtn.classList.add('active');
+
+    // Render
+    document.getElementById('single-label').textContent = board.label;
+    
+    const container = document.getElementById('single-board');
+    const temp = document.createElement('div');
+    temp.innerHTML = renderBoardHTML(board.fen, 'board-large');
+    const newBoard = temp.firstChild;
+    newBoard.id = 'single-board';
+    container.parentNode.replaceChild(newBoard, container);
+}
+
+// ─── Periodic rescan for new boards ──────────────────────────
+setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        const id = nextMsgId++;
+        pendingCalls.set(id, { action: 'eboards' });
+        send({ call: 'eboards', id, param: {} });
+    }
+}, 15000);
+
+// ─── Start ───────────────────────────────────────────────────
+connect();
+</script>
+</body>
+</html>
