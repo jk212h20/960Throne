@@ -151,6 +151,32 @@
             </div>
         </div>
 
+        <!-- Armageddon Position (hidden by default) -->
+        <div id="armageddon-card" class="card p-4 mb-4" style="display: none;">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-bold text-red-400 uppercase tracking-wider">⚔️ Armageddon Position</h2>
+                <button onclick="hideArmageddon()" class="text-gray-500 hover:text-white text-xs">✕ Close</button>
+            </div>
+            <div class="text-center mb-3">
+                <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Armageddon Position</div>
+                <div class="position-number" id="arma-pos-number" style="color: #f87171;">—</div>
+                <div class="text-sm text-gray-400 mt-2" id="arma-pos-pieces"></div>
+            </div>
+            <div class="position-board" id="arma-board">
+                <!-- Filled by JS -->
+            </div>
+            <div class="text-xs text-gray-500 mt-3 text-center">
+                Offset +480 from current block position
+            </div>
+        </div>
+
+        <!-- Armageddon Button -->
+        <div class="text-center mb-4">
+            <button id="armageddon-btn" onclick="showArmageddon()" class="px-4 py-2 rounded-lg text-sm font-bold transition-colors" style="background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.4);">
+                ⚔️ Armageddon Position
+            </button>
+        </div>
+
         <!-- Countdown to next round -->
         <div class="card p-4 mb-4 text-center" id="countdown-card">
             <div class="text-xs text-gray-400 uppercase tracking-wider mb-1" id="countdown-label">Next round in</div>
@@ -425,6 +451,91 @@
             }
 
             renderSchedule(now);
+        }
+
+        // === Armageddon Position ===
+        // Client-side Chess960 position generator (mirrors server's chess960.js)
+        function positionFromNumber(n) {
+            const pieces = new Array(8).fill(null);
+            const n2 = Math.floor(n / 4);
+            const b1 = (n % 4) * 2 + 1;
+            pieces[b1] = 'B';
+            const n3 = Math.floor(n2 / 4);
+            const b2 = (n2 % 4) * 2;
+            pieces[b2] = 'B';
+            const n4 = Math.floor(n3 / 6);
+            const q = n3 % 6;
+            let emptyCount = 0;
+            for (let i = 0; i < 8; i++) {
+                if (pieces[i] === null) {
+                    if (emptyCount === q) { pieces[i] = 'Q'; break; }
+                    emptyCount++;
+                }
+            }
+            const knightPlacements = [
+                [0,1],[0,2],[0,3],[0,4],[1,2],[1,3],[1,4],[2,3],[2,4],[3,4]
+            ];
+            const kn = knightPlacements[n4];
+            emptyCount = 0;
+            let knightPlaced = 0;
+            for (let i = 0; i < 8 && knightPlaced < 2; i++) {
+                if (pieces[i] === null) {
+                    if (emptyCount === kn[0] && knightPlaced === 0) { pieces[i] = 'N'; knightPlaced++; }
+                    else if (emptyCount === kn[1] && knightPlaced === 1) { pieces[i] = 'N'; knightPlaced++; }
+                    emptyCount++;
+                }
+            }
+            const remaining = [];
+            for (let i = 0; i < 8; i++) { if (pieces[i] === null) remaining.push(i); }
+            pieces[remaining[0]] = 'R';
+            pieces[remaining[1]] = 'K';
+            pieces[remaining[2]] = 'R';
+            return pieces;
+        }
+
+        function renderBoardTo(boardEl, pieces) {
+            boardEl.innerHTML = '';
+            if (!pieces || pieces.length !== 8) {
+                boardEl.innerHTML = '<div class="col-span-8 text-center text-gray-500 py-8">No position data</div>';
+                return;
+            }
+            const rows = [];
+            rows.push(pieces.map(p => p.toLowerCase()));
+            rows.push(Array(8).fill('p'));
+            for (let i = 0; i < 4; i++) rows.push(Array(8).fill(null));
+            rows.push(Array(8).fill('P'));
+            rows.push([...pieces]);
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const sq = document.createElement('div');
+                    const isLight = (row + col) % 2 === 0;
+                    sq.className = 'sq ' + (isLight ? 'sq-light' : 'sq-dark');
+                    const piece = rows[row][col];
+                    if (piece) {
+                        const img = document.createElement('img');
+                        img.src = '/pieces/' + PIECE_MAP[piece] + '.svg';
+                        img.alt = piece;
+                        sq.appendChild(img);
+                    }
+                    boardEl.appendChild(sq);
+                }
+            }
+        }
+
+        function showArmageddon() {
+            if (!currentPosition) return;
+            const armaNum = (currentPosition.positionNumber + 480) % 960;
+            const armaPieces = positionFromNumber(armaNum);
+            document.getElementById('arma-pos-number').textContent = '#' + armaNum;
+            document.getElementById('arma-pos-pieces').textContent = armaPieces.join('');
+            renderBoardTo(document.getElementById('arma-board'), armaPieces);
+            document.getElementById('armageddon-card').style.display = 'block';
+            document.getElementById('armageddon-btn').style.display = 'none';
+        }
+
+        function hideArmageddon() {
+            document.getElementById('armageddon-card').style.display = 'none';
+            document.getElementById('armageddon-btn').style.display = 'inline-block';
         }
 
         // Main loop
