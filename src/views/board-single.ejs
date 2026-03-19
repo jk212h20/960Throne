@@ -4,186 +4,295 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Board <%= boardNum %></title>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
+        html, body {
             background: #0f0f1a;
             color: #fff;
             font-family: system-ui, -apple-system, sans-serif;
-            min-height: 100vh;
+            height: 100%;
+            overflow: hidden;
+        }
+        .container {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            height: 100vh;
+            padding: 8px;
         }
-        .header {
-            text-align: center;
-            margin-bottom: 12px;
+
+        /* Player bars — top and bottom */
+        .player-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: var(--board-size);
+            padding: 8px 14px;
+            border-radius: 8px;
+            min-height: 48px;
         }
-        .board-label {
-            font-size: 1.6rem;
-            font-weight: bold;
-            color: #FFD700;
+        .player-bar.top {
+            margin-bottom: 4px;
+            background: #1a1a2e;
+            border: 1px solid #333;
         }
-        .player-names {
-            font-size: 1.2rem;
-            color: #ccc;
+        .player-bar.bottom {
             margin-top: 4px;
+            background: #1a1a2e;
+            border: 1px solid #333;
         }
-        .player-names .white { color: #f0d9b5; }
-        .player-names .black { color: #b58863; }
-        .chess-board { display: inline-block; border-radius: 4px; overflow: hidden; }
-        .board-row { display: flex; }
-        .sq {
-            width: 80px; height: 80px;
-            display: flex; align-items: center; justify-content: center;
+        .player-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        .sq-light { background: #f0d9b5; }
-        .sq-dark { background: #b58863; }
-        .piece-img { width: 85%; height: 85%; object-fit: contain; }
-        .clocks {
-            display: flex; gap: 24px; margin-top: 12px;
+        .player-piece {
+            font-size: 1.4rem;
+            line-height: 1;
         }
-        .clock-box {
+        .player-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #eee;
+        }
+        .player-bar.top .player-name { color: #ccc; }
+        .player-bar.bottom .player-name { color: #f0d9b5; }
+        .player-clock {
             font-family: 'Courier New', monospace;
             font-weight: bold;
-            font-size: 2rem;
-            padding: 10px 28px;
-            border-radius: 8px;
-            min-width: 150px;
+            font-size: 1.6rem;
+            padding: 4px 14px;
+            border-radius: 6px;
+            min-width: 90px;
             text-align: center;
         }
         .clock-white { background: #f0d9b5; color: #1a1a1a; }
         .clock-black { background: #333; color: #f0d9b5; }
+        .clock-active { box-shadow: 0 0 8px rgba(255,215,0,0.5); }
+
+        /* Chess board */
+        .chess-board {
+            display: inline-block;
+            border-radius: 4px;
+            overflow: hidden;
+            width: var(--board-size);
+            height: var(--board-size);
+        }
+        .board-row { display: flex; }
+        .sq {
+            width: var(--sq-size);
+            height: var(--sq-size);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sq-light { background: #f0d9b5; }
+        .sq-dark { background: #b58863; }
+        .piece-img { width: 85%; height: 85%; object-fit: contain; }
+
+        /* Waiting state */
         .status-msg {
-            text-align: center; padding: 60px; color: #555; font-size: 1.2rem;
+            text-align: center;
+            padding: 60px;
+            color: #555;
+            font-size: 1.2rem;
         }
         .status-msg .icon { font-size: 3rem; margin-bottom: 12px; }
-        @media (max-width: 700px) {
-            .sq { width: 44px; height: 44px; }
-            .clock-box { font-size: 1.4rem; min-width: 100px; }
+
+        /* Board label (small, top-left) */
+        .board-label {
+            position: fixed;
+            top: 6px;
+            left: 10px;
+            font-size: 0.7rem;
+            color: #444;
+            z-index: 10;
         }
     </style>
 </head>
 <body>
 
-<div class="header">
-    <div class="board-label" id="board-label">Board <%= boardNum %></div>
-    <div class="player-names" id="player-names">
-        <% if (whiteName || blackName) { %>
-            <span class="white">♔ <%= whiteName || '?' %></span>
-            <span style="color:#666"> vs </span>
-            <span class="black">♚ <%= blackName || '?' %></span>
-        <% } %>
-    </div>
-</div>
+<div class="board-label">Board <%= boardNum %></div>
 
-<div id="board-container">
-    <div class="status-msg">
+<div class="container" id="main-container">
+    <div class="status-msg" id="waiting-msg">
         <div class="icon">📡</div>
-        <div>Connecting to LiveChess...</div>
-        <div style="margin-top:6px;font-size:0.8rem">Board <%= boardNum %> — waiting for data</div>
+        <div>Waiting for board data...</div>
+        <div style="margin-top:6px;font-size:0.8rem">Board <%= boardNum %></div>
     </div>
-</div>
-
-<div class="clocks" id="clocks" style="display:none">
-    <div class="clock-box clock-white" id="clock-w">♔ --:--</div>
-    <div class="clock-box clock-black" id="clock-b">♚ --:--</div>
 </div>
 
 <script>
 const BOARD_NUM = <%= boardNum %>;
-const SERVER = window.location.origin;
+const socket = io();
+
 const FEN_PIECES = {
     'K':'wK','Q':'wQ','R':'wR','B':'wB','N':'wN','P':'wP',
     'k':'bK','q':'bQ','r':'bR','b':'bB','n':'bN','p':'bP',
 };
 
-let ws = null;
-let reconnectTimer = null;
-let nextMsgId = 10;
-let pollTimer = null;
-let allBoards = []; // sorted serial numbers
-let myFen = null;
-let customOrder = {}; // serialNr → sortPosition from server
+let myBoardId = null;    // The serial number / board ID we're tracking
+let allBoardIds = [];    // Sorted list of all known board IDs
+let customOrder = {};    // serialNr → sortPosition from server
+let currentFen = null;
+let whiteName = '<%= whiteName || "" %>';
+let blackName = '<%= blackName || "" %>';
+let currentClock = null;
+let boardRendered = false;
 
-// ─── LiveChess Connection ────────────────────────────────────
-function connect() {
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    try { ws = new WebSocket('ws://localhost:1982/api/v1.0'); } catch(e) { scheduleReconnect(); return; }
-    ws.onopen = () => {
-        pollEboards();
-        pollTimer = setInterval(pollEboards, 500);
-    };
-    ws.onmessage = (evt) => { try { handleMessage(JSON.parse(evt.data)); } catch(e){} };
-    ws.onclose = () => { if(pollTimer){clearInterval(pollTimer);pollTimer=null;} scheduleReconnect(); };
-    ws.onerror = () => { scheduleReconnect(); };
+// ─── Sizing ──────────────────────────────────────────────────
+function calcSizes() {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    // Board + 2 player bars (~56px each) + gaps
+    const barSpace = 120;
+    const maxBoard = Math.min(vw - 16, vh - barSpace);
+    const boardSize = Math.max(200, maxBoard);
+    const sqSize = boardSize / 8;
+    document.documentElement.style.setProperty('--board-size', boardSize + 'px');
+    document.documentElement.style.setProperty('--sq-size', sqSize + 'px');
 }
+calcSizes();
+window.addEventListener('resize', () => { calcSizes(); if (currentFen) renderFull(); });
 
-function send(msg) { if(ws&&ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
-function pollEboards() { send({call:'eboards',id:nextMsgId++,param:{}}); }
-function scheduleReconnect() { if(reconnectTimer)return; reconnectTimer=setTimeout(()=>{reconnectTimer=null;connect();},3000); }
+// ─── Determine which board ID maps to our board number ───────
+async function resolveMyBoard() {
+    // Load custom board order
+    try {
+        const orderRes = await fetch('/api/board-order');
+        const orderData = await orderRes.json();
+        if (orderData.order) customOrder = orderData.order;
+    } catch(e) {}
 
-function handleMessage(msg) {
-    if (!msg.param) return;
-    let feeds = Array.isArray(msg.param) ? msg.param : (msg.param.feeds || []);
-    if (feeds.length === 0) return;
+    // Load all active boards
+    try {
+        const boardsRes = await fetch('/api/dgt/boards');
+        const boardsData = await boardsRes.json();
+        if (boardsData.boards) {
+            allBoardIds = Object.keys(boardsData.boards).sort((a, b) => {
+                const oa = customOrder[a], ob = customOrder[b];
+                if (oa != null && ob != null) return oa - ob;
+                if (oa != null) return -1;
+                if (ob != null) return 1;
+                return a.localeCompare(b);
+            });
 
-    // Sort by custom order if set, else alphabetical serial
-    const serials = feeds.map(f => f.serialnr || f.id || String(f)).sort((a, b) => {
-        const oa = customOrder[a], ob = customOrder[b];
-        if (oa != null && ob != null) return oa - ob;
-        if (oa != null) return -1;
-        if (ob != null) return 1;
-        return a.localeCompare(b);
-    });
-    
-    // Find the feed for our board number (1-indexed)
-    if (BOARD_NUM > serials.length) return; // Not enough boards
-    const mySerial = serials[BOARD_NUM - 1];
-    const feed = feeds.find(f => (f.serialnr || f.id || String(f)) === mySerial);
-    if (!feed) return;
+            if (BOARD_NUM <= allBoardIds.length) {
+                myBoardId = allBoardIds[BOARD_NUM - 1];
+                console.log('Board', BOARD_NUM, '→ boardId:', myBoardId);
 
-    // Extract FEN
-    const fen = feed.fen || (feed.board && typeof feed.board === 'string' && feed.board.includes('/') ? feed.board : null) || boardToFen(feed.board);
-    if (fen && fen !== myFen) {
-        myFen = fen;
-        renderBoard(fen);
-    }
-
-    // Extract clock
-    if (feed.clock && typeof feed.clock === 'object') {
-        document.getElementById('clocks').style.display = '';
-        const w = feed.clock.white != null ? Number(feed.clock.white) : null;
-        const b = feed.clock.black != null ? Number(feed.clock.black) : null;
-        document.getElementById('clock-w').textContent = '♔ ' + formatClock(w);
-        document.getElementById('clock-b').textContent = '♚ ' + formatClock(b);
-    }
-}
-
-function boardToFen(board) {
-    if (!board) return null;
-    const sq = typeof board === 'string' ? board.split('') : board;
-    if (sq.length !== 64) return null;
-    let fen = '';
-    for (let r = 0; r < 8; r++) {
-        let empty = 0;
-        for (let f = 0; f < 8; f++) {
-            const p = sq[r*8+f];
-            if (!p||p==='.'||p===' ') { empty++; }
-            else { if(empty){fen+=empty;empty=0;} fen+=p; }
+                // Load initial state
+                const stateRes = await fetch('/api/dgt/boards/' + encodeURIComponent(myBoardId));
+                const state = await stateRes.json();
+                if (state && state.fen) {
+                    currentFen = state.fen;
+                    currentClock = state.clock || null;
+                    renderFull();
+                }
+            }
         }
-        if (empty) fen += empty;
-        if (r < 7) fen += '/';
+    } catch(e) {
+        console.error('Failed to load boards:', e);
     }
-    return fen;
 }
 
+// ─── Socket.io — real-time updates from server ───────────────
+socket.on('dgt_multi_board', (data) => {
+    // If we haven't resolved our board yet, try to match by index
+    if (!myBoardId) {
+        // Track all IDs we've seen to re-resolve
+        if (!allBoardIds.includes(data.boardId)) {
+            allBoardIds.push(data.boardId);
+            allBoardIds.sort((a, b) => {
+                const oa = customOrder[a], ob = customOrder[b];
+                if (oa != null && ob != null) return oa - ob;
+                if (oa != null) return -1;
+                if (ob != null) return 1;
+                return a.localeCompare(b);
+            });
+        }
+        if (BOARD_NUM <= allBoardIds.length) {
+            myBoardId = allBoardIds[BOARD_NUM - 1];
+            console.log('Board', BOARD_NUM, '→ boardId:', myBoardId, '(from socket)');
+        }
+    }
+
+    // Only process events for our board
+    if (data.boardId !== myBoardId) return;
+
+    let changed = false;
+    if (data.fen && data.fen !== currentFen) {
+        currentFen = data.fen;
+        changed = true;
+    }
+    if (data.clock) {
+        currentClock = data.clock;
+        changed = true;
+    }
+
+    if (changed && currentFen) {
+        renderFull();
+    }
+});
+
+// ─── Poll player names from server ──────────────────────────
+function pollNames() {
+    fetch('/api/board-names/' + BOARD_NUM)
+        .then(r => r.json())
+        .then(data => {
+            const w = data.white_name || '';
+            const b = data.black_name || '';
+            if (w !== whiteName || b !== blackName) {
+                whiteName = w;
+                blackName = b;
+                if (boardRendered) renderFull();
+            }
+        }).catch(() => {});
+}
+setInterval(pollNames, 5000);
+
+// ─── Rendering ───────────────────────────────────────────────
 function formatClock(sec) {
     if (sec == null) return '--:--';
     const m = Math.floor(sec / 60);
     const s = sec % 60;
     return m + ':' + String(s).padStart(2, '0');
+}
+
+function renderFull() {
+    if (!currentFen) return;
+    boardRendered = true;
+
+    const container = document.getElementById('main-container');
+    const wActive = currentClock && currentClock.activeSide === 'white' && currentClock.running;
+    const bActive = currentClock && currentClock.activeSide === 'black' && currentClock.running;
+
+    let html = '';
+
+    // Top bar — Black player
+    html += '<div class="player-bar top">';
+    html += '  <div class="player-info">';
+    html += '    <span class="player-piece">♚</span>';
+    html += '    <span class="player-name">' + escHtml(blackName || 'Black') + '</span>';
+    html += '  </div>';
+    html += '  <div class="player-clock clock-black' + (bActive ? ' clock-active' : '') + '">' + formatClock(currentClock?.black) + '</div>';
+    html += '</div>';
+
+    // Board
+    html += renderBoard(currentFen);
+
+    // Bottom bar — White player
+    html += '<div class="player-bar bottom">';
+    html += '  <div class="player-info">';
+    html += '    <span class="player-piece">♔</span>';
+    html += '    <span class="player-name">' + escHtml(whiteName || 'White') + '</span>';
+    html += '  </div>';
+    html += '  <div class="player-clock clock-white' + (wActive ? ' clock-active' : '') + '">' + formatClock(currentClock?.white) + '</div>';
+    html += '</div>';
+
+    container.innerHTML = html;
 }
 
 function renderBoard(fen) {
@@ -196,13 +305,13 @@ function renderBoard(fen) {
         for (const ch of rows[r]) {
             if (ch >= '1' && ch <= '8') {
                 for (let i = 0; i < parseInt(ch); i++) {
-                    html += '<div class="sq '+((r+col)%2===0?'sq-light':'sq-dark')+'"></div>';
+                    html += '<div class="sq ' + ((r + col) % 2 === 0 ? 'sq-light' : 'sq-dark') + '"></div>';
                     col++;
                 }
             } else {
                 const piece = FEN_PIECES[ch];
-                html += '<div class="sq '+((r+col)%2===0?'sq-light':'sq-dark')+'">';
-                if (piece) html += '<img src="'+SERVER+'/pieces/'+piece+'.svg" class="piece-img">';
+                html += '<div class="sq ' + ((r + col) % 2 === 0 ? 'sq-light' : 'sq-dark') + '">';
+                if (piece) html += '<img src="/pieces/' + piece + '.svg" class="piece-img">';
                 html += '</div>';
                 col++;
             }
@@ -210,38 +319,18 @@ function renderBoard(fen) {
         html += '</div>';
     }
     html += '</div>';
-    document.getElementById('board-container').innerHTML = html;
+    return html;
 }
 
-// ─── Poll player names from server ──────────────────────────
-function pollNames() {
-    fetch(SERVER + '/api/board-names/' + BOARD_NUM)
-        .then(r => r.json())
-        .then(data => {
-            const w = data.white_name || '';
-            const b = data.black_name || '';
-            const el = document.getElementById('player-names');
-            if (w || b) {
-                el.innerHTML = '<span class="white">♔ '+(w||'?')+'</span> <span style="color:#666">vs</span> <span class="black">♚ '+(b||'?')+'</span>';
-            } else {
-                el.innerHTML = '';
-            }
-        }).catch(() => {});
-}
-// Poll names every 5 seconds
-setInterval(pollNames, 5000);
-
-// ─── Load board order from server ────────────────────────────
-function loadBoardOrder() {
-    fetch(SERVER + '/api/board-order')
-        .then(r => r.json())
-        .then(data => { if (data.order) customOrder = data.order; })
-        .catch(() => {});
+function escHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
 }
 
 // ─── Start ───────────────────────────────────────────────────
-loadBoardOrder();
-connect();
+resolveMyBoard();
 </script>
+<script src="/vscale.js"></script>
 </body>
 </html>

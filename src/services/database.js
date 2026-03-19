@@ -869,6 +869,11 @@ function resolveNotification(id) {
     save();
 }
 
+function resolveAllNotifications() {
+    db.run(`UPDATE admin_notifications SET resolved = 1 WHERE resolved = 0`);
+    save();
+}
+
 // ============================================================
 // Payout operations
 // ============================================================
@@ -1253,6 +1258,7 @@ module.exports = {
     createNotification,
     getUnresolvedNotifications,
     resolveNotification,
+    resolveAllNotifications,
     
     // Payouts
     createPayout,

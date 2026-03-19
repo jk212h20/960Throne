@@ -883,6 +883,11 @@ router.post('/admin/rename-player', requireAdmin, (req, res) => {
     res.json({ success: true, name: trimmed });
 });
 
+router.post('/admin/notifications/resolve-all', requireAdmin, (req, res) => {
+    db.resolveAllNotifications();
+    res.json({ success: true });
+});
+
 router.post('/admin/notifications/resolve', requireAdmin, (req, res) => {
     const { id } = req.body;
     if (!id) return res.status(400).json({ error: 'Notification ID required' });

@@ -126,7 +126,13 @@ router.get('/board', (req, res) => {
 // Multi-board index — shows all connected DGT boards (public)
 router.get('/boards', (req, res) => {
     const boards = dgtBoard.getAllMultiBoardStates();
-    res.render('boards', { boards });
+    // Load board names for each board number
+    const boardNames = {};
+    const boardCount = Object.keys(boards).length;
+    for (let i = 1; i <= Math.max(boardCount, 9); i++) {
+        boardNames[i] = db.getBoardNames(i) || {};
+    }
+    res.render('boards', { boards, boardNames });
 });
 
 // Single board stream view — clean full-screen board + clock for OBS capture (public)

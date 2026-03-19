@@ -55,8 +55,15 @@
                     </div>
                     <span class="text-xs text-gray-500 font-mono"><%= id.length > 12 ? id.substring(0,12)+'…' : id %></span>
                 </div>
+                <!-- Player names -->
+                <% const names = boardNames[index + 1]; %>
+                <% if (names && (names.white_name || names.black_name)) { %>
+                <div class="text-center text-xs mb-2">
+                    <span style="color:#b58863">♚ <%= names.black_name || '?' %></span>
+                </div>
+                <% } %>
                 <!-- Mini board -->
-                <div class="flex justify-center mb-3" id="miniboard-<%= id %>">
+                <div class="flex justify-center mb-1" id="miniboard-<%= id %>">
                     <div class="inline-block rounded overflow-hidden">
                         <% if (b.board) { b.board.forEach((row, r) => { %>
                         <div class="flex">

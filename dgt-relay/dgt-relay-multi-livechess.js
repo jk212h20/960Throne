@@ -165,10 +165,11 @@ function handleMessage(msg) {
         pendingCalls.delete(msg.id);
         if (msg.param) {
             const fen = msg.param.fen || (msg.param.board ? boardToFen(msg.param.board) : null);
+            const clock = extractClock(msg.param);
             const board = boards.get(pending.feedId);
             if (fen && board) {
                 board.lastFen = fen;
-                pushToServer(board.boardId, fen, board.label);
+                pushToServer(board.boardId, fen, board.label, clock);
             }
         }
         return;
@@ -176,7 +177,7 @@ function handleMessage(msg) {
     
     // ── Subscription push (board update from any board) ──
     // These don't have a matching pending call — they come as feed events
-    if (msg.param && (msg.param.board || msg.param.fen)) {
+    if (msg.param && (msg.param.board || msg.param.fen || msg.param.clock)) {
         // Determine which board this came from
         const feedId = msg.param.feed || msg.param.id;
         let board = boards.get(feedId);
@@ -188,9 +189,13 @@ function handleMessage(msg) {
         
         if (board) {
             const fen = msg.param.fen || boardToFen(msg.param.board);
+            const clock = extractClock(msg.param);
             if (fen && fen !== board.lastFen) {
                 board.lastFen = fen;
-                pushToServer(board.boardId, fen, board.label);
+                pushToServer(board.boardId, fen, board.label, clock);
+            } else if (clock) {
+                // Clock update without board change — still push
+                pushToServer(board.boardId, board.lastFen, board.label, clock);
             }
         }
         return;
@@ -225,31 +230,78 @@ function boardToFen(board) {
     return fen;
 }
 
+// ─── Clock Extraction ────────────────────────────────────────
+
+/**
+ * Extract clock data from a LiveChess message param.
+ * LiveChess clock format varies — handle known formats.
+ * Returns { white, black } in seconds, or null if no clock data.
+ */
+function extractClock(param) {
+    if (!param) return null;
+    
+    // Direct clock object: { white: seconds, black: seconds }
+    if (param.clock && typeof param.clock === 'object') {
+        const w = param.clock.white != null ? Number(param.clock.white) : null;
+        const b = param.clock.black != null ? Number(param.clock.black) : null;
+        if (w != null || b != null) {
+            return {
+                white: w,
+                black: b,
+                running: param.clock.running != null ? param.clock.running : null,
+                activeSide: param.clock.activeSide || null,
+            };
+        }
+    }
+    
+    // Clock as separate fields
+    if (param.whiteTime != null || param.blackTime != null) {
+        return {
+            white: param.whiteTime != null ? Number(param.whiteTime) : null,
+            black: param.blackTime != null ? Number(param.blackTime) : null,
+        };
+    }
+    
+    return null;
+}
+
 // ─── Push to Server ──────────────────────────────────────────
 
-async function pushToServer(boardId, fen, label) {
+async function pushToServer(boardId, fen, label, clock) {
+    if (!fen) return; // Nothing to push
     try {
+        const body = {
+            fen,
+            label,
+            source: 'livechess-multi',
+        };
+        if (clock) body.clock = clock;
+        
         const res = await fetch(`${SERVER_URL}/api/dgt/boards/${encodeURIComponent(boardId)}/state`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'x-relay-secret': RELAY_SECRET,
             },
-            body: JSON.stringify({
-                fen,
-                label,
-                source: 'livechess-multi',
-            }),
+            body: JSON.stringify(body),
         });
         
         const data = await res.json();
         if (data.changed) {
             const shortFen = fen.split(' ')[0].substring(0, 24);
-            console.log(`♟️  [${boardId}] → ${shortFen}...`);
+            const clockStr = clock ? ` ⏱ W:${formatSec(clock.white)} B:${formatSec(clock.black)}` : '';
+            console.log(`♟️  [${boardId}] → ${shortFen}...${clockStr}`);
         }
     } catch (err) {
         console.error(`❌ [${boardId}] Push failed: ${err.message}`);
     }
+}
+
+function formatSec(s) {
+    if (s == null) return '--:--';
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m + ':' + String(sec).padStart(2, '0');
 }
 
 // ─── Periodic re-scan for new boards ─────────────────────────
