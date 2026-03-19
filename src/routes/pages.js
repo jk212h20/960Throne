@@ -238,12 +238,27 @@ ${req.query.pw ? '<script>document.getElementById("err").style.display="block"</
 });
 
 // Individual board pages /board1 through /board9 — public, for OBS/stream capture
-// Each shows a single full-screen board from LiveChess + player names from DB
+// Each shows a single full-screen board with player names + clock, reads from server via Socket.io
 for (let i = 1; i <= 9; i++) {
     router.get('/board' + i, (req, res) => {
         const names = db.getBoardNames(i);
+        // Resolve which board serial maps to this board number
+        const boardOrder = db.getBoardOrder();
+        const allBoards = dgtBoard.getAllMultiBoardStates();
+        const boardIds = Object.keys(allBoards).sort((a, b) => {
+            const oa = boardOrder[a], ob = boardOrder[b];
+            if (oa != null && ob != null) return oa - ob;
+            if (oa != null) return -1;
+            if (ob != null) return 1;
+            return a.localeCompare(b);
+        });
+        const resolvedBoardId = boardIds[i - 1] || null;
+        const initialState = resolvedBoardId ? allBoards[resolvedBoardId] : null;
         res.render('board-single', {
             boardNum: i,
+            boardId: resolvedBoardId,
+            initialFen: initialState?.fen || null,
+            initialClock: initialState?.clock || null,
             whiteName: names?.white_name || '',
             blackName: names?.black_name || '',
         });

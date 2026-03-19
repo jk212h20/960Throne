@@ -128,25 +128,28 @@
 const BOARD_NUM = <%= boardNum %>;
 const socket = io();
 
+// Server-resolved board ID (null if no boards connected when page was loaded)
+let myBoardId = <%- boardId ? JSON.stringify(boardId) : 'null' %>;
+
 const FEN_PIECES = {
     'K':'wK','Q':'wQ','R':'wR','B':'wB','N':'wN','P':'wP',
     'k':'bK','q':'bQ','r':'bR','b':'bB','n':'bN','p':'bP',
 };
 
-let myBoardId = null;    // The serial number / board ID we're tracking
-let allBoardIds = [];    // Sorted list of all known board IDs
-let customOrder = {};    // serialNr → sortPosition from server
-let currentFen = null;
+// State
+let currentFen = <%- initialFen ? JSON.stringify(initialFen) : 'null' %>;
+let currentClock = <%- initialClock ? JSON.stringify(initialClock) : 'null' %>;
 let whiteName = '<%= whiteName || "" %>';
 let blackName = '<%= blackName || "" %>';
-let currentClock = null;
 let boardRendered = false;
+
+// For auto-discovery when server didn't have boards at page load time
+let discoveredBoardIds = [];
 
 // ─── Sizing ──────────────────────────────────────────────────
 function calcSizes() {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    // Board + 2 player bars (~56px each) + gaps
     const barSpace = 120;
     const maxBoard = Math.min(vw - 16, vh - barSpace);
     const boardSize = Math.max(200, maxBoard);
@@ -157,71 +160,39 @@ function calcSizes() {
 calcSizes();
 window.addEventListener('resize', () => { calcSizes(); if (currentFen) renderFull(); });
 
-// ─── Determine which board ID maps to our board number ───────
-async function resolveMyBoard() {
-    // Load custom board order
-    try {
-        const orderRes = await fetch('/api/board-order');
-        const orderData = await orderRes.json();
-        if (orderData.order) customOrder = orderData.order;
-    } catch(e) {}
-
-    // Load all active boards
-    try {
-        const boardsRes = await fetch('/api/dgt/boards');
-        const boardsData = await boardsRes.json();
-        if (boardsData.boards) {
-            allBoardIds = Object.keys(boardsData.boards).sort((a, b) => {
-                const oa = customOrder[a], ob = customOrder[b];
-                if (oa != null && ob != null) return oa - ob;
-                if (oa != null) return -1;
-                if (ob != null) return 1;
-                return a.localeCompare(b);
-            });
-
-            if (BOARD_NUM <= allBoardIds.length) {
-                myBoardId = allBoardIds[BOARD_NUM - 1];
-                console.log('Board', BOARD_NUM, '→ boardId:', myBoardId);
-
-                // Load initial state
-                const stateRes = await fetch('/api/dgt/boards/' + encodeURIComponent(myBoardId));
-                const state = await stateRes.json();
-                if (state && state.fen) {
-                    currentFen = state.fen;
-                    currentClock = state.clock || null;
-                    renderFull();
-                }
-            }
-        }
-    } catch(e) {
-        console.error('Failed to load boards:', e);
-    }
+// ─── Render initial state if server provided it ──────────────
+if (currentFen) {
+    renderFull();
 }
 
 // ─── Socket.io — real-time updates from server ───────────────
 socket.on('dgt_multi_board', (data) => {
-    // If we haven't resolved our board yet, try to match by index
-    if (!myBoardId) {
-        // Track all IDs we've seen to re-resolve
-        if (!allBoardIds.includes(data.boardId)) {
-            allBoardIds.push(data.boardId);
-            allBoardIds.sort((a, b) => {
-                const oa = customOrder[a], ob = customOrder[b];
-                if (oa != null && ob != null) return oa - ob;
-                if (oa != null) return -1;
-                if (ob != null) return 1;
-                return a.localeCompare(b);
-            });
-        }
-        if (BOARD_NUM <= allBoardIds.length) {
-            myBoardId = allBoardIds[BOARD_NUM - 1];
-            console.log('Board', BOARD_NUM, '→ boardId:', myBoardId, '(from socket)');
-        }
+    // Case 1: We already know our board ID — just filter for it
+    if (myBoardId) {
+        if (data.boardId !== myBoardId) return;
+        handleBoardUpdate(data);
+        return;
     }
 
-    // Only process events for our board
-    if (data.boardId !== myBoardId) return;
+    // Case 2: No board ID yet (server had no boards when page loaded)
+    // Auto-discover: collect board IDs as they appear, pick the Nth one
+    if (!discoveredBoardIds.includes(data.boardId)) {
+        discoveredBoardIds.push(data.boardId);
+        discoveredBoardIds.sort(); // Simple alphabetical sort as fallback
+        console.log('Discovered boards:', discoveredBoardIds);
+    }
 
+    if (BOARD_NUM <= discoveredBoardIds.length) {
+        myBoardId = discoveredBoardIds[BOARD_NUM - 1];
+        console.log('Board', BOARD_NUM, '=> boardId:', myBoardId, '(auto-discovered)');
+    }
+
+    if (data.boardId === myBoardId) {
+        handleBoardUpdate(data);
+    }
+});
+
+function handleBoardUpdate(data) {
     let changed = false;
     if (data.fen && data.fen !== currentFen) {
         currentFen = data.fen;
@@ -231,11 +202,10 @@ socket.on('dgt_multi_board', (data) => {
         currentClock = data.clock;
         changed = true;
     }
-
     if (changed && currentFen) {
         renderFull();
     }
-});
+}
 
 // ─── Poll player names from server ──────────────────────────
 function pollNames() {
@@ -277,7 +247,7 @@ function renderFull() {
     html += '    <span class="player-piece">♚</span>';
     html += '    <span class="player-name">' + escHtml(blackName || 'Black') + '</span>';
     html += '  </div>';
-    html += '  <div class="player-clock clock-black' + (bActive ? ' clock-active' : '') + '">' + formatClock(currentClock?.black) + '</div>';
+    html += '  <div class="player-clock clock-black' + (bActive ? ' clock-active' : '') + '">' + formatClock(currentClock ? currentClock.black : null) + '</div>';
     html += '</div>';
 
     // Board
@@ -289,7 +259,7 @@ function renderFull() {
     html += '    <span class="player-piece">♔</span>';
     html += '    <span class="player-name">' + escHtml(whiteName || 'White') + '</span>';
     html += '  </div>';
-    html += '  <div class="player-clock clock-white' + (wActive ? ' clock-active' : '') + '">' + formatClock(currentClock?.white) + '</div>';
+    html += '  <div class="player-clock clock-white' + (wActive ? ' clock-active' : '') + '">' + formatClock(currentClock ? currentClock.white : null) + '</div>';
     html += '</div>';
 
     container.innerHTML = html;
@@ -327,9 +297,6 @@ function escHtml(s) {
     d.textContent = s;
     return d.innerHTML;
 }
-
-// ─── Start ───────────────────────────────────────────────────
-resolveMyBoard();
 </script>
 <script src="/vscale.js"></script>
 </body>
