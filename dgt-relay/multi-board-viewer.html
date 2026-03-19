@@ -320,6 +320,32 @@ function handleMessage(msg) {
             updateUI(feedId);
         }
         
+        // Extract player names from tournament data
+        // LiveChess sends: players (array), white/black, or source field
+        if (feed.players && Array.isArray(feed.players)) {
+            const w = feed.players.find(p => p.color === 'white' || p.color === 'w');
+            const b = feed.players.find(p => p.color === 'black' || p.color === 'b');
+            if (w) board.white = w.name || w.fname || '';
+            if (b) board.black = b.name || b.fname || '';
+            updatePlayerNames(feedId);
+        } else if (feed.white || feed.black) {
+            if (feed.white) board.white = typeof feed.white === 'string' ? feed.white : feed.white.name || '';
+            if (feed.black) board.black = typeof feed.black === 'string' ? feed.black : feed.black.name || '';
+            updatePlayerNames(feedId);
+        }
+        
+        // Extract source/label from LiveChess board config
+        if (feed.source && typeof feed.source === 'string' && feed.source !== board.source) {
+            board.source = feed.source;
+        }
+        
+        // Log ALL feed keys on first discovery so we can see what LiveChess sends
+        if (!board._logged) {
+            board._logged = true;
+            console.log('Board ' + feedId + ' keys:', Object.keys(feed).join(', '));
+            console.log('Board ' + feedId + ' full:', JSON.stringify(feed).substring(0, 800));
+        }
+        
         // Extract clock — LiveChess puts it in feed.clock
         if (feed.clock && typeof feed.clock === 'object') {
             const clock = {
@@ -462,7 +488,8 @@ function rebuildGrid() {
                 <span class="card-serial">${board.boardId}</span>
             </div>
             <div id="card-board-${feedId}">${renderBoardHTML(board.fen, 'board-small')}</div>
-            <div class="clocks" style="margin-top:8px;justify-content:center">
+            <div style="margin-top:6px;text-align:center;font-size:0.8rem;color:#999;min-height:18px" id="card-players-${feedId}">${board.white || board.black ? '♔ ' + (board.white||'?') + ' vs ♚ ' + (board.black||'?') : ''}</div>
+            <div class="clocks" style="margin-top:4px;justify-content:center">
                 <div class="clock-box clock-white clock-sm" id="card-cw-${feedId}">♔ --:--</div>
                 <div class="clock-box clock-black clock-sm" id="card-cb-${feedId}">♚ --:--</div>
             </div>
@@ -511,6 +538,21 @@ function updateClockUI(feedId) {
     }
 }
 
+function updatePlayerNames(feedId) {
+    const board = boards.get(feedId);
+    if (!board) return;
+    const hasNames = board.white || board.black;
+    const text = hasNames ? '♔ ' + (board.white||'?') + '  vs  ♚ ' + (board.black||'?') : '';
+    // Grid card
+    const el = document.getElementById('card-players-' + feedId);
+    if (el) el.textContent = text;
+    // Single view — update label to include names
+    if (currentView === feedId) {
+        const label = document.getElementById('single-label');
+        if (label) label.textContent = hasNames ? board.label + ' — ' + (board.white||'?') + ' vs ' + (board.black||'?') : board.label;
+    }
+}
+
 function showGrid() {
     currentView = 'grid';
     document.getElementById('grid-view').classList.add('active');
@@ -534,8 +576,11 @@ function showSingle(feedId) {
     const navBtn = document.getElementById('nav-' + feedId);
     if (navBtn) navBtn.classList.add('active');
 
-    // Render
-    document.getElementById('single-label').textContent = board.label;
+    // Render — include player names if available
+    const hasNames = board.white || board.black;
+    document.getElementById('single-label').textContent = hasNames 
+        ? board.label + ' — ' + (board.white||'?') + ' vs ' + (board.black||'?') 
+        : board.label;
     
     const container = document.getElementById('single-board');
     const temp = document.createElement('div');
