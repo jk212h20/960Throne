@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DGT Multi-Board — Direct USB</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0f0f1a;
+            color: #fff;
+            font-family: system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+        }
+
+        /* Nav */
+        .nav-bar {
+            background: #1a1a2e;
+            border-bottom: 1px solid #333;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .nav-title { font-size: 1.3rem; font-weight: bold; color: #FFD700; margin-right: 12px; }
+        .nav-btn {
+            padding: 8px 16px; border-radius: 8px; border: 2px solid #333;
+            background: #0f0f1a; color: #ccc; cursor: pointer; font-size: 0.9rem; transition: all 0.2s;
+        }
+        .nav-btn:hover { border-color: #FFD700; color: #FFD700; }
+        .nav-btn.active { border-color: #22c55e; color: #22c55e; background: rgba(34,197,94,0.1); }
+        .nav-btn.add { border-color: #FFD700; color: #FFD700; font-weight: bold; }
+        .nav-btn.add:hover { background: rgba(255,215,0,0.1); }
+        .nav-info { margin-left: auto; font-size: 0.85rem; color: #6b7280; }
+
+        /* Views */
+        .view { display: none; }
+        .view.active { display: flex; }
+
+        /* Grid */
+        #grid-view { flex-wrap: wrap; gap: 20px; padding: 24px; justify-content: center; }
+        .board-card {
+            background: #1a1a2e; border: 2px solid #333; border-radius: 16px;
+            padding: 16px; cursor: pointer; transition: all 0.3s;
+        }
+        .board-card:hover { border-color: #FFD700; box-shadow: 0 0 20px rgba(255,215,0,0.15); }
+        .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+        .card-label { font-weight: bold; font-size: 1.1rem; }
+        .card-status { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; }
+        .card-status.ok { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .card-status.err { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+        /* Single view */
+        #single-view {
+            flex-direction: column; align-items: center; justify-content: center;
+            min-height: calc(100vh - 56px); gap: 12px;
+        }
+        .single-label { font-size: 1.4rem; font-weight: bold; color: #FFD700; }
+
+        /* Board */
+        .chess-board { display: inline-block; border-radius: 4px; overflow: hidden; }
+        .board-row { display: flex; }
+        .sq { display: flex; align-items: center; justify-content: center; }
+        .sq-light { background: #f0d9b5; }
+        .sq-dark { background: #b58863; }
+        .board-small .sq { width: 40px; height: 40px; }
+        .board-small .piece { font-size: 28px; line-height: 1; }
+        .board-large .sq { width: 80px; height: 80px; }
+        .board-large .piece { font-size: 58px; line-height: 1; }
+
+        /* Clocks */
+        .clocks { display: flex; gap: 20px; }
+        .clock-box { font-family: 'Courier New', monospace; font-weight: bold; padding: 6px 18px; border-radius: 8px; text-align: center; }
+        .clock-white { background: #f0d9b5; color: #1a1a1a; }
+        .clock-black { background: #333; color: #f0d9b5; }
+        .clock-sm { font-size: 1.1rem; min-width: 90px; }
+        .clock-lg { font-size: 2rem; min-width: 150px; padding: 10px 28px; }
+        .clock-active-w { box-shadow: 0 0 10px rgba(240,217,181,0.6); }
+        .clock-active-b { box-shadow: 0 0 10px rgba(181,136,99,0.6); }
+
+        /* Empty */
+        .empty-state { text-align: center; padding: 80px 20px; color: #555; width: 100%; }
+        .empty-state .icon { font-size: 4rem; margin-bottom: 16px; }
+
+        /* Error banner */
+        .error-banner {
+            background: rgba(239,68,68,0.1); border: 1px solid #ef4444;
+            color: #ef4444; padding: 12px 20px; text-align: center; font-size: 0.9rem;
+        }
+        .error-banner.hidden { display: none; }
+
+        @media (max-width: 700px) {
+            .board-small .sq { width: 30px; height: 30px; }
+            .board-small .piece { font-size: 20px; }
+            .board-large .sq { width: 44px; height: 44px; }
+            .board-large .piece { font-size: 32px; }
+            .clock-lg { font-size: 1.4rem; min-width: 100px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Error if not Chrome -->
+<div class="error-banner" id="serial-error">
+    ⚠️ Web Serial API not supported in this browser. Use <strong>Chrome 89+</strong> or <strong>Edge 89+</strong>.
+</div>
+
+<!-- Nav -->
+<div class="nav-bar">
+    <span class="nav-title">♟️ Boards (USB Direct)</span>
+    <button class="nav-btn active" id="btn-all" onclick="showGrid()">All Boards</button>
+    <div id="board-buttons"></div>
+    <button class="nav-btn add" id="btn-add" onclick="addBoard()">+ Add Board</button>
+    <span class="nav-info" id="nav-info">Click "Add Board" to connect a DGT board via USB</span>
+</div>
+
+<!-- Grid -->
+<div class="view active" id="grid-view">
+    <div class="empty-state" id="no-boards">
+        <div class="icon">🔌</div>
+        <div style="font-size:1.2rem">No boards connected</div>
+        <div style="margin-top:8px;font-size:0.85rem">
+            Click <strong>"+ Add Board"</strong> above to pair a DGT board via USB.<br>
+            Each USB connection = one board. Add each one separately.
+        </div>
+    </div>
+</div>
+
+<!-- Single -->
+<div class="view" id="single-view">
+    <div class="single-label" id="single-label">Board</div>
+    <div class="chess-board board-large" id="single-board"></div>
+    <div class="clocks">
+        <div class="clock-box clock-white clock-lg" id="single-cw">♔ --:--</div>
+        <div class="clock-box clock-black clock-lg" id="single-cb">♚ --:--</div>
+    </div>
+</div>
+
+<script>
+// ─── Check Web Serial support ────────────────────────────────
+if (!('serial' in navigator)) {
+    document.getElementById('serial-error').classList.remove('hidden');
+    document.getElementById('btn-add').disabled = true;
+} else {
+    document.getElementById('serial-error').classList.add('hidden');
+}
+
+// ─── Chess Pieces ────────────────────────────────────────────
+const UNICODE = {
+    'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙',
+    'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟',
+};
+
+// DGT piece codes → FEN char
+const DGT_PIECE = {
+    0x00: null,
+    0x01: 'P', 0x02: 'R', 0x03: 'N', 0x04: 'B', 0x05: 'K', 0x06: 'Q',
+    0x07: 'p', 0x08: 'r', 0x09: 'n', 0x0A: 'b', 0x0B: 'k', 0x0C: 'q',
+};
+
+// DGT commands
+const CMD_SEND_CLK = 0x41;
+const CMD_SEND_BRD = 0x42;
+const CMD_UPDATE_NICE = 0x4b;
+
+// DGT message IDs
+const MSG_BOARD_DUMP   = 0x86;
+const MSG_BWTIME       = 0x8d;
+const MSG_FIELD_UPDATE = 0x8e;
+
+// ─── Board State ─────────────────────────────────────────────
+const boards = []; // { port, reader, writer, squares[64], fen, clock, label, buffer }
+let currentView = 'grid'; // 'grid' | index
+let boardCount = 0;
+
+// ─── Add Board ───────────────────────────────────────────────
+
+async function addBoard() {
+    try {
+        const port = await navigator.serial.requestPort({
+            filters: [
+                { usbVendorId: 0x0403 }, // FTDI (DGT boards use FTDI chips)
+            ]
+        });
+
+        await port.open({ baudRate: 9600, dataBits: 8, parity: 'none', stopBits: 1 });
+
+        boardCount++;
+        const idx = boards.length;
+        const board = {
+            port,
+            squares: new Array(64).fill(null),
+            fen: null,
+            clock: null,
+            label: 'Board ' + boardCount,
+            buffer: new Uint8Array(0),
+        };
+        boards.push(board);
+
+        // Get writer
+        const writer = port.writable.getWriter();
+        board.writer = writer;
+
+        // Send initial commands
+        await writer.write(new Uint8Array([CMD_SEND_BRD]));
+        setTimeout(async () => {
+            try { await writer.write(new Uint8Array([CMD_UPDATE_NICE])); } catch(e) {}
+        }, 500);
+        setTimeout(async () => {
+            try { await writer.write(new Uint8Array([CMD_SEND_CLK])); } catch(e) {}
+        }, 1000);
+
+        // Periodic clock poll
+        board.clockInterval = setInterval(async () => {
+            try { await writer.write(new Uint8Array([CMD_SEND_CLK])); } catch(e) {}
+        }, 1000);
+
+        // Periodic full board dump
+        board.boardInterval = setInterval(async () => {
+            try { await writer.write(new Uint8Array([CMD_SEND_BRD])); } catch(e) {}
+        }, 5000);
+
+        // Start reading
+        readLoop(idx);
+
+        rebuildNav();
+        rebuildGrid();
+        document.getElementById('nav-info').textContent = boards.length + ' board(s) connected';
+
+    } catch (e) {
+        if (e.name !== 'NotFoundError') { // User cancelled picker
+            console.error('Serial error:', e);
+            alert('Could not connect: ' + e.message);
+        }
+    }
+}
+
+async function readLoop(idx) {
+    const board = boards[idx];
+    const reader = board.port.readable.getReader();
+    try {
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            // Append to buffer
+            const newBuf = new Uint8Array(board.buffer.length + value.length);
+            newBuf.set(board.buffer);
+            newBuf.set(value, board.buffer.length);
+            board.buffer = newBuf;
+            parseBuffer(idx);
+        }
+    } catch (e) {
+        console.error('Read error on board ' + (idx+1) + ':', e.message);
+    } finally {
+        reader.releaseLock();
+    }
+}
+
+// ─── DGT Protocol Parser ────────────────────────────────────
+
+function parseBuffer(idx) {
+    const board = boards[idx];
+    let buf = board.buffer;
+
+    while (buf.length > 0) {
+        const msgType = buf[0];
+        if ((msgType & 0x80) === 0) { buf = buf.slice(1); continue; }
+        if (buf.length < 3) break;
+
+        const msgLen = ((buf[1] & 0x7f) << 7) | (buf[2] & 0x7f);
+        if (buf.length < msgLen) break;
+
+        const msg = buf.slice(0, msgLen);
+        buf = buf.slice(msgLen);
+
+        if (msgType === MSG_BOARD_DUMP && msg.length >= 67) {
+            for (let i = 0; i < 64; i++) {
+                board.squares[i] = DGT_PIECE[msg[3 + i]] || null;
+            }
+            board.fen = squaresToFen(board.squares);
+            updateUI(idx);
+        }
+        else if (msgType === MSG_FIELD_UPDATE && msg.length >= 5) {
+            const field = msg[3];
+            board.squares[field] = DGT_PIECE[msg[4]] || null;
+            board.fen = squaresToFen(board.squares);
+            updateUI(idx);
+        }
+        else if (msgType === MSG_BWTIME && msg.length >= 10) {
+            // Check for clock ack (not real data)
+            if ((msg[3] & 0x0f) === 0x0a || (msg[6] & 0x0f) === 0x0a) continue;
+            const status = msg[9];
+            if (status & 0x20) continue; // No clock connected
+
+            const rH = msg[3] & 0x0f;
+            const rM = bcd(msg[4]);
+            const rS = bcd(msg[5]);
+            const lH = msg[6] & 0x0f;
+            const lM = bcd(msg[7]);
+            const lS = bcd(msg[8]);
+
+            const running = !!(status & 0x01);
+            const rightTurn = !!(status & 0x08);
+            const leftTurn = !!(status & 0x10);
+
+            board.clock = {
+                white: rH * 3600 + rM * 60 + rS,
+                black: lH * 3600 + lM * 60 + lS,
+                running,
+                activeSide: rightTurn ? 'white' : (leftTurn ? 'black' : null),
+            };
+            updateUI(idx);
+        }
+    }
+    board.buffer = buf;
+}
+
+function bcd(b) { return ((b >> 4) & 0x0f) * 10 + (b & 0x0f); }
+
+function squaresToFen(squares) {
+    let fen = '';
+    for (let r = 0; r < 8; r++) {
+        let empty = 0;
+        for (let f = 0; f < 8; f++) {
+            const p = squares[r * 8 + f];
+            if (!p) { empty++; }
+            else { if (empty) { fen += empty; empty = 0; } fen += p; }
+        }
+        if (empty) fen += empty;
+        if (r < 7) fen += '/';
+    }
+    return fen;
+}
+
+// ─── Rendering ───────────────────────────────────────────────
+
+function renderBoard(fen, sizeClass) {
+    if (!fen) {
+        let h = '<div class="chess-board '+sizeClass+'">';
+        for (let r=0;r<8;r++){h+='<div class="board-row">';for(let c=0;c<8;c++){h+='<div class="sq '+((r+c)%2===0?'sq-light':'sq-dark')+'"></div>';}h+='</div>';}
+        return h+'</div>';
+    }
+    const rows = fen.split('/');
+    let h = '<div class="chess-board '+sizeClass+'">';
+    for (let r=0;r<rows.length;r++){
+        h+='<div class="board-row">';
+        let col=0;
+        for (const ch of rows[r]){
+            if(ch>='1'&&ch<='8'){for(let i=0;i<parseInt(ch);i++){h+='<div class="sq '+((r+col)%2===0?'sq-light':'sq-dark')+'"></div>';col++;}}
+            else{const u=UNICODE[ch]||'';h+='<div class="sq '+((r+col)%2===0?'sq-light':'sq-dark')+'">'+(u?'<span class="piece">'+u+'</span>':'')+'</div>';col++;}
+        }
+        h+='</div>';
+    }
+    return h+'</div>';
+}
+
+function fmtClock(s){if(s==null)return'--:--';return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+
+// ─── UI ──────────────────────────────────────────────────────
+
+function rebuildNav(){
+    const c=document.getElementById('board-buttons');c.innerHTML='';
+    boards.forEach((b,i)=>{
+        const btn=document.createElement('button');
+        btn.className='nav-btn'+(currentView===i?' active':'');
+        btn.textContent=b.label;
+        btn.onclick=()=>showSingle(i);
+        btn.id='nav-'+i;
+        c.appendChild(btn);
+    });
+}
+
+function rebuildGrid(){
+    const grid=document.getElementById('grid-view');
+    grid.querySelectorAll('.board-card').forEach(c=>c.remove());
+    document.getElementById('no-boards').style.display=boards.length===0?'':'none';
+    boards.forEach((b,i)=>{
+        const card=document.createElement('div');
+        card.className='board-card';card.id='card-'+i;card.onclick=()=>showSingle(i);
+        card.innerHTML=`
+            <div class="card-header">
+                <span class="card-label">${b.label}</span>
+                <span class="card-status ok">Connected</span>
+            </div>
+            <div id="card-board-${i}">${renderBoard(b.fen,'board-small')}</div>
+            <div class="clocks" style="margin-top:8px;justify-content:center">
+                <div class="clock-box clock-white clock-sm" id="card-cw-${i}">♔ ${fmtClock(b.clock?.white)}</div>
+                <div class="clock-box clock-black clock-sm" id="card-cb-${i}">♚ ${fmtClock(b.clock?.black)}</div>
+            </div>`;
+        grid.appendChild(card);
+    });
+}
+
+function updateUI(idx){
+    const b=boards[idx];
+    // Grid card
+    const cb=document.getElementById('card-board-'+idx);
+    if(cb)cb.innerHTML=renderBoard(b.fen,'board-small');
+    const cw=document.getElementById('card-cw-'+idx);
+    const ck=document.getElementById('card-cb-'+idx);
+    if(cw&&b.clock)cw.textContent='♔ '+fmtClock(b.clock.white);
+    if(ck&&b.clock)ck.textContent='♚ '+fmtClock(b.clock.black);
+
+    // Single view
+    if(currentView===idx){
+        const el=document.getElementById('single-board');
+        const tmp=document.createElement('div');
+        tmp.innerHTML=renderBoard(b.fen,'board-large');
+        const nb=tmp.firstChild;nb.id='single-board';
+        el.parentNode.replaceChild(nb,el);
+
+        if(b.clock){
+            const sw=document.getElementById('single-cw');
+            const sb=document.getElementById('single-cb');
+            sw.textContent='♔ '+fmtClock(b.clock.white);
+            sb.textContent='♚ '+fmtClock(b.clock.black);
+            sw.className='clock-box clock-white clock-lg'+(b.clock.activeSide==='white'?' clock-active-w':'');
+            sb.className='clock-box clock-black clock-lg'+(b.clock.activeSide==='black'?' clock-active-b':'');
+        }
+    }
+}
+
+function showGrid(){
+    currentView='grid';
+    document.getElementById('grid-view').classList.add('active');
+    document.getElementById('single-view').classList.remove('active');
+    document.getElementById('btn-all').classList.add('active');
+    document.querySelectorAll('#board-buttons .nav-btn').forEach(b=>b.classList.remove('active'));
+    rebuildGrid();
+}
+
+function showSingle(idx){
+    const b=boards[idx];if(!b)return;
+    currentView=idx;
+    document.getElementById('grid-view').classList.remove('active');
+    document.getElementById('single-view').classList.add('active');
+    document.getElementById('btn-all').classList.remove('active');
+    document.querySelectorAll('#board-buttons .nav-btn').forEach(b=>b.classList.remove('active'));
+    const nb=document.getElementById('nav-'+idx);if(nb)nb.classList.add('active');
+    document.getElementById('single-label').textContent=b.label;
+    const el=document.getElementById('single-board');
+    const tmp=document.createElement('div');
+    tmp.innerHTML=renderBoard(b.fen,'board-large');
+    const newB=tmp.firstChild;newB.id='single-board';
+    el.parentNode.replaceChild(newB,el);
+    if(b.clock){
+        document.getElementById('single-cw').textContent='♔ '+fmtClock(b.clock.white);
+        document.getElementById('single-cb').textContent='♚ '+fmtClock(b.clock.black);
+    }
+}
+</script>
+</body>
+</html>
