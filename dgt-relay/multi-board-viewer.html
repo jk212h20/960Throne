@@ -230,8 +230,12 @@ function connect() {
 
     ws.onmessage = (evt) => {
         try {
-            handleMessage(JSON.parse(evt.data));
-        } catch (e) {}
+            const msg = JSON.parse(evt.data);
+            console.log('📨 LiveChess:', JSON.stringify(msg).substring(0, 500));
+            handleMessage(msg);
+        } catch (e) {
+            console.error('Parse error:', e);
+        }
     };
 
     ws.onclose = () => {
