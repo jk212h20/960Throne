@@ -1502,6 +1502,20 @@ router.post('/board-names-clear', requireAdmin, (req, res) => {
     res.json({ success: true });
 });
 
+// Board order — custom serial → position mapping
+router.get('/board-order', (req, res) => {
+    res.json({ order: db.getBoardOrder() });
+});
+
+router.post('/board-order', requireBoardAccess, (req, res) => {
+    const { serials } = req.body;
+    if (!serials || !Array.isArray(serials)) {
+        return res.status(400).json({ error: 'serials array required' });
+    }
+    db.saveBoardOrder(serials);
+    res.json({ success: true });
+});
+
 // Autocomplete player names from history
 router.get('/board-names/autocomplete/:query', (req, res) => {
     const names = db.searchNameHistory(req.params.query);

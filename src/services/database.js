@@ -235,6 +235,14 @@ function createTables() {
         )
     `);
 
+    // Board ordering — maps serial numbers to display positions
+    db.run(`
+        CREATE TABLE IF NOT EXISTS board_order (
+            serial_nr TEXT PRIMARY KEY,
+            sort_position INTEGER NOT NULL
+        )
+    `);
+
     // Player name history for autocomplete
     db.run(`
         CREATE TABLE IF NOT EXISTS board_name_history (
@@ -1118,6 +1126,39 @@ function searchNameHistory(query) {
 }
 
 // ============================================================
+// Board Order operations (custom serial → position mapping)
+// ============================================================
+
+/**
+ * Get custom board order. Returns { serialNr: sortPosition } map.
+ * Empty = no custom order (use default alphabetical serial sort).
+ */
+function getBoardOrder() {
+    const result = db.exec(`SELECT serial_nr, sort_position FROM board_order ORDER BY sort_position`);
+    if (result.length === 0) return {};
+    const order = {};
+    result[0].values.forEach(row => { order[row[0]] = row[1]; });
+    return order;
+}
+
+/**
+ * Save custom board order. Takes array of serial numbers in desired order.
+ * Clears existing order and inserts new positions.
+ */
+function saveBoardOrder(orderedSerials) {
+    db.run(`DELETE FROM board_order`);
+    orderedSerials.forEach((serial, i) => {
+        db.run(`INSERT INTO board_order (serial_nr, sort_position) VALUES (?, ?)`, [serial, i + 1]);
+    });
+    save();
+}
+
+function clearBoardOrder() {
+    db.run(`DELETE FROM board_order`);
+    save();
+}
+
+// ============================================================
 // Utility helpers
 // ============================================================
 
@@ -1238,4 +1279,9 @@ module.exports = {
     getAllBoardNames,
     clearAllBoardNames,
     searchNameHistory,
+
+    // Board Order
+    getBoardOrder,
+    saveBoardOrder,
+    clearBoardOrder,
 };

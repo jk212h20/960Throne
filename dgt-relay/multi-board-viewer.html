@@ -227,6 +227,7 @@ const boards = new Map(); // feedId → { boardId, fen, clock, label }
 let currentView = 'grid'; // 'grid' | feedId
 let boardCounter = 0;
 let pollTimer = null;
+let customOrder = {}; // serialNr → sortPosition from server
 
 // ─── LiveChess Connection ────────────────────────────────────
 // Strategy: connect via WebSocket, then POLL eboards every 500ms.
@@ -388,18 +389,55 @@ function handleMessage(msg) {
     }
 }
 
-// Sort boards by serial number so the order is deterministic
+// Sort boards: use custom order if set, else alphabetical serial
 function reassignBoardNumbers() {
-    const sorted = [...boards.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+    const sorted = [...boards.entries()].sort((a, b) => {
+        const oa = customOrder[a[0]], ob = customOrder[b[0]];
+        if (oa != null && ob != null) return oa - ob;
+        if (oa != null) return -1;
+        if (ob != null) return 1;
+        return String(a[0]).localeCompare(String(b[0]));
+    });
     sorted.forEach(([feedId, board], i) => {
         board.num = i + 1;
         board.label = 'Board ' + (i + 1);
     });
 }
 
-// Helper: get boards sorted by serial number
 function sortedBoards() {
     return [...boards.entries()].sort((a, b) => a[1].num - b[1].num);
+}
+
+// ─── Reorder Boards ──────────────────────────────────────────
+function moveBoard(feedId, dir) {
+    const arr = sortedBoards();
+    const idx = arr.findIndex(([id]) => id === feedId);
+    if (idx < 0) return;
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= arr.length) return;
+    // Swap in custom order
+    const serials = arr.map(([id]) => id);
+    [serials[idx], serials[swapIdx]] = [serials[swapIdx], serials[idx]];
+    // Save to server
+    fetch('/api/board-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serials }),
+    }).catch(e => console.warn('Failed to save order:', e));
+    // Apply locally
+    serials.forEach((s, i) => { customOrder[s] = i + 1; });
+    reassignBoardNumbers();
+    // Re-save names with new board numbers
+    for (const [fid, board] of boards) saveBoardNamesToServer(board.num, board);
+    rebuildNav();
+    rebuildGrid();
+}
+
+function loadBoardOrder() {
+    fetch('/api/board-order').then(r => r.json()).then(data => {
+        if (data.order) customOrder = data.order;
+        if (boards.size > 0) { reassignBoardNumbers(); rebuildNav(); rebuildGrid(); }
+    }).catch(() => {});
 }
 
 // ─── FEN Conversion ──────────────────────────────────────────
@@ -504,9 +542,16 @@ function rebuildGrid() {
         card.id = 'card-' + feedId;
         card.onclick = () => showSingle(feedId);
 
+        const sorted = sortedBoards();
+        const isFirst = sorted[0]?.[0] === feedId;
+        const isLast = sorted[sorted.length-1]?.[0] === feedId;
         card.innerHTML = `
             <div class="card-header">
-                <span class="card-label">${board.label}</span>
+                <span style="display:flex;align-items:center;gap:6px">
+                    <button onclick="event.stopPropagation();moveBoard('${feedId}',-1)" style="background:none;border:1px solid #444;color:${isFirst?'#333':'#aaa'};cursor:pointer;border-radius:4px;padding:2px 6px;font-size:0.8rem" ${isFirst?'disabled':''}>▲</button>
+                    <button onclick="event.stopPropagation();moveBoard('${feedId}',1)" style="background:none;border:1px solid #444;color:${isLast?'#333':'#aaa'};cursor:pointer;border-radius:4px;padding:2px 6px;font-size:0.8rem" ${isLast?'disabled':''}>▼</button>
+                    <span class="card-label">${board.label}</span>
+                </span>
                 <span class="card-serial">${board.boardId}</span>
             </div>
             <div id="card-board-${feedId}">${renderBoardHTML(board.fen, 'board-small')}</div>
@@ -704,6 +749,7 @@ rebuildGrid = function() {
 };
 
 // ─── Start ───────────────────────────────────────────────────
+loadBoardOrder();
 connect();
 </script>
 </body>

@@ -105,6 +105,7 @@ let nextMsgId = 10;
 let pollTimer = null;
 let allBoards = []; // sorted serial numbers
 let myFen = null;
+let customOrder = {}; // serialNr → sortPosition from server
 
 // ─── LiveChess Connection ────────────────────────────────────
 function connect() {
@@ -128,8 +129,14 @@ function handleMessage(msg) {
     let feeds = Array.isArray(msg.param) ? msg.param : (msg.param.feeds || []);
     if (feeds.length === 0) return;
 
-    // Sort by serial number to assign board numbers
-    const serials = feeds.map(f => f.serialnr || f.id || String(f)).sort();
+    // Sort by custom order if set, else alphabetical serial
+    const serials = feeds.map(f => f.serialnr || f.id || String(f)).sort((a, b) => {
+        const oa = customOrder[a], ob = customOrder[b];
+        if (oa != null && ob != null) return oa - ob;
+        if (oa != null) return -1;
+        if (ob != null) return 1;
+        return a.localeCompare(b);
+    });
     
     // Find the feed for our board number (1-indexed)
     if (BOARD_NUM > serials.length) return; // Not enough boards
@@ -224,7 +231,16 @@ function pollNames() {
 // Poll names every 5 seconds
 setInterval(pollNames, 5000);
 
+// ─── Load board order from server ────────────────────────────
+function loadBoardOrder() {
+    fetch(SERVER + '/api/board-order')
+        .then(r => r.json())
+        .then(data => { if (data.order) customOrder = data.order; })
+        .catch(() => {});
+}
+
 // ─── Start ───────────────────────────────────────────────────
+loadBoardOrder();
 connect();
 </script>
 </body>
