@@ -237,33 +237,43 @@ ${req.query.pw ? '<script>document.getElementById("err").style.display="block"</
     res.sendFile(require('path').join(__dirname, '../../dgt-relay/multi-board-viewer.html'));
 });
 
-// Individual board pages /board1 through /board9 — public, for OBS/stream capture
-// Each shows a single full-screen board with player names + clock, reads from server via Socket.io
-for (let i = 1; i <= 9; i++) {
-    router.get('/board' + i, (req, res) => {
-        const names = db.getBoardNames(i);
-        // Resolve which board serial maps to this board number
-        const boardOrder = db.getBoardOrder();
-        const allBoards = dgtBoard.getAllMultiBoardStates();
-        const boardIds = Object.keys(allBoards).sort((a, b) => {
-            const oa = boardOrder[a], ob = boardOrder[b];
-            if (oa != null && ob != null) return oa - ob;
-            if (oa != null) return -1;
-            if (ob != null) return 1;
-            return a.localeCompare(b);
-        });
-        const resolvedBoardId = boardIds[i - 1] || null;
-        const initialState = resolvedBoardId ? allBoards[resolvedBoardId] : null;
-        res.render('board-single', {
-            boardNum: i,
-            boardId: resolvedBoardId,
-            initialFen: initialState?.fen || null,
-            initialClock: initialState?.clock || null,
-            whiteName: names?.white_name || '',
-            blackName: names?.black_name || '',
-        });
+// Helper: resolve board number to serial ID and redirect to /boards/<id>
+function resolveBoardAndRedirect(boardNum, res) {
+    const boardOrder = db.getBoardOrder();
+    const allBoards = dgtBoard.getAllMultiBoardStates();
+    const boardIds = Object.keys(allBoards).sort((a, b) => {
+        const oa = boardOrder[a], ob = boardOrder[b];
+        if (oa != null && ob != null) return oa - ob;
+        if (oa != null) return -1;
+        if (ob != null) return 1;
+        return a.localeCompare(b);
     });
+    const resolvedBoardId = boardIds[boardNum - 1] || null;
+    if (resolvedBoardId) {
+        return res.redirect('/boards/' + encodeURIComponent(resolvedBoardId));
+    }
+    // No board found yet — show a waiting page that auto-refreshes
+    res.send(`<!DOCTYPE html><html><head><title>Board ${boardNum}</title>
+<meta http-equiv="refresh" content="3">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0f0f1a;color:#fff;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh}
+.msg{text-align:center}.icon{font-size:3rem;margin-bottom:12px}.sub{color:#555;font-size:0.9rem;margin-top:8px}</style>
+</head><body><div class="msg"><div class="icon">📡</div><div style="font-size:1.2rem;color:#888">Waiting for Board ${boardNum}...</div>
+<div class="sub">No boards connected yet. This page will auto-refresh.</div></div></body></html>`);
 }
+
+// Individual board pages — /board1 through /board9 (public, for OBS/stream capture)
+for (let i = 1; i <= 9; i++) {
+    router.get('/board' + i, (req, res) => resolveBoardAndRedirect(i, res));
+}
+
+// Also handle /board/:num pattern (e.g. /board/1)
+router.get('/board/:num', (req, res) => {
+    const num = parseInt(req.params.num);
+    if (!num || num < 1 || num > 9) {
+        return res.status(404).send('Board number must be 1-9');
+    }
+    resolveBoardAndRedirect(num, res);
+});
 
 // Multi-board direct USB viewer — served from Railway, uses Web Serial API on the laptop
 router.get('/multi-board-direct', (req, res) => {
