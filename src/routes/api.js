@@ -1468,6 +1468,41 @@ router.post('/dgt/board-state', (req, res) => {
 });
 
 // ============================================================
+// Board Names — for multi-board stream viewer
+// ============================================================
+
+// Get all board names (public — stream pages need this)
+router.get('/board-names', (req, res) => {
+    res.json({ boards: db.getAllBoardNames() });
+});
+
+// Get single board name (public)
+router.get('/board-names/:boardNum', (req, res) => {
+    const names = db.getBoardNames(parseInt(req.params.boardNum));
+    res.json(names || { board_num: parseInt(req.params.boardNum), white_name: '', black_name: '' });
+});
+
+// Set board names (admin only)
+router.post('/board-names/:boardNum', requireAdmin, (req, res) => {
+    const boardNum = parseInt(req.params.boardNum);
+    const { white_name, black_name, serial_nr } = req.body;
+    db.setBoardNames(boardNum, white_name || '', black_name || '', serial_nr || '');
+    res.json({ success: true });
+});
+
+// Clear all board names (admin only)
+router.post('/board-names-clear', requireAdmin, (req, res) => {
+    db.clearAllBoardNames();
+    res.json({ success: true });
+});
+
+// Autocomplete player names from history
+router.get('/board-names/autocomplete/:query', (req, res) => {
+    const names = db.searchNameHistory(req.params.query);
+    res.json({ names });
+});
+
+// ============================================================
 // Multi-board DGT endpoints — for stream display of multiple boards
 // ============================================================
 

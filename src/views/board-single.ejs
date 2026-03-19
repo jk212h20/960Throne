@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Board <%= boardNum %></title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0f0f1a;
+            color: #fff;
+            font-family: system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 12px;
+        }
+        .board-label {
+            font-size: 1.6rem;
+            font-weight: bold;
+            color: #FFD700;
+        }
+        .player-names {
+            font-size: 1.2rem;
+            color: #ccc;
+            margin-top: 4px;
+        }
+        .player-names .white { color: #f0d9b5; }
+        .player-names .black { color: #b58863; }
+        .chess-board { display: inline-block; border-radius: 4px; overflow: hidden; }
+        .board-row { display: flex; }
+        .sq {
+            width: 80px; height: 80px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .sq-light { background: #f0d9b5; }
+        .sq-dark { background: #b58863; }
+        .piece-img { width: 85%; height: 85%; object-fit: contain; }
+        .clocks {
+            display: flex; gap: 24px; margin-top: 12px;
+        }
+        .clock-box {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 2rem;
+            padding: 10px 28px;
+            border-radius: 8px;
+            min-width: 150px;
+            text-align: center;
+        }
+        .clock-white { background: #f0d9b5; color: #1a1a1a; }
+        .clock-black { background: #333; color: #f0d9b5; }
+        .status-msg {
+            text-align: center; padding: 60px; color: #555; font-size: 1.2rem;
+        }
+        .status-msg .icon { font-size: 3rem; margin-bottom: 12px; }
+        @media (max-width: 700px) {
+            .sq { width: 44px; height: 44px; }
+            .clock-box { font-size: 1.4rem; min-width: 100px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="board-label" id="board-label">Board <%= boardNum %></div>
+    <div class="player-names" id="player-names">
+        <% if (whiteName || blackName) { %>
+            <span class="white">♔ <%= whiteName || '?' %></span>
+            <span style="color:#666"> vs </span>
+            <span class="black">♚ <%= blackName || '?' %></span>
+        <% } %>
+    </div>
+</div>
+
+<div id="board-container">
+    <div class="status-msg">
+        <div class="icon">📡</div>
+        <div>Connecting to LiveChess...</div>
+        <div style="margin-top:6px;font-size:0.8rem">Board <%= boardNum %> — waiting for data</div>
+    </div>
+</div>
+
+<div class="clocks" id="clocks" style="display:none">
+    <div class="clock-box clock-white" id="clock-w">♔ --:--</div>
+    <div class="clock-box clock-black" id="clock-b">♚ --:--</div>
+</div>
+
+<script>
+const BOARD_NUM = <%= boardNum %>;
+const SERVER = window.location.origin;
+const FEN_PIECES = {
+    'K':'wK','Q':'wQ','R':'wR','B':'wB','N':'wN','P':'wP',
+    'k':'bK','q':'bQ','r':'bR','b':'bB','n':'bN','p':'bP',
+};
+
+let ws = null;
+let reconnectTimer = null;
+let nextMsgId = 10;
+let pollTimer = null;
+let allBoards = []; // sorted serial numbers
+let myFen = null;
+
+// ─── LiveChess Connection ────────────────────────────────────
+function connect() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    try { ws = new WebSocket('ws://localhost:1982/api/v1.0'); } catch(e) { scheduleReconnect(); return; }
+    ws.onopen = () => {
+        pollEboards();
+        pollTimer = setInterval(pollEboards, 500);
+    };
+    ws.onmessage = (evt) => { try { handleMessage(JSON.parse(evt.data)); } catch(e){} };
+    ws.onclose = () => { if(pollTimer){clearInterval(pollTimer);pollTimer=null;} scheduleReconnect(); };
+    ws.onerror = () => { scheduleReconnect(); };
+}
+
+function send(msg) { if(ws&&ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
+function pollEboards() { send({call:'eboards',id:nextMsgId++,param:{}}); }
+function scheduleReconnect() { if(reconnectTimer)return; reconnectTimer=setTimeout(()=>{reconnectTimer=null;connect();},3000); }
+
+function handleMessage(msg) {
+    if (!msg.param) return;
+    let feeds = Array.isArray(msg.param) ? msg.param : (msg.param.feeds || []);
+    if (feeds.length === 0) return;
+
+    // Sort by serial number to assign board numbers
+    const serials = feeds.map(f => f.serialnr || f.id || String(f)).sort();
+    
+    // Find the feed for our board number (1-indexed)
+    if (BOARD_NUM > serials.length) return; // Not enough boards
+    const mySerial = serials[BOARD_NUM - 1];
+    const feed = feeds.find(f => (f.serialnr || f.id || String(f)) === mySerial);
+    if (!feed) return;
+
+    // Extract FEN
+    const fen = feed.fen || (feed.board && typeof feed.board === 'string' && feed.board.includes('/') ? feed.board : null) || boardToFen(feed.board);
+    if (fen && fen !== myFen) {
+        myFen = fen;
+        renderBoard(fen);
+    }
+
+    // Extract clock
+    if (feed.clock && typeof feed.clock === 'object') {
+        document.getElementById('clocks').style.display = '';
+        const w = feed.clock.white != null ? Number(feed.clock.white) : null;
+        const b = feed.clock.black != null ? Number(feed.clock.black) : null;
+        document.getElementById('clock-w').textContent = '♔ ' + formatClock(w);
+        document.getElementById('clock-b').textContent = '♚ ' + formatClock(b);
+    }
+}
+
+function boardToFen(board) {
+    if (!board) return null;
+    const sq = typeof board === 'string' ? board.split('') : board;
+    if (sq.length !== 64) return null;
+    let fen = '';
+    for (let r = 0; r < 8; r++) {
+        let empty = 0;
+        for (let f = 0; f < 8; f++) {
+            const p = sq[r*8+f];
+            if (!p||p==='.'||p===' ') { empty++; }
+            else { if(empty){fen+=empty;empty=0;} fen+=p; }
+        }
+        if (empty) fen += empty;
+        if (r < 7) fen += '/';
+    }
+    return fen;
+}
+
+function formatClock(sec) {
+    if (sec == null) return '--:--';
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m + ':' + String(s).padStart(2, '0');
+}
+
+function renderBoard(fen) {
+    const placement = fen.split(' ')[0];
+    const rows = placement.split('/');
+    let html = '<div class="chess-board">';
+    for (let r = 0; r < rows.length; r++) {
+        html += '<div class="board-row">';
+        let col = 0;
+        for (const ch of rows[r]) {
+            if (ch >= '1' && ch <= '8') {
+                for (let i = 0; i < parseInt(ch); i++) {
+                    html += '<div class="sq '+((r+col)%2===0?'sq-light':'sq-dark')+'"></div>';
+                    col++;
+                }
+            } else {
+                const piece = FEN_PIECES[ch];
+                html += '<div class="sq '+((r+col)%2===0?'sq-light':'sq-dark')+'">';
+                if (piece) html += '<img src="'+SERVER+'/pieces/'+piece+'.svg" class="piece-img">';
+                html += '</div>';
+                col++;
+            }
+        }
+        html += '</div>';
+    }
+    html += '</div>';
+    document.getElementById('board-container').innerHTML = html;
+}
+
+// ─── Poll player names from server ──────────────────────────
+function pollNames() {
+    fetch(SERVER + '/api/board-names/' + BOARD_NUM)
+        .then(r => r.json())
+        .then(data => {
+            const w = data.white_name || '';
+            const b = data.black_name || '';
+            const el = document.getElementById('player-names');
+            if (w || b) {
+                el.innerHTML = '<span class="white">♔ '+(w||'?')+'</span> <span style="color:#666">vs</span> <span class="black">♚ '+(b||'?')+'</span>';
+            } else {
+                el.innerHTML = '';
+            }
+        }).catch(() => {});
+}
+// Poll names every 5 seconds
+setInterval(pollNames, 5000);
+
+// ─── Start ───────────────────────────────────────────────────
+connect();
+</script>
+</body>
+</html>

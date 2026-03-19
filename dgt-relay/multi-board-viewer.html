@@ -621,17 +621,14 @@ function showSingle(feedId) {
 }
 
 // ─── Player Name Management ──────────────────────────────────
-// Names typed by the stream operator, saved to localStorage
+// Names saved to server DB (admin-authenticated via cookie)
 
 function setPlayerName(feedId, color, name) {
     const board = boards.get(feedId);
     if (!board) return;
     board[color] = name.trim();
-    // Save to localStorage keyed by serial number
-    const stored = JSON.parse(localStorage.getItem('boardNames') || '{}');
-    if (!stored[feedId]) stored[feedId] = {};
-    stored[feedId][color] = name.trim();
-    localStorage.setItem('boardNames', JSON.stringify(stored));
+    // Save to server API
+    saveBoardNamesToServer(board.num, board);
     // Update single view if showing this board
     if (currentView === feedId) {
         const hasNames = board.white || board.black;
@@ -641,15 +638,70 @@ function setPlayerName(feedId, color, name) {
     }
 }
 
-// Load saved names when a board is first registered
-function loadSavedNames(feedId) {
-    const stored = JSON.parse(localStorage.getItem('boardNames') || '{}');
-    const board = boards.get(feedId);
-    if (stored[feedId] && board) {
-        board.white = stored[feedId].white || '';
-        board.black = stored[feedId].black || '';
-    }
+function saveBoardNamesToServer(boardNum, board) {
+    fetch('/api/board-names/' + boardNum, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            white_name: board.white || '',
+            black_name: board.black || '',
+            serial_nr: board.boardId || '',
+        }),
+    }).catch(err => console.warn('Failed to save board names:', err));
 }
+
+// Load saved names from server when boards are first detected
+function loadSavedNames(feedId) {
+    const board = boards.get(feedId);
+    if (!board) return;
+    fetch('/api/board-names/' + board.num)
+        .then(r => r.json())
+        .then(data => {
+            if (data.white_name) board.white = data.white_name;
+            if (data.black_name) board.black = data.black_name;
+            // Update inputs if grid is showing
+            const wInp = document.getElementById('inp-w-' + feedId);
+            const bInp = document.getElementById('inp-b-' + feedId);
+            if (wInp) wInp.value = board.white || '';
+            if (bInp) bInp.value = board.black || '';
+        }).catch(() => {});
+}
+
+// ─── Autocomplete ────────────────────────────────────────────
+// Add autocomplete to player name inputs using datalist
+let autocompleteCache = [];
+function setupAutocomplete(input) {
+    if (!input.getAttribute('list')) {
+        input.setAttribute('list', 'name-suggestions');
+    }
+    input.addEventListener('input', function() {
+        const q = this.value.trim();
+        if (q.length < 2) return;
+        fetch('/api/board-names/autocomplete/' + encodeURIComponent(q))
+            .then(r => r.json())
+            .then(data => {
+                const dl = document.getElementById('name-suggestions') || createDatalist();
+                dl.innerHTML = '';
+                (data.names || []).forEach(n => {
+                    const opt = document.createElement('option');
+                    opt.value = n;
+                    dl.appendChild(opt);
+                });
+            }).catch(() => {});
+    });
+}
+function createDatalist() {
+    const dl = document.createElement('datalist');
+    dl.id = 'name-suggestions';
+    document.body.appendChild(dl);
+    return dl;
+}
+// Attach autocomplete to all player inputs after grid rebuild
+const _origRebuildGrid = rebuildGrid;
+rebuildGrid = function() {
+    _origRebuildGrid();
+    document.querySelectorAll('.player-input').forEach(setupAutocomplete);
+};
 
 // ─── Start ───────────────────────────────────────────────────
 connect();

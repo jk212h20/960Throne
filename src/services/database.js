@@ -224,6 +224,26 @@ function createTables() {
             created_at TEXT DEFAULT (datetime('now'))
         )
     `);
+
+    // Board names for multi-board viewer (stream operator assigns player names to DGT boards)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS board_names (
+            board_num INTEGER PRIMARY KEY,
+            serial_nr TEXT,
+            white_name TEXT DEFAULT '',
+            black_name TEXT DEFAULT ''
+        )
+    `);
+
+    // Player name history for autocomplete
+    db.run(`
+        CREATE TABLE IF NOT EXISTS board_name_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            used_count INTEGER DEFAULT 1,
+            last_used_at TEXT DEFAULT (datetime('now'))
+        )
+    `);
 }
 
 function migrateSchema() {
@@ -1052,6 +1072,52 @@ function getAccountingAudit(satRate) {
 }
 
 // ============================================================
+// Board Name operations (multi-board viewer)
+// ============================================================
+
+function setBoardNames(boardNum, whiteName, blackName, serialNr) {
+    db.run(`INSERT OR REPLACE INTO board_names (board_num, serial_nr, white_name, black_name) VALUES (?, ?, ?, ?)`,
+        [boardNum, serialNr || '', whiteName || '', blackName || '']);
+    // Track names for autocomplete
+    if (whiteName) addNameToHistory(whiteName);
+    if (blackName) addNameToHistory(blackName);
+    save();
+}
+
+function getBoardNames(boardNum) {
+    const result = db.exec(`SELECT * FROM board_names WHERE board_num = ?`, [boardNum]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return rowToObject(result[0]);
+}
+
+function getAllBoardNames() {
+    const result = db.exec(`SELECT * FROM board_names ORDER BY board_num`);
+    if (result.length === 0) return [];
+    return rowsToObjects(result[0]);
+}
+
+function clearAllBoardNames() {
+    db.run(`DELETE FROM board_names`);
+    save();
+}
+
+function addNameToHistory(name) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    db.run(`INSERT INTO board_name_history (name, used_count, last_used_at) VALUES (?, 1, datetime('now'))
+            ON CONFLICT(name) DO UPDATE SET used_count = used_count + 1, last_used_at = datetime('now')`,
+        [trimmed]);
+}
+
+function searchNameHistory(query) {
+    if (!query || query.length < 1) return [];
+    const result = db.exec(`SELECT name FROM board_name_history WHERE name LIKE ? ORDER BY used_count DESC, last_used_at DESC LIMIT 10`,
+        ['%' + query + '%']);
+    if (result.length === 0) return [];
+    return result[0].values.map(r => r[0]);
+}
+
+// ============================================================
 // Utility helpers
 // ============================================================
 
@@ -1165,4 +1231,11 @@ module.exports = {
 
     // Backup
     getExportBuffer,
+
+    // Board Names
+    setBoardNames,
+    getBoardNames,
+    getAllBoardNames,
+    clearAllBoardNames,
+    searchNameHistory,
 };

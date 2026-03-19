@@ -204,10 +204,26 @@ router.get('/leaderboard', (req, res) => {
     res.render('leaderboard', { leaderboard, longestReigns, stats, player: req.player, state });
 });
 
-// Multi-board LiveChess viewer — served from Railway, connects to localhost LiveChess on the laptop
+// Multi-board LiveChess viewer — admin protected, connects to localhost LiveChess on the laptop
 router.get('/multi-board', (req, res) => {
+    if (!req.isAdmin) {
+        return res.render('admin-login', { returnTo: '/multi-board' });
+    }
     res.sendFile(require('path').join(__dirname, '../../dgt-relay/multi-board-viewer.html'));
 });
+
+// Individual board pages /board1 through /board9 — public, for OBS/stream capture
+// Each shows a single full-screen board from LiveChess + player names from DB
+for (let i = 1; i <= 9; i++) {
+    router.get('/board' + i, (req, res) => {
+        const names = db.getBoardNames(i);
+        res.render('board-single', {
+            boardNum: i,
+            whiteName: names?.white_name || '',
+            blackName: names?.black_name || '',
+        });
+    });
+}
 
 // Multi-board direct USB viewer — served from Railway, uses Web Serial API on the laptop
 router.get('/multi-board-direct', (req, res) => {
