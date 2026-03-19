@@ -712,35 +712,65 @@ function loadSavedNames(feedId) {
         }).catch(() => {});
 }
 
-// ─── Autocomplete ────────────────────────────────────────────
-// Add autocomplete to player name inputs using datalist
-let autocompleteCache = [];
+// ─── Autocomplete (custom dropdown) ──────────────────────────
+// Custom dropdown that fetches from server — works across all boards/colors
+let activeDropdown = null;
+
 function setupAutocomplete(input) {
-    if (!input.getAttribute('list')) {
-        input.setAttribute('list', 'name-suggestions');
-    }
+    if (input._acSetup) return;
+    input._acSetup = true;
+    input.setAttribute('autocomplete', 'off');
+
     input.addEventListener('input', function() {
         const q = this.value.trim();
-        if (q.length < 2) return;
+        if (q.length < 1) { hideDropdown(); return; }
         fetch('/api/board-names/autocomplete/' + encodeURIComponent(q))
             .then(r => r.json())
             .then(data => {
-                const dl = document.getElementById('name-suggestions') || createDatalist();
-                dl.innerHTML = '';
-                (data.names || []).forEach(n => {
-                    const opt = document.createElement('option');
-                    opt.value = n;
-                    dl.appendChild(opt);
-                });
-            }).catch(() => {});
+                const names = data.names || [];
+                if (names.length === 0) { hideDropdown(); return; }
+                showDropdown(input, names);
+            }).catch(() => hideDropdown());
+    });
+    input.addEventListener('focus', function() {
+        if (this.value.trim().length >= 1) this.dispatchEvent(new Event('input'));
+    });
+    input.addEventListener('blur', function() {
+        setTimeout(hideDropdown, 200); // delay so click registers
     });
 }
-function createDatalist() {
-    const dl = document.createElement('datalist');
-    dl.id = 'name-suggestions';
-    document.body.appendChild(dl);
-    return dl;
+
+function showDropdown(input, names) {
+    hideDropdown();
+    const rect = input.getBoundingClientRect();
+    const dd = document.createElement('div');
+    dd.id = 'ac-dropdown';
+    dd.style.cssText = 'position:fixed;z-index:9999;background:#1a1a2e;border:1px solid #555;border-radius:6px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+    dd.style.left = rect.left + 'px';
+    dd.style.top = (rect.bottom + 2) + 'px';
+    dd.style.minWidth = Math.max(rect.width, 140) + 'px';
+    names.forEach(n => {
+        const item = document.createElement('div');
+        item.textContent = n;
+        item.style.cssText = 'padding:6px 10px;cursor:pointer;color:#ccc;font-size:0.85rem;';
+        item.onmouseenter = () => item.style.background = '#333';
+        item.onmouseleave = () => item.style.background = '';
+        item.onmousedown = (e) => {
+            e.preventDefault();
+            input.value = n;
+            input.dispatchEvent(new Event('change'));
+            hideDropdown();
+        };
+        dd.appendChild(item);
+    });
+    document.body.appendChild(dd);
+    activeDropdown = dd;
 }
+
+function hideDropdown() {
+    if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; }
+}
+
 // Attach autocomplete to all player inputs after grid rebuild
 const _origRebuildGrid = rebuildGrid;
 rebuildGrid = function() {
