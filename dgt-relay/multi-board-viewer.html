@@ -200,16 +200,22 @@ const PIECES = {
 let ws = null;
 let reconnectTimer = null;
 let nextMsgId = 10;
-const pendingCalls = new Map();
 const boards = new Map(); // feedId → { boardId, fen, clock, label }
 let currentView = 'grid'; // 'grid' | feedId
 let boardCounter = 0;
+let pollTimer = null;
 
 // ─── LiveChess Connection ────────────────────────────────────
+// Strategy: connect via WebSocket, then POLL eboards every 500ms.
+// LiveChess subscribe is broken in many versions (2.2.9+), so polling
+// eboards is the only reliable way to get board data. This is exactly
+// what the working dgt-relay.ejs does.
 
 function connect() {
     const url = 'ws://localhost:1982/api/v1.0';
     setStatus('yellow', 'Connecting...');
+    
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     
     try {
         ws = new WebSocket(url);
@@ -221,24 +227,20 @@ function connect() {
 
     ws.onopen = () => {
         setStatus('green', 'Connected to LiveChess');
-        boards.clear();
-        boardCounter = 0;
-        const id = nextMsgId++;
-        pendingCalls.set(id, { action: 'eboards' });
-        ws.send(JSON.stringify({ call: 'eboards', id, param: {} }));
+        // Start polling eboards every 500ms
+        pollEboards();
+        pollTimer = setInterval(pollEboards, 500);
     };
 
     ws.onmessage = (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            console.log('📨 LiveChess:', JSON.stringify(msg).substring(0, 500));
             handleMessage(msg);
-        } catch (e) {
-            console.error('Parse error:', e);
-        }
+        } catch (e) {}
     };
 
     ws.onclose = () => {
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         setStatus('red', 'Disconnected. Reconnecting...');
         scheduleReconnect();
     };
@@ -255,6 +257,11 @@ function send(msg) {
     }
 }
 
+function pollEboards() {
+    const id = nextMsgId++;
+    send({ call: 'eboards', id, param: {} });
+}
+
 function scheduleReconnect() {
     if (reconnectTimer) return;
     reconnectTimer = setTimeout(() => {
@@ -269,94 +276,63 @@ function setStatus(color, text) {
 }
 
 // ─── Message Handling ────────────────────────────────────────
+// Every eboards response contains the FULL state of all boards
+// including FEN, clock, serial number. We just extract it all.
 
 function handleMessage(msg) {
-    const pending = pendingCalls.get(msg.id);
-
-    // eboards response
-    if (pending && pending.action === 'eboards') {
-        pendingCalls.delete(msg.id);
-        let feeds = [];
-        if (msg.param) {
-            if (Array.isArray(msg.param)) feeds = msg.param;
-            else if (msg.param.feeds) feeds = msg.param.feeds;
-        }
-
-        if (feeds.length === 0) {
-            setTimeout(() => {
-                const id = nextMsgId++;
-                pendingCalls.set(id, { action: 'eboards' });
-                send({ call: 'eboards', id, param: {} });
-            }, 3000);
-            return;
-        }
-
-        setStatus('green', feeds.length + ' board(s) connected');
-
-        feeds.forEach((feed, i) => {
-            const feedId = feed.id || feed.serialnr || String(feed);
-            if (boards.has(feedId)) return; // Already known
-
+    // We only care about eboards responses which have msg.param as array or .feeds
+    if (!msg.param) return;
+    
+    let feeds = [];
+    if (Array.isArray(msg.param)) feeds = msg.param;
+    else if (msg.param.feeds) feeds = msg.param.feeds;
+    else return; // Not an eboards response
+    
+    if (feeds.length === 0) return;
+    
+    setStatus('green', feeds.length + ' board(s) connected');
+    let navChanged = false;
+    
+    feeds.forEach(feed => {
+        const feedId = feed.serialnr || feed.id || String(feed);
+        
+        // Register new boards
+        if (!boards.has(feedId)) {
             boardCounter++;
-            const boardId = feed.serialnr || feedId;
             boards.set(feedId, {
-                boardId: String(boardId),
+                boardId: String(feedId),
                 num: boardCounter,
                 label: 'Board ' + boardCounter,
                 fen: null,
                 clock: null,
             });
-
-            // Subscribe
-            const subId = nextMsgId++;
-            pendingCalls.set(subId, { action: 'subscribe', feedId });
-            send({ call: 'subscribe', id: subId, param: { feed: feedId, param: { board: true, san: false } } });
-        });
-
+            navChanged = true;
+        }
+        
+        const board = boards.get(feedId);
+        
+        // Extract FEN — LiveChess puts it in feed.fen or feed.board
+        const fen = feed.fen || (feed.board && typeof feed.board === 'string' && feed.board.includes('/') ? feed.board : null) || boardToFen(feed.board);
+        if (fen && fen !== board.fen) {
+            board.fen = fen;
+            updateUI(feedId);
+        }
+        
+        // Extract clock — LiveChess puts it in feed.clock
+        if (feed.clock && typeof feed.clock === 'object') {
+            const clock = {
+                white: feed.clock.white != null ? Number(feed.clock.white) : null,
+                black: feed.clock.black != null ? Number(feed.clock.black) : null,
+                run: feed.clock.run,
+            };
+            board.clock = clock;
+            updateClockUI(feedId);
+        }
+    });
+    
+    if (navChanged) {
         rebuildNav();
         rebuildGrid();
-        return;
-    }
-
-    // subscribe response
-    if (pending && pending.action === 'subscribe') {
-        pendingCalls.delete(msg.id);
-        // Request current state
-        const feedReqId = nextMsgId++;
-        pendingCalls.set(feedReqId, { action: 'feed', feedId: pending.feedId });
-        send({ call: 'feed', id: feedReqId, param: { id: pending.feedId } });
-        return;
-    }
-
-    // feed response
-    if (pending && pending.action === 'feed') {
-        pendingCalls.delete(msg.id);
-        if (msg.param) {
-            const fen = msg.param.fen || boardToFen(msg.param.board);
-            const board = boards.get(pending.feedId);
-            if (fen && board) {
-                board.fen = fen;
-                updateUI(pending.feedId);
-            }
-        }
-        return;
-    }
-
-    // Subscription push (live update)
-    if (msg.param && (msg.param.board || msg.param.fen)) {
-        const feedId = msg.param.feed || msg.param.id;
-        let board = boards.get(feedId);
-        if (!board && boards.size === 1) {
-            board = boards.values().next().value;
-        }
-        if (board) {
-            const fen = msg.param.fen || boardToFen(msg.param.board);
-            if (fen) {
-                board.fen = fen;
-                updateUI(feedId || boards.keys().next().value);
-            }
-        }
-        return;
     }
 }
 
@@ -489,14 +465,31 @@ function updateUI(feedId) {
 
     // Update single view if showing this board
     if (currentView === feedId) {
-        document.getElementById('single-board').innerHTML = renderBoardHTML(board.fen, 'board-large').replace('<div class="chess-board board-large">', '').replace(/<\/div>$/, '');
-        // Actually just replace the whole thing properly
         const container = document.getElementById('single-board');
         const temp = document.createElement('div');
         temp.innerHTML = renderBoardHTML(board.fen, 'board-large');
         const newBoard = temp.firstChild;
-        container.parentNode.replaceChild(newBoard, container);
         newBoard.id = 'single-board';
+        container.parentNode.replaceChild(newBoard, container);
+    }
+}
+
+function updateClockUI(feedId) {
+    const board = boards.get(feedId);
+    if (!board || !board.clock) return;
+    const wStr = '♔ ' + formatClock(board.clock.white);
+    const bStr = '♚ ' + formatClock(board.clock.black);
+    // Grid card clocks
+    const cw = document.getElementById('card-cw-' + feedId);
+    const cb = document.getElementById('card-cb-' + feedId);
+    if (cw) cw.textContent = wStr;
+    if (cb) cb.textContent = bStr;
+    // Single view clocks
+    if (currentView === feedId) {
+        const sw = document.getElementById('single-clock-w');
+        const sb = document.getElementById('single-clock-b');
+        if (sw) sw.textContent = wStr;
+        if (sb) sb.textContent = bStr;
     }
 }
 
@@ -533,15 +526,6 @@ function showSingle(feedId) {
     newBoard.id = 'single-board';
     container.parentNode.replaceChild(newBoard, container);
 }
-
-// ─── Periodic rescan for new boards ──────────────────────────
-setInterval(() => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        const id = nextMsgId++;
-        pendingCalls.set(id, { action: 'eboards' });
-        send({ call: 'eboards', id, param: {} });
-    }
-}, 15000);
 
 // ─── Start ───────────────────────────────────────────────────
 connect();
