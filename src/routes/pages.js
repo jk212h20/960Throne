@@ -101,6 +101,17 @@ router.get('/throne', (req, res) => {
     res.render('throne', { state, dgt, showVenueCode: true, showVenueCodeText: showCode });
 });
 
+// Throne Trip — Psychedelic party mode (same as /throne but with visual effects)
+router.get('/throne/trip', (req, res) => {
+    if (!req.isAdmin) {
+        return res.render('admin-login', { returnTo: '/throne/trip' });
+    }
+    const state = gameEngine.getThoneState();
+    const dgt = dgtBoard.getState();
+    const showCode = db.getConfig('show_venue_code') === 'true';
+    res.render('throne', { state, dgt, showVenueCode: true, showVenueCodeText: showCode, tripMode: true });
+});
+
 // Live — Public web version of throne (no QR code, shows "Watch live" URL instead)
 router.get('/live', (req, res) => {
     const state = gameEngine.getThoneState();
