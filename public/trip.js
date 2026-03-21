@@ -161,6 +161,7 @@
   // JS runs every 100ms; CSS transition smooths the transforms.
 
   let hueAngle = 0;
+  let hueWasActive = false; // track on/off transitions to reset angle
   let lastTick = Date.now();
   let leftPanel = null;
   let rightPanel = null;
@@ -227,10 +228,13 @@
     const t = now / 1000;
 
     // ── Hue rotation ──
+    // Reset angle to 0 when transitioning from off→on so it starts from current colors
     if (eHue > 0.001) {
+      if (!hueWasActive) { hueAngle = 0; hueWasActive = true; }
       hueAngle = (hueAngle + eHue * 120 * dt) % 360;
       body.style.filter = 'hue-rotate(' + Math.round(hueAngle) + 'deg)';
     } else {
+      if (hueWasActive) { hueAngle = 0; hueWasActive = false; }
       body.style.filter = '';
     }
 
