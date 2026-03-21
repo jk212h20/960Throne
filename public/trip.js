@@ -1,19 +1,11 @@
 /**
  * 960 Throne — Psychedelic Party Mode
- * Pure client-side CSS/SVG filter effects with control panel & timeline scheduler.
- * Each effect has an independent 0–1 slider, multiplied by a master intensity.
- * All state persisted to localStorage so it survives page reloads.
+ * CSS/SVG filter effects with control panel & timeline scheduler.
+ * Performance: 20fps setInterval, 2-octave turbulence, seed updates every 4s.
+ * QR protection: lens warp is reduced on the left panel (QR area).
+ * Hue rotation applies everywhere (doesn't affect QR scannability).
  *
- * Performance notes:
- * - Hue rotate: simple CSS filter property update (~free)
- * - Lens warp: SVG feTurbulence + feDisplacementMap
- *   - Turbulence seed only changes every 4s (expensive to recompute)
- *   - Displacement scale changes with slider (cheap)
- *   - numOctaves kept at 2 (not 4) to reduce computation
- * - Main loop runs at ~20fps via setInterval (not rAF at 60fps)
- *
- * Display mode: include with data-display attribute to hide controls.
- *   <script src="/trip.js" data-display></script>
+ * Display mode: <script src="/trip.js" data-display></script>
  * Press 'T' to toggle control panel (control mode only).
  */
 (function() {
@@ -45,17 +37,14 @@
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch(e) {}
   }
 
-  // Display mode: sync from localStorage
   if (isDisplayMode) {
     setInterval(() => {
-      try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if (saved) Object.assign(S, saved);
-      } catch(e) {}
+      try { const s = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (s) Object.assign(S, s); } catch(e) {}
     }, 250);
   }
 
-  // ─── SVG Filter (lightweight: only 2 octaves) ────────────
+  // ─── SVG Filters ──────────────────────────────────────────
+  // Two filters: full strength for main content, reduced for QR area
   function injectSVGFilters() {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('width', '0');
@@ -64,8 +53,12 @@
     svg.innerHTML = `
       <defs>
         <filter id="trip-lens" x="-5%" y="-5%" width="110%" height="110%">
-          <feTurbulence id="trip-turb" type="turbulence" baseFrequency="0.008" numOctaves="2" seed="3" result="noise"/>
+          <feTurbulence id="trip-turb" type="fractalNoise" baseFrequency="0.004" numOctaves="2" seed="3" result="noise"/>
           <feDisplacementMap id="trip-disp" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+        <filter id="trip-lens-soft" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence id="trip-turb-soft" type="fractalNoise" baseFrequency="0.004" numOctaves="2" seed="3" result="noise"/>
+          <feDisplacementMap id="trip-disp-soft" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="G"/>
         </filter>
       </defs>
     `;
@@ -145,9 +138,7 @@
     document.body.appendChild(hint);
     if (!S.panelOpen) panel.classList.add('hidden');
 
-    wireSlider('master');
-    wireSlider('hueRotate');
-    wireSlider('kaleidoscope');
+    wireSlider('master'); wireSlider('hueRotate'); wireSlider('kaleidoscope');
 
     const rts = document.getElementById('trip-ramp-target');
     const rtv = document.getElementById('trip-v-ramp-target');
@@ -191,13 +182,29 @@
     });
   }
 
-  // ─── Animation: single setInterval at ~20fps ──────────────
+  // ─── Animation ────────────────────────────────────────────
   let hueAngle = 0;
   let lastTick = Date.now();
   let turbSeed = 3;
   let lastTurbUpdate = 0;
   let lastScale = -1;
+  let lastScaleSoft = -1;
   let lastFreq = -1;
+
+  // Find the left panel (QR area) and right panel (game area)
+  // In the throne layout: body > ... > div.flex-1.flex > [flex-[3], flex-[7]]
+  let leftPanel = null;
+  let rightPanel = null;
+
+  function findPanels() {
+    // The main content area is a flex container with two children
+    // Left: flex-[3] (QR + queue), Right: flex-[7] (game)
+    const mainFlex = document.querySelector('.flex-1.flex');
+    if (mainFlex && mainFlex.children.length >= 2) {
+      leftPanel = mainFlex.children[0]; // flex-[3]
+      rightPanel = mainFlex.children[1]; // flex-[7]
+    }
+  }
 
   function tick() {
     const body = document.body;
@@ -214,7 +221,6 @@
       S.master = progress * S.rampTarget;
       syncSliders();
       if (progress >= 1) { S.rampActive = false; save(); }
-      // Update ramp UI
       const fill = document.getElementById('trip-ramp-fill');
       const status = document.getElementById('trip-ramp-status');
       const startBtn = document.getElementById('trip-ramp-start');
@@ -230,67 +236,90 @@
 
     const m = S.master;
     if (m < 0.001) {
-      if (body.style.filter) body.style.filter = '';
+      body.style.filter = '';
+      if (rightPanel) rightPanel.style.filter = '';
+      if (leftPanel) leftPanel.style.filter = '';
       return;
     }
 
     const eHue = S.hueRotate * m;
     const eKaleid = S.kaleidoscope * m;
-    const filters = [];
 
-    // Hue — just increment angle (one style write, very cheap)
+    // ── Hue rotation: apply to body (affects everything uniformly, QR-safe) ──
     if (eHue > 0.001) {
       hueAngle = (hueAngle + eHue * 120 * dt) % 360;
-      filters.push('hue-rotate(' + Math.round(hueAngle) + 'deg)');
+      body.style.filter = 'hue-rotate(' + Math.round(hueAngle) + 'deg)';
+    } else {
+      body.style.filter = '';
     }
 
-    // Lens warp — update SVG filter params only when they change
+    // ── Lens warp: apply to panels separately ──
+    // Right panel (game): full distortion
+    // Left panel (QR): ~25% distortion for subtle inclusion without breaking scannability
     if (eKaleid > 0.001) {
       const turbEl = document.getElementById('trip-turb');
       const dispEl = document.getElementById('trip-disp');
+      const turbSoftEl = document.getElementById('trip-turb-soft');
+      const dispSoftEl = document.getElementById('trip-disp-soft');
+
       if (turbEl && dispEl) {
-        // Update displacement scale (cheap — only when value changes)
-        const scale = Math.round(eKaleid * eKaleid * 60);
+        // Full distortion scale — smoother, larger waves (0.004 base freq = big smooth warps)
+        // Increased max scale from 60 to 90 for more dramatic effect
+        const scale = Math.round(eKaleid * eKaleid * 90);
         if (scale !== lastScale) {
           dispEl.setAttribute('scale', scale);
           lastScale = scale;
         }
 
-        // Update base frequency (cheap — only when slider changes)
-        const freq = Math.round((0.003 + eKaleid * 0.015) * 100000);
+        // Soft version for left panel — 25% of full strength
+        const scaleSoft = Math.round(scale * 0.25);
+        if (dispSoftEl && scaleSoft !== lastScaleSoft) {
+          dispSoftEl.setAttribute('scale', scaleSoft);
+          lastScaleSoft = scaleSoft;
+        }
+
+        // Base frequency — lower = smoother, bigger waves
+        const freq = Math.round((0.002 + eKaleid * 0.008) * 100000);
         if (freq !== lastFreq) {
           const f = freq / 100000;
-          turbEl.setAttribute('baseFrequency', f.toFixed(5) + ' ' + (f * 0.8).toFixed(5));
+          const fStr = f.toFixed(5) + ' ' + (f * 0.7).toFixed(5);
+          turbEl.setAttribute('baseFrequency', fStr);
+          if (turbSoftEl) turbSoftEl.setAttribute('baseFrequency', fStr);
           lastFreq = freq;
         }
 
-        // Morph turbulence seed every 4 seconds (THE expensive op — done rarely)
+        // Morph turbulence seed every 4 seconds
         if (now - lastTurbUpdate > 4000) {
           turbSeed = (turbSeed + 1) % 1000;
           turbEl.setAttribute('seed', turbSeed);
+          if (turbSoftEl) turbSoftEl.setAttribute('seed', turbSeed);
           lastTurbUpdate = now;
         }
 
-        filters.push('url(#trip-lens)');
+        // Apply filters to panels
+        if (rightPanel) rightPanel.style.filter = 'url(#trip-lens)';
+        if (leftPanel) leftPanel.style.filter = 'url(#trip-lens-soft)';
       }
     } else {
       if (lastScale !== 0) {
         const dispEl = document.getElementById('trip-disp');
+        const dispSoftEl = document.getElementById('trip-disp-soft');
         if (dispEl) dispEl.setAttribute('scale', '0');
+        if (dispSoftEl) dispSoftEl.setAttribute('scale', '0');
         lastScale = 0;
+        lastScaleSoft = 0;
       }
+      if (rightPanel) rightPanel.style.filter = '';
+      if (leftPanel) leftPanel.style.filter = '';
     }
-
-    body.style.filter = filters.length ? filters.join(' ') : '';
   }
 
   // ─── Init ─────────────────────────────────────────────────
   function init() {
     injectSVGFilters();
+    findPanels();
     if (!isDisplayMode) createPanel();
-    // Run at ~20fps — smooth enough for psychedelic effects, light on CPU
-    setInterval(tick, 50);
-    // Save ramp progress periodically
+    setInterval(tick, 50); // ~20fps
     if (!isDisplayMode) setInterval(() => { if (S.rampActive) save(); }, 5000);
   }
 
