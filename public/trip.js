@@ -131,16 +131,42 @@
     });
   }
 
-  // ─── Animation (all GPU-composited, zero CPU) ─────────────
-  // We use CSS transitions to smoothly interpolate between target values.
-  // JS only runs every 100ms to compute new target values from sine waves.
-  // The browser's compositor handles the smooth animation on the GPU.
+  // ─── SVG Displacement Filter ──────────────────────────────
+  // Static turbulence (generated ONCE, never recalculated).
+  // Only the displacement `scale` changes — that's a cheap attribute swap.
+  // Two filters: full (right panel) and soft (left panel/QR).
+  function injectSVGFilters() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '0');
+    svg.setAttribute('height', '0');
+    svg.style.position = 'absolute';
+    svg.innerHTML = `<defs>
+      <filter id="trip-lens" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.006 0.004" numOctaves="1" seed="7" result="n"/>
+        <feDisplacementMap id="trip-disp" in="SourceGraphic" in2="n" scale="0" xChannelSelector="R" yChannelSelector="G"/>
+      </filter>
+      <filter id="trip-lens-soft" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.006 0.004" numOctaves="1" seed="7" result="n"/>
+        <feDisplacementMap id="trip-disp-soft" in="SourceGraphic" in2="n" scale="0" xChannelSelector="R" yChannelSelector="G"/>
+      </filter>
+    </defs>`;
+    document.body.appendChild(svg);
+  }
+
+  // ─── Animation ────────────────────────────────────────────
+  // Hybrid approach:
+  // - SVG displacement for actual pixel-level distortion (static noise, only scale changes)
+  // - CSS perspective transforms for gentle 3D sway (GPU-composited)
+  // - Hue rotation on body
+  // JS runs every 100ms; CSS transition smooths the transforms.
 
   let hueAngle = 0;
   let lastTick = Date.now();
   let leftPanel = null;
   let rightPanel = null;
   let topBar = null;
+  let lastDispScale = -1;
+  let lastDispScaleSoft = -1;
 
   function findPanels() {
     const mainFlex = document.querySelector('.flex-1.flex');
@@ -148,39 +174,21 @@
       leftPanel = mainFlex.children[0];
       rightPanel = mainFlex.children[1];
     }
-    // Top bar is the first child of body with the title
     topBar = document.querySelector('.bg-throne-dark.border-b');
   }
 
   function setupTransitions() {
-    // Add CSS transitions so transform changes animate smoothly
-    // The browser GPU handles the interpolation — completely free
-    const transStyle = 'transform 3s cubic-bezier(0.4, 0, 0.2, 1)';
-    if (rightPanel) {
-      rightPanel.style.transition = transStyle;
-      rightPanel.style.transformOrigin = 'center center';
-      rightPanel.style.willChange = 'transform';
-    }
-    if (leftPanel) {
-      leftPanel.style.transition = transStyle;
-      leftPanel.style.transformOrigin = 'center center';
-      leftPanel.style.willChange = 'transform';
-    }
-    if (topBar) {
-      topBar.style.transition = transStyle;
-      topBar.style.transformOrigin = 'center center';
-      topBar.style.willChange = 'transform';
-    }
+    const ts = 'transform 3s cubic-bezier(0.4,0,0.2,1)';
+    [rightPanel, leftPanel, topBar].forEach(el => {
+      if (!el) return;
+      el.style.transition = ts;
+      el.style.transformOrigin = 'center center';
+      el.style.willChange = 'transform';
+    });
   }
 
-  // Use multiple slow sine waves at different speeds for organic movement
-  // t is in seconds; returns -1 to 1
-  function organicWave(t, speed1, speed2, speed3) {
-    return (
-      Math.sin(t * speed1) * 0.5 +
-      Math.sin(t * speed2) * 0.3 +
-      Math.sin(t * speed3) * 0.2
-    );
+  function wave(t, s1, s2, s3) {
+    return Math.sin(t*s1)*0.5 + Math.sin(t*s2)*0.3 + Math.sin(t*s3)*0.2;
   }
 
   function tick() {
@@ -208,17 +216,17 @@
     const m = S.master;
     if (m < 0.001) {
       body.style.filter = '';
-      if (rightPanel) rightPanel.style.transform = '';
-      if (leftPanel) leftPanel.style.transform = '';
+      if (rightPanel) { rightPanel.style.filter = ''; rightPanel.style.transform = ''; }
+      if (leftPanel) { leftPanel.style.filter = ''; leftPanel.style.transform = ''; }
       if (topBar) topBar.style.transform = '';
       return;
     }
 
     const eHue = S.hueRotate * m;
     const eKaleid = S.kaleidoscope * m;
-    const t = now / 1000; // time in seconds
+    const t = now / 1000;
 
-    // ── Hue: one style write per tick ──
+    // ── Hue rotation ──
     if (eHue > 0.001) {
       hueAngle = (hueAngle + eHue * 120 * dt) % 360;
       body.style.filter = 'hue-rotate(' + Math.round(hueAngle) + 'deg)';
@@ -226,49 +234,57 @@
       body.style.filter = '';
     }
 
-    // ── Lens Warp: perspective + rotate via CSS transforms ──
-    // Organic multi-sine waves create slowly shifting tilt.
-    // CSS transition (3s ease) smooths between our 100ms updates.
-    // All GPU-composited — zero CPU paint cost.
+    // ── Lens Warp: SVG displacement + CSS perspective ──
     if (eKaleid > 0.001) {
-      // Max tilt in degrees — quadratic for gentle low end
-      const maxTilt = eKaleid * eKaleid * 8; // 0-8 degrees
-      // Perspective distance — closer = more dramatic
-      const perspective = 800 - eKaleid * 400; // 800px to 400px
-
-      // Organic movement — different frequencies for X and Y
-      const rx = organicWave(t, 0.13, 0.29, 0.07) * maxTilt;
-      const ry = organicWave(t, 0.11, 0.23, 0.05) * maxTilt;
-      // Slight scale breathing
-      const sc = 1 + organicWave(t, 0.09, 0.17, 0.03) * eKaleid * 0.02;
-
-      // Right panel: full effect
-      if (rightPanel) {
-        rightPanel.style.transform = `perspective(${Math.round(perspective)}px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) scale(${sc.toFixed(4)})`;
+      // SVG displacement scale — smooth sine breathing
+      // Only write to DOM when the rounded value changes
+      const breath = wave(t, 0.15, 0.31, 0.07);
+      const baseScale = eKaleid * eKaleid * 70;
+      const scale = Math.round(baseScale + breath * baseScale * 0.3);
+      if (scale !== lastDispScale) {
+        const d = document.getElementById('trip-disp');
+        if (d) d.setAttribute('scale', scale);
+        lastDispScale = scale;
+      }
+      // Soft version: 25%
+      const scaleSoft = Math.round(scale * 0.25);
+      if (scaleSoft !== lastDispScaleSoft) {
+        const ds = document.getElementById('trip-disp-soft');
+        if (ds) ds.setAttribute('scale', scaleSoft);
+        lastDispScaleSoft = scaleSoft;
       }
 
-      // Left panel: 25% of effect (QR protection)
-      if (leftPanel) {
-        leftPanel.style.transform = `perspective(${Math.round(perspective * 1.5)}px) rotateX(${(rx * 0.25).toFixed(2)}deg) rotateY(${(ry * 0.25).toFixed(2)}deg) scale(${(1 + (sc - 1) * 0.25).toFixed(4)})`;
-      }
+      // Apply SVG filter to panels
+      if (rightPanel && !rightPanel.style.filter.includes('trip-lens')) rightPanel.style.filter = 'url(#trip-lens)';
+      if (leftPanel && !leftPanel.style.filter.includes('trip-lens-soft')) leftPanel.style.filter = 'url(#trip-lens-soft)';
 
-      // Top bar: 15% of effect
-      if (topBar) {
-        topBar.style.transform = `perspective(${Math.round(perspective * 2)}px) rotateX(${(rx * 0.15).toFixed(2)}deg) rotateY(${(ry * 0.15).toFixed(2)}deg)`;
-      }
+      // CSS perspective sway on top (lightweight addition)
+      const maxTilt = eKaleid * 3;
+      const rx = wave(t, 0.13, 0.29, 0.07) * maxTilt;
+      const ry = wave(t, 0.11, 0.23, 0.05) * maxTilt;
+      if (rightPanel) rightPanel.style.transform = `perspective(800px) rotateX(${rx.toFixed(1)}deg) rotateY(${ry.toFixed(1)}deg)`;
+      if (leftPanel) leftPanel.style.transform = `perspective(1200px) rotateX(${(rx*0.25).toFixed(1)}deg) rotateY(${(ry*0.25).toFixed(1)}deg)`;
+      if (topBar) topBar.style.transform = `perspective(1600px) rotateX(${(rx*0.1).toFixed(1)}deg) rotateY(${(ry*0.1).toFixed(1)}deg)`;
     } else {
-      if (rightPanel) rightPanel.style.transform = '';
-      if (leftPanel) leftPanel.style.transform = '';
+      if (lastDispScale !== 0) {
+        const d = document.getElementById('trip-disp');
+        const ds = document.getElementById('trip-disp-soft');
+        if (d) d.setAttribute('scale', '0');
+        if (ds) ds.setAttribute('scale', '0');
+        lastDispScale = 0; lastDispScaleSoft = 0;
+      }
+      if (rightPanel) { rightPanel.style.filter = ''; rightPanel.style.transform = ''; }
+      if (leftPanel) { leftPanel.style.filter = ''; leftPanel.style.transform = ''; }
       if (topBar) topBar.style.transform = '';
     }
   }
 
   // ─── Init ─────────────────────────────────────────────────
   function init() {
+    injectSVGFilters();
     findPanels();
     setupTransitions();
     if (!isDisplayMode) createPanel();
-    // Only update targets every 100ms — CSS transitions do the smoothing
     setInterval(tick, 100);
     if (!isDisplayMode) setInterval(() => { if (S.rampActive) save(); }, 5000);
   }
