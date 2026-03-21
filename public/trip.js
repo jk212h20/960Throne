@@ -295,7 +295,8 @@
   // ─── Animation Loop ───────────────────────────────────────
   let t = 0;
   let lastTime = performance.now();
-  const target = document.documentElement;
+  // Apply filter to <body> — applying to <html> doesn't work reliably in all browsers
+  let target = null;
 
   // For smooth lens morph we track the current turbulence seed as a float
   let lensSeed = 3.0;
@@ -382,6 +383,7 @@
 
   // ─── Init ─────────────────────────────────────────────────
   function init() {
+    target = document.body;
     injectSVGFilters();
     if (!isDisplayMode) {
       createPanel();
