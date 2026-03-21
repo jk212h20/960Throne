@@ -1,12 +1,16 @@
 /**
  * 960 Throne — Psychedelic Party Mode
- * CSS/SVG filter effects with control panel & timeline scheduler.
- * Performance: 20fps setInterval, 2-octave turbulence, seed updates every 4s.
- * QR protection: lens warp is reduced on the left panel (QR area).
- * Hue rotation applies everywhere (doesn't affect QR scannability).
+ * Pure GPU-accelerated CSS effects. Zero SVG filters = zero CPU cost.
  *
- * Display mode: <script src="/trip.js" data-display></script>
- * Press 'T' to toggle control panel (control mode only).
+ * Effects:
+ * - Hue Cycle: CSS hue-rotate on body (GPU-composited)
+ * - Lens Warp: CSS perspective + rotate transforms (GPU-composited)
+ *   Creates a slow "swaying through a lens" effect — the whole page
+ *   gently tilts and warps in 3D perspective. Smooth, organic, zero CPU.
+ *
+ * QR protection: left panel gets 25% of the warp amplitude.
+ * All state in localStorage. Display mode syncs every 250ms.
+ * Press T to toggle control panel.
  */
 (function() {
   'use strict';
@@ -14,55 +18,21 @@
   const scriptTag = document.currentScript;
   const isDisplayMode = scriptTag && scriptTag.hasAttribute('data-display');
 
-  // ─── State ────────────────────────────────────────────────
   const STORAGE_KEY = '_trip';
   const defaults = {
-    master: 0,
-    hueRotate: 0,
-    kaleidoscope: 0,
-    rampStart: null,
-    rampDuration: 60,
-    rampTarget: 1,
-    rampActive: false,
+    master: 0, hueRotate: 0, kaleidoscope: 0,
+    rampStart: null, rampDuration: 60, rampTarget: 1, rampActive: false,
     panelOpen: true,
   };
 
   let S = Object.assign({}, defaults);
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved) Object.assign(S, saved);
-  } catch(e) {}
-
-  function save() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch(e) {}
-  }
+  try { const s = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (s) Object.assign(S, s); } catch(e) {}
+  function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch(e) {} }
 
   if (isDisplayMode) {
     setInterval(() => {
       try { const s = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (s) Object.assign(S, s); } catch(e) {}
     }, 250);
-  }
-
-  // ─── SVG Filters ──────────────────────────────────────────
-  // Two filters: full strength for main content, reduced for QR area
-  function injectSVGFilters() {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('width', '0');
-    svg.setAttribute('height', '0');
-    svg.style.position = 'absolute';
-    svg.innerHTML = `
-      <defs>
-        <filter id="trip-lens" x="-5%" y="-5%" width="110%" height="110%">
-          <feTurbulence id="trip-turb" type="fractalNoise" baseFrequency="0.004" numOctaves="2" seed="3" result="noise"/>
-          <feDisplacementMap id="trip-disp" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="G"/>
-        </filter>
-        <filter id="trip-lens-soft" x="-5%" y="-5%" width="110%" height="110%">
-          <feTurbulence id="trip-turb-soft" type="fractalNoise" baseFrequency="0.004" numOctaves="2" seed="3" result="noise"/>
-          <feDisplacementMap id="trip-disp-soft" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="G"/>
-        </filter>
-      </defs>
-    `;
-    document.body.appendChild(svg);
   }
 
   // ─── Control Panel ────────────────────────────────────────
@@ -99,22 +69,13 @@
         <input type="range" min="0" max="100" value="${Math.round(S.master*100)}" id="trip-s-master">
         <span class="trip-val" id="trip-v-master">${Math.round(S.master*100)}%</span>
       </div>
-      <div class="trip-section">
-        <h4>Effects</h4>
+      <div class="trip-section"><h4>Effects</h4>
         ${makeSlider('hueRotate', 'Hue Cycle')}
         ${makeSlider('kaleidoscope', 'Lens Warp')}
       </div>
-      <div class="trip-section">
-        <h4>⏱ Timeline Scheduler</h4>
-        <div class="trip-time-row">
-          <label>Duration</label>
-          <input type="number" id="trip-ramp-dur" value="${S.rampDuration}" min="1" max="480" step="1"> min
-        </div>
-        <div class="trip-time-row">
-          <label>Target</label>
-          <input type="range" min="0" max="100" value="${Math.round(S.rampTarget*100)}" id="trip-ramp-target" style="flex:1;accent-color:#a855f7">
-          <span class="trip-val" id="trip-v-ramp-target">${Math.round(S.rampTarget*100)}%</span>
-        </div>
+      <div class="trip-section"><h4>⏱ Timeline Scheduler</h4>
+        <div class="trip-time-row"><label>Duration</label><input type="number" id="trip-ramp-dur" value="${S.rampDuration}" min="1" max="480" step="1"> min</div>
+        <div class="trip-time-row"><label>Target</label><input type="range" min="0" max="100" value="${Math.round(S.rampTarget*100)}" id="trip-ramp-target" style="flex:1;accent-color:#a855f7"><span class="trip-val" id="trip-v-ramp-target">${Math.round(S.rampTarget*100)}%</span></div>
         <div id="trip-ramp-bar"><div id="trip-ramp-fill"></div></div>
         <div id="trip-ramp-status">Not active</div>
         <div style="display:flex;gap:8px;margin-top:8px">
@@ -130,7 +91,6 @@
       </div>
     `;
     document.body.appendChild(panel);
-
     const hint = document.createElement('div');
     hint.id = 'trip-hint';
     hint.textContent = 'Press T for trip controls';
@@ -139,79 +99,95 @@
     if (!S.panelOpen) panel.classList.add('hidden');
 
     wireSlider('master'); wireSlider('hueRotate'); wireSlider('kaleidoscope');
-
-    const rts = document.getElementById('trip-ramp-target');
-    const rtv = document.getElementById('trip-v-ramp-target');
-    rts.addEventListener('input', () => { S.rampTarget = parseInt(rts.value)/100; rtv.textContent = rts.value+'%'; save(); });
-    document.getElementById('trip-ramp-dur').addEventListener('change', (e) => { S.rampDuration = Math.max(1, parseInt(e.target.value)||60); save(); });
-    document.getElementById('trip-ramp-start').addEventListener('click', () => { S.rampStart = Date.now(); S.rampActive = true; save(); });
-    document.getElementById('trip-ramp-stop').addEventListener('click', () => { S.rampActive = false; S.rampStart = null; save(); });
-    document.getElementById('trip-kill').addEventListener('click', () => {
-      S.master=0; S.hueRotate=0; S.kaleidoscope=0; S.rampActive=false; S.rampStart=null;
-      save(); syncSliders();
-    });
-    document.getElementById('trip-preset-mild').addEventListener('click', () => { S.hueRotate=0.3; S.kaleidoscope=0.15; S.master=0.4; save(); syncSliders(); });
-    document.getElementById('trip-preset-medium').addEventListener('click', () => { S.hueRotate=0.6; S.kaleidoscope=0.4; S.master=0.7; save(); syncSliders(); });
-    document.getElementById('trip-preset-full').addEventListener('click', () => { S.hueRotate=1; S.kaleidoscope=0.8; S.master=1; save(); syncSliders(); });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (e.key === 't' || e.key === 'T') {
-        S.panelOpen = !S.panelOpen;
-        panel.classList.toggle('hidden', !S.panelOpen);
-        hint.style.display = S.panelOpen ? 'none' : 'block';
-        save();
-      }
+    const rts = document.getElementById('trip-ramp-target'), rtv = document.getElementById('trip-v-ramp-target');
+    rts.addEventListener('input', () => { S.rampTarget=parseInt(rts.value)/100; rtv.textContent=rts.value+'%'; save(); });
+    document.getElementById('trip-ramp-dur').addEventListener('change', e => { S.rampDuration=Math.max(1,parseInt(e.target.value)||60); save(); });
+    document.getElementById('trip-ramp-start').addEventListener('click', () => { S.rampStart=Date.now(); S.rampActive=true; save(); });
+    document.getElementById('trip-ramp-stop').addEventListener('click', () => { S.rampActive=false; S.rampStart=null; save(); });
+    document.getElementById('trip-kill').addEventListener('click', () => { S.master=0;S.hueRotate=0;S.kaleidoscope=0;S.rampActive=false;S.rampStart=null; save();syncSliders(); });
+    document.getElementById('trip-preset-mild').addEventListener('click', () => { S.hueRotate=0.3;S.kaleidoscope=0.15;S.master=0.4; save();syncSliders(); });
+    document.getElementById('trip-preset-medium').addEventListener('click', () => { S.hueRotate=0.6;S.kaleidoscope=0.4;S.master=0.7; save();syncSliders(); });
+    document.getElementById('trip-preset-full').addEventListener('click', () => { S.hueRotate=1;S.kaleidoscope=0.8;S.master=1; save();syncSliders(); });
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+      if (e.key==='t'||e.key==='T') { S.panelOpen=!S.panelOpen; panel.classList.toggle('hidden',!S.panelOpen); hint.style.display=S.panelOpen?'none':'block'; save(); }
     });
   }
 
   function makeSlider(key, label) {
-    const v = Math.round(S[key] * 100);
+    const v = Math.round(S[key]*100);
     return `<div class="trip-row"><label>${label}</label><input type="range" min="0" max="100" value="${v}" id="trip-s-${key}"><span class="trip-val" id="trip-v-${key}">${v}%</span></div>`;
   }
   function wireSlider(key) {
-    const sl = document.getElementById('trip-s-'+key), vl = document.getElementById('trip-v-'+key);
+    const sl=document.getElementById('trip-s-'+key), vl=document.getElementById('trip-v-'+key);
     if (!sl) return;
     sl.addEventListener('input', () => { S[key]=parseInt(sl.value)/100; vl.textContent=sl.value+'%'; save(); });
   }
   function syncSliders() {
     ['master','hueRotate','kaleidoscope'].forEach(k => {
-      const sl = document.getElementById('trip-s-'+k), vl = document.getElementById('trip-v-'+k);
-      if (sl) sl.value = Math.round(S[k]*100);
-      if (vl) vl.textContent = Math.round(S[k]*100)+'%';
+      const sl=document.getElementById('trip-s-'+k), vl=document.getElementById('trip-v-'+k);
+      if (sl) sl.value=Math.round(S[k]*100);
+      if (vl) vl.textContent=Math.round(S[k]*100)+'%';
     });
   }
 
-  // ─── Animation ────────────────────────────────────────────
+  // ─── Animation (all GPU-composited, zero CPU) ─────────────
+  // We use CSS transitions to smoothly interpolate between target values.
+  // JS only runs every 100ms to compute new target values from sine waves.
+  // The browser's compositor handles the smooth animation on the GPU.
+
   let hueAngle = 0;
   let lastTick = Date.now();
-  let turbSeed = 3;
-  let lastTurbUpdate = 0;
-  let lastScale = -1;
-  let lastScaleSoft = -1;
-  let lastFreq = -1;
-
-  // Find the left panel (QR area) and right panel (game area)
-  // In the throne layout: body > ... > div.flex-1.flex > [flex-[3], flex-[7]]
   let leftPanel = null;
   let rightPanel = null;
+  let topBar = null;
 
   function findPanels() {
-    // The main content area is a flex container with two children
-    // Left: flex-[3] (QR + queue), Right: flex-[7] (game)
     const mainFlex = document.querySelector('.flex-1.flex');
     if (mainFlex && mainFlex.children.length >= 2) {
-      leftPanel = mainFlex.children[0]; // flex-[3]
-      rightPanel = mainFlex.children[1]; // flex-[7]
+      leftPanel = mainFlex.children[0];
+      rightPanel = mainFlex.children[1];
     }
+    // Top bar is the first child of body with the title
+    topBar = document.querySelector('.bg-throne-dark.border-b');
+  }
+
+  function setupTransitions() {
+    // Add CSS transitions so transform changes animate smoothly
+    // The browser GPU handles the interpolation — completely free
+    const transStyle = 'transform 3s cubic-bezier(0.4, 0, 0.2, 1)';
+    if (rightPanel) {
+      rightPanel.style.transition = transStyle;
+      rightPanel.style.transformOrigin = 'center center';
+      rightPanel.style.willChange = 'transform';
+    }
+    if (leftPanel) {
+      leftPanel.style.transition = transStyle;
+      leftPanel.style.transformOrigin = 'center center';
+      leftPanel.style.willChange = 'transform';
+    }
+    if (topBar) {
+      topBar.style.transition = transStyle;
+      topBar.style.transformOrigin = 'center center';
+      topBar.style.willChange = 'transform';
+    }
+  }
+
+  // Use multiple slow sine waves at different speeds for organic movement
+  // t is in seconds; returns -1 to 1
+  function organicWave(t, speed1, speed2, speed3) {
+    return (
+      Math.sin(t * speed1) * 0.5 +
+      Math.sin(t * speed2) * 0.3 +
+      Math.sin(t * speed3) * 0.2
+    );
   }
 
   function tick() {
     const body = document.body;
     if (!body) return;
-
     const now = Date.now();
-    const dt = Math.min((now - lastTick) / 1000, 0.2);
+    const dt = Math.min((now - lastTick) / 1000, 0.5);
     lastTick = now;
 
     // Ramp
@@ -221,31 +197,28 @@
       S.master = progress * S.rampTarget;
       syncSliders();
       if (progress >= 1) { S.rampActive = false; save(); }
-      const fill = document.getElementById('trip-ramp-fill');
-      const status = document.getElementById('trip-ramp-status');
-      const startBtn = document.getElementById('trip-ramp-start');
-      const stopBtn = document.getElementById('trip-ramp-stop');
-      if (fill) fill.style.width = (progress*100)+'%';
-      if (startBtn) startBtn.style.display = 'none';
-      if (stopBtn) stopBtn.style.display = '';
-      if (status) {
-        const rem = Math.max(0, S.rampDuration - elapsed);
-        status.textContent = rem > 0 ? Math.floor(rem)+'m '+Math.floor((rem%1)*60)+'s → '+Math.round(S.rampTarget*100)+'%' : 'Ramp complete!';
-      }
+      const fill=document.getElementById('trip-ramp-fill'), status=document.getElementById('trip-ramp-status');
+      const startBtn=document.getElementById('trip-ramp-start'), stopBtn=document.getElementById('trip-ramp-stop');
+      if (fill) fill.style.width=(progress*100)+'%';
+      if (startBtn) startBtn.style.display='none';
+      if (stopBtn) stopBtn.style.display='';
+      if (status) { const rem=Math.max(0,S.rampDuration-elapsed); status.textContent=rem>0?Math.floor(rem)+'m '+Math.floor((rem%1)*60)+'s → '+Math.round(S.rampTarget*100)+'%':'Ramp complete!'; }
     }
 
     const m = S.master;
     if (m < 0.001) {
       body.style.filter = '';
-      if (rightPanel) rightPanel.style.filter = '';
-      if (leftPanel) leftPanel.style.filter = '';
+      if (rightPanel) rightPanel.style.transform = '';
+      if (leftPanel) leftPanel.style.transform = '';
+      if (topBar) topBar.style.transform = '';
       return;
     }
 
     const eHue = S.hueRotate * m;
     const eKaleid = S.kaleidoscope * m;
+    const t = now / 1000; // time in seconds
 
-    // ── Hue rotation: apply to body (affects everything uniformly, QR-safe) ──
+    // ── Hue: one style write per tick ──
     if (eHue > 0.001) {
       hueAngle = (hueAngle + eHue * 120 * dt) % 360;
       body.style.filter = 'hue-rotate(' + Math.round(hueAngle) + 'deg)';
@@ -253,73 +226,50 @@
       body.style.filter = '';
     }
 
-    // ── Lens warp: apply to panels separately ──
-    // Right panel (game): full distortion
-    // Left panel (QR): ~25% distortion for subtle inclusion without breaking scannability
+    // ── Lens Warp: perspective + rotate via CSS transforms ──
+    // Organic multi-sine waves create slowly shifting tilt.
+    // CSS transition (3s ease) smooths between our 100ms updates.
+    // All GPU-composited — zero CPU paint cost.
     if (eKaleid > 0.001) {
-      const turbEl = document.getElementById('trip-turb');
-      const dispEl = document.getElementById('trip-disp');
-      const turbSoftEl = document.getElementById('trip-turb-soft');
-      const dispSoftEl = document.getElementById('trip-disp-soft');
+      // Max tilt in degrees — quadratic for gentle low end
+      const maxTilt = eKaleid * eKaleid * 8; // 0-8 degrees
+      // Perspective distance — closer = more dramatic
+      const perspective = 800 - eKaleid * 400; // 800px to 400px
 
-      if (turbEl && dispEl) {
-        // Full distortion scale — smoother, larger waves (0.004 base freq = big smooth warps)
-        // Increased max scale from 60 to 90 for more dramatic effect
-        const scale = Math.round(eKaleid * eKaleid * 90);
-        if (scale !== lastScale) {
-          dispEl.setAttribute('scale', scale);
-          lastScale = scale;
-        }
+      // Organic movement — different frequencies for X and Y
+      const rx = organicWave(t, 0.13, 0.29, 0.07) * maxTilt;
+      const ry = organicWave(t, 0.11, 0.23, 0.05) * maxTilt;
+      // Slight scale breathing
+      const sc = 1 + organicWave(t, 0.09, 0.17, 0.03) * eKaleid * 0.02;
 
-        // Soft version for left panel — 25% of full strength
-        const scaleSoft = Math.round(scale * 0.25);
-        if (dispSoftEl && scaleSoft !== lastScaleSoft) {
-          dispSoftEl.setAttribute('scale', scaleSoft);
-          lastScaleSoft = scaleSoft;
-        }
+      // Right panel: full effect
+      if (rightPanel) {
+        rightPanel.style.transform = `perspective(${Math.round(perspective)}px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) scale(${sc.toFixed(4)})`;
+      }
 
-        // Base frequency — lower = smoother, bigger waves
-        const freq = Math.round((0.002 + eKaleid * 0.008) * 100000);
-        if (freq !== lastFreq) {
-          const f = freq / 100000;
-          const fStr = f.toFixed(5) + ' ' + (f * 0.7).toFixed(5);
-          turbEl.setAttribute('baseFrequency', fStr);
-          if (turbSoftEl) turbSoftEl.setAttribute('baseFrequency', fStr);
-          lastFreq = freq;
-        }
+      // Left panel: 25% of effect (QR protection)
+      if (leftPanel) {
+        leftPanel.style.transform = `perspective(${Math.round(perspective * 1.5)}px) rotateX(${(rx * 0.25).toFixed(2)}deg) rotateY(${(ry * 0.25).toFixed(2)}deg) scale(${(1 + (sc - 1) * 0.25).toFixed(4)})`;
+      }
 
-        // Morph turbulence seed every 4 seconds
-        if (now - lastTurbUpdate > 4000) {
-          turbSeed = (turbSeed + 1) % 1000;
-          turbEl.setAttribute('seed', turbSeed);
-          if (turbSoftEl) turbSoftEl.setAttribute('seed', turbSeed);
-          lastTurbUpdate = now;
-        }
-
-        // Apply filters to panels
-        if (rightPanel) rightPanel.style.filter = 'url(#trip-lens)';
-        if (leftPanel) leftPanel.style.filter = 'url(#trip-lens-soft)';
+      // Top bar: 15% of effect
+      if (topBar) {
+        topBar.style.transform = `perspective(${Math.round(perspective * 2)}px) rotateX(${(rx * 0.15).toFixed(2)}deg) rotateY(${(ry * 0.15).toFixed(2)}deg)`;
       }
     } else {
-      if (lastScale !== 0) {
-        const dispEl = document.getElementById('trip-disp');
-        const dispSoftEl = document.getElementById('trip-disp-soft');
-        if (dispEl) dispEl.setAttribute('scale', '0');
-        if (dispSoftEl) dispSoftEl.setAttribute('scale', '0');
-        lastScale = 0;
-        lastScaleSoft = 0;
-      }
-      if (rightPanel) rightPanel.style.filter = '';
-      if (leftPanel) leftPanel.style.filter = '';
+      if (rightPanel) rightPanel.style.transform = '';
+      if (leftPanel) leftPanel.style.transform = '';
+      if (topBar) topBar.style.transform = '';
     }
   }
 
   // ─── Init ─────────────────────────────────────────────────
   function init() {
-    injectSVGFilters();
     findPanels();
+    setupTransitions();
     if (!isDisplayMode) createPanel();
-    setInterval(tick, 50); // ~20fps
+    // Only update targets every 100ms — CSS transitions do the smoothing
+    setInterval(tick, 100);
     if (!isDisplayMode) setInterval(() => { if (S.rampActive) save(); }, 5000);
   }
 
