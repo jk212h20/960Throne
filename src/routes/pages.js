@@ -112,6 +112,17 @@ router.get('/throne/trip', (req, res) => {
     res.render('throne', { state, dgt, showVenueCode: true, showVenueCodeText: showCode, tripMode: true });
 });
 
+// Throne Trip Display — effects only, no control panel (for the projector/TV)
+router.get('/throne/trip/display', (req, res) => {
+    if (!req.isAdmin) {
+        return res.render('admin-login', { returnTo: '/throne/trip/display' });
+    }
+    const state = gameEngine.getThoneState();
+    const dgt = dgtBoard.getState();
+    const showCode = db.getConfig('show_venue_code') === 'true';
+    res.render('throne', { state, dgt, showVenueCode: true, showVenueCodeText: showCode, tripDisplay: true });
+});
+
 // Live — Public web version of throne (no QR code, shows "Watch live" URL instead)
 router.get('/live', (req, res) => {
     const state = gameEngine.getThoneState();

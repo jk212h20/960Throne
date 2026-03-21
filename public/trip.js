@@ -2,27 +2,32 @@
  * 960 Throne — Psychedelic Party Mode
  * Pure client-side CSS/SVG filter effects with control panel & timeline scheduler.
  * Each effect has an independent 0–1 slider, multiplied by a master intensity.
- * All state persisted to localStorage so it survives page reloads (throne reloads on game transitions).
+ * All state persisted to localStorage so it survives page reloads.
  *
- * Usage: Include this script on any page. Press 'T' to toggle control panel.
+ * Display mode: include with data-display attribute to hide controls and just render effects.
+ *   <script src="/trip.js" data-display></script>
+ * Control mode (default): shows the control panel.
+ *   <script src="/trip.js"></script>
+ *
+ * Press 'T' to toggle control panel (control mode only).
  */
 (function() {
   'use strict';
+
+  // Detect display-only mode from script tag attribute
+  const scriptTag = document.currentScript;
+  const isDisplayMode = scriptTag && scriptTag.hasAttribute('data-display');
 
   // ─── State ────────────────────────────────────────────────
   const STORAGE_KEY = '_trip';
   const defaults = {
     master: 0,
-    hueRotate: 0,     // rainbow color cycling speed
-    colorPulse: 0,     // saturation/brightness throb
-    warp: 0,           // SVG displacement warp
-    kaleidoscope: 0,   // contrast + invert cycling
-    glow: 0,           // bloom/glow overlay
-    rgbSplit: 0,       // chromatic aberration
+    hueRotate: 0,       // rainbow color cycling speed
+    kaleidoscope: 0,     // bumpy lens distortion
     // Timeline
-    rampStart: null,    // timestamp ms
-    rampDuration: 60,   // minutes
-    rampTarget: 1,      // target master value
+    rampStart: null,
+    rampDuration: 60,    // minutes
+    rampTarget: 1,
     rampActive: false,
     panelOpen: true,
   };
@@ -37,6 +42,17 @@
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch(e) {}
   }
 
+  // In display mode, periodically re-read state from localStorage
+  // so the display page follows the control page's settings
+  if (isDisplayMode) {
+    setInterval(() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (saved) Object.assign(S, saved);
+      } catch(e) {}
+    }, 200);
+  }
+
   // ─── SVG Filter Definitions ───────────────────────────────
   function injectSVGFilters() {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -45,35 +61,19 @@
     svg.style.position = 'absolute';
     svg.innerHTML = `
       <defs>
-        <filter id="trip-warp" x="-10%" y="-10%" width="120%" height="120%">
-          <feTurbulence id="trip-turbulence" type="fractalNoise" baseFrequency="0.015" numOctaves="3" seed="1" result="noise"/>
-          <feDisplacementMap id="trip-displacement" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="G"/>
-        </filter>
-        <filter id="trip-rgb" x="-5%" y="-5%" width="110%" height="110%">
-          <feOffset id="trip-r-offset" in="SourceGraphic" dx="0" dy="0" result="r"/>
-          <feOffset id="trip-b-offset" in="SourceGraphic" dx="0" dy="0" result="b"/>
-          <feColorMatrix in="r" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red"/>
-          <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="green"/>
-          <feColorMatrix in="b" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="blue"/>
-          <feBlend in="red" in2="green" mode="screen" result="rg"/>
-          <feBlend in="rg" in2="blue" mode="screen"/>
+        <filter id="trip-lens" x="-10%" y="-10%" width="120%" height="120%">
+          <feTurbulence id="trip-lens-turb" type="turbulence" baseFrequency="0.01 0.01" numOctaves="4" seed="3" result="noise" stitchTiles="stitch"/>
+          <feDisplacementMap id="trip-lens-disp" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="G"/>
         </filter>
       </defs>
     `;
     document.body.appendChild(svg);
   }
 
-  // ─── Glow Overlay ─────────────────────────────────────────
-  let glowEl = null;
-  function createGlowOverlay() {
-    glowEl = document.createElement('div');
-    glowEl.id = 'trip-glow';
-    glowEl.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9998;mix-blend-mode:screen;opacity:0;backdrop-filter:blur(0px);';
-    document.body.appendChild(glowEl);
-  }
-
-  // ─── Control Panel ────────────────────────────────────────
+  // ─── Control Panel (only in control mode) ─────────────────
   function createPanel() {
+    if (isDisplayMode) return;
+
     const panel = document.createElement('div');
     panel.id = 'trip-panel';
     panel.innerHTML = `
@@ -119,11 +119,7 @@
       <div class="trip-section">
         <h4>Effects</h4>
         ${makeSlider('hueRotate', 'Hue Cycle')}
-        ${makeSlider('colorPulse', 'Color Pulse')}
-        ${makeSlider('warp', 'Warp')}
-        ${makeSlider('kaleidoscope', 'Kaleidoscope')}
-        ${makeSlider('glow', 'Glow/Bloom')}
-        ${makeSlider('rgbSplit', 'RGB Split')}
+        ${makeSlider('kaleidoscope', 'Lens Warp')}
       </div>
 
       <div class="trip-section">
@@ -165,7 +161,8 @@
 
     // Wire up sliders
     wireSlider('master');
-    ['hueRotate','colorPulse','warp','kaleidoscope','glow','rgbSplit'].forEach(wireSlider);
+    wireSlider('hueRotate');
+    wireSlider('kaleidoscope');
 
     // Ramp target slider
     const rampTargetSlider = document.getElementById('trip-ramp-target');
@@ -199,9 +196,10 @@
     // Kill all
     document.getElementById('trip-kill').addEventListener('click', () => {
       S.master = 0;
-      S.hueRotate = 0; S.colorPulse = 0; S.warp = 0;
-      S.kaleidoscope = 0; S.glow = 0; S.rgbSplit = 0;
-      S.rampActive = false; S.rampStart = null;
+      S.hueRotate = 0;
+      S.kaleidoscope = 0;
+      S.rampActive = false;
+      S.rampStart = null;
       save();
       syncSlidersFromState();
       updateRampUI();
@@ -209,20 +207,20 @@
 
     // Presets
     document.getElementById('trip-preset-mild').addEventListener('click', () => {
-      S.hueRotate = 0.3; S.colorPulse = 0.2; S.warp = 0.1;
-      S.kaleidoscope = 0; S.glow = 0.2; S.rgbSplit = 0.1;
+      S.hueRotate = 0.3;
+      S.kaleidoscope = 0.15;
       S.master = 0.4;
       save(); syncSlidersFromState();
     });
     document.getElementById('trip-preset-medium').addEventListener('click', () => {
-      S.hueRotate = 0.6; S.colorPulse = 0.5; S.warp = 0.3;
-      S.kaleidoscope = 0.2; S.glow = 0.4; S.rgbSplit = 0.3;
+      S.hueRotate = 0.6;
+      S.kaleidoscope = 0.4;
       S.master = 0.7;
       save(); syncSlidersFromState();
     });
     document.getElementById('trip-preset-full').addEventListener('click', () => {
-      S.hueRotate = 1; S.colorPulse = 0.8; S.warp = 0.7;
-      S.kaleidoscope = 0.5; S.glow = 0.7; S.rgbSplit = 0.6;
+      S.hueRotate = 1;
+      S.kaleidoscope = 0.8;
       S.master = 1;
       save(); syncSlidersFromState();
     });
@@ -260,7 +258,7 @@
   }
 
   function syncSlidersFromState() {
-    ['master','hueRotate','colorPulse','warp','kaleidoscope','glow','rgbSplit'].forEach(key => {
+    ['master','hueRotate','kaleidoscope'].forEach(key => {
       const slider = document.getElementById('trip-s-' + key);
       const val = document.getElementById('trip-v-' + key);
       if (slider) slider.value = Math.round(S[key] * 100);
@@ -273,10 +271,11 @@
     const stopBtn = document.getElementById('trip-ramp-stop');
     const status = document.getElementById('trip-ramp-status');
     const fill = document.getElementById('trip-ramp-fill');
+    if (!startBtn) return; // display mode — no UI
     if (S.rampActive) {
       startBtn.style.display = 'none';
       stopBtn.style.display = '';
-      const elapsed = (Date.now() - S.rampStart) / 1000 / 60; // minutes
+      const elapsed = (Date.now() - S.rampStart) / 1000 / 60;
       const progress = Math.min(1, elapsed / S.rampDuration);
       fill.style.width = (progress * 100) + '%';
       const remaining = Math.max(0, S.rampDuration - elapsed);
@@ -295,17 +294,22 @@
 
   // ─── Animation Loop ───────────────────────────────────────
   let t = 0;
-  const target = document.documentElement; // apply filters to <html> so everything is affected
+  let lastTime = performance.now();
+  const target = document.documentElement;
 
-  function animate() {
-    t += 0.016; // ~60fps time step
+  // For smooth lens morph we track the current turbulence seed as a float
+  let lensSeed = 3.0;
 
-    // Timeline ramp — auto-adjust master
-    if (S.rampActive && S.rampStart) {
+  function animate(now) {
+    const dt = Math.min((now - lastTime) / 1000, 0.1); // cap delta to avoid jumps
+    lastTime = now;
+    t += dt;
+
+    // Timeline ramp — auto-adjust master (only in control mode)
+    if (!isDisplayMode && S.rampActive && S.rampStart) {
       const elapsed = (Date.now() - S.rampStart) / 1000 / 60;
       const progress = Math.min(1, elapsed / S.rampDuration);
       S.master = progress * S.rampTarget;
-      // Update master slider
       const ms = document.getElementById('trip-s-master');
       const mv = document.getElementById('trip-v-master');
       if (ms) ms.value = Math.round(S.master * 100);
@@ -319,22 +323,14 @@
 
     const m = S.master;
     if (m < 0.001) {
-      // No effects — clear everything
       target.style.filter = '';
-      if (glowEl) glowEl.style.opacity = '0';
       requestAnimationFrame(animate);
       return;
     }
 
-    // Effective values (each * master)
     const eHue = S.hueRotate * m;
-    const ePulse = S.colorPulse * m;
-    const eWarp = S.warp * m;
     const eKaleid = S.kaleidoscope * m;
-    const eGlow = S.glow * m;
-    const eRgb = S.rgbSplit * m;
 
-    // Build CSS filter chain
     const filters = [];
 
     // 1. Hue Rotate — cycles continuously, speed based on value
@@ -344,77 +340,42 @@
       filters.push(`hue-rotate(${hueDeg.toFixed(1)}deg)`);
     }
 
-    // 2. Color Pulse — oscillating saturation + brightness
-    if (ePulse > 0.001) {
-      const pulsePhase = Math.sin(t * 2.5) * 0.5 + 0.5; // 0-1 oscillation
-      const sat = 1 + ePulse * pulsePhase * 2; // 1x to 3x
-      const bright = 1 + ePulse * Math.sin(t * 1.8) * 0.3; // subtle brightness
-      filters.push(`saturate(${sat.toFixed(2)}) brightness(${bright.toFixed(2)})`);
-    }
-
-    // 3. Warp — SVG displacement map
-    if (eWarp > 0.001) {
-      const turbEl = document.getElementById('trip-turbulence');
-      const dispEl = document.getElementById('trip-displacement');
+    // 2. Kaleidoscope / Bumpy Lens — SVG displacement with slowly morphing turbulence
+    //    At low values: very subtle waviness, like looking through old glass
+    //    At high values: strong liquid distortion, the whole screen warps and breathes
+    if (eKaleid > 0.001) {
+      const turbEl = document.getElementById('trip-lens-turb');
+      const dispEl = document.getElementById('trip-lens-disp');
       if (turbEl && dispEl) {
-        // Animate turbulence seed for movement
-        const freq = 0.008 + eWarp * 0.02;
-        turbEl.setAttribute('baseFrequency', freq.toFixed(4));
-        // Animate seed slowly for morphing
-        turbEl.setAttribute('seed', Math.floor(t * 2) % 100);
-        dispEl.setAttribute('scale', (eWarp * 40).toFixed(1));
-        filters.push('url(#trip-warp)');
+        // Base frequency controls how "bumpy" the lens is
+        // Low kaleid = large smooth bumps, high = tighter more chaotic bumps
+        const freqBase = 0.003 + eKaleid * 0.015;
+        // Add slow breathing oscillation to frequency
+        const freqBreath = Math.sin(t * 0.3) * eKaleid * 0.004;
+        const freq = freqBase + freqBreath;
+        turbEl.setAttribute('baseFrequency', freq.toFixed(5) + ' ' + (freq * 0.8).toFixed(5));
+
+        // Slowly morph the noise pattern by incrementing seed
+        // This creates the "living lens" feeling — the bumps slowly shift
+        lensSeed += dt * (0.3 + eKaleid * 0.7); // faster morph at higher intensity
+        turbEl.setAttribute('seed', Math.floor(lensSeed) % 1000);
+
+        // Displacement scale: how much the bumps distort
+        // Starts very subtle (2-3px), ramps up to strong (50px+)
+        const baseScale = eKaleid * eKaleid * 60; // quadratic — gentle at low, strong at high
+        // Add slow pulsing to the displacement for "breathing" effect
+        const scalePulse = Math.sin(t * 0.5) * eKaleid * 8;
+        const scale = baseScale + scalePulse;
+        dispEl.setAttribute('scale', Math.max(0, scale).toFixed(1));
+
+        filters.push('url(#trip-lens)');
       }
     } else {
-      const dispEl = document.getElementById('trip-displacement');
+      const dispEl = document.getElementById('trip-lens-disp');
       if (dispEl) dispEl.setAttribute('scale', '0');
     }
 
-    // 4. Kaleidoscope — contrast + periodic invert
-    if (eKaleid > 0.001) {
-      const contrast = 1 + eKaleid * Math.sin(t * 1.5) * 0.8;
-      filters.push(`contrast(${contrast.toFixed(2)})`);
-      // Periodic brief invert flashes at higher intensity
-      if (eKaleid > 0.3) {
-        const invertPhase = Math.pow(Math.sin(t * 3), 20); // sharp spikes
-        const invertAmt = invertPhase * eKaleid * 0.6;
-        if (invertAmt > 0.01) filters.push(`invert(${invertAmt.toFixed(2)})`);
-      }
-    }
-
-    // 5. RGB Split — SVG channel offset
-    if (eRgb > 0.001) {
-      const rOff = document.getElementById('trip-r-offset');
-      const bOff = document.getElementById('trip-b-offset');
-      if (rOff && bOff) {
-        const dx = Math.sin(t * 2) * eRgb * 8;
-        const dy = Math.cos(t * 1.7) * eRgb * 4;
-        rOff.setAttribute('dx', dx.toFixed(1));
-        rOff.setAttribute('dy', (-dy).toFixed(1));
-        bOff.setAttribute('dx', (-dx).toFixed(1));
-        bOff.setAttribute('dy', dy.toFixed(1));
-        filters.push('url(#trip-rgb)');
-      }
-    } else {
-      const rOff = document.getElementById('trip-r-offset');
-      const bOff = document.getElementById('trip-b-offset');
-      if (rOff) { rOff.setAttribute('dx', '0'); rOff.setAttribute('dy', '0'); }
-      if (bOff) { bOff.setAttribute('dx', '0'); bOff.setAttribute('dy', '0'); }
-    }
-
-    // Apply combined filter
     target.style.filter = filters.length ? filters.join(' ') : '';
-
-    // 6. Glow overlay — separate from main filter chain
-    if (glowEl) {
-      if (eGlow > 0.001) {
-        const blurPx = eGlow * 20 + Math.sin(t * 1.2) * eGlow * 8;
-        glowEl.style.opacity = (eGlow * 0.4).toFixed(2);
-        glowEl.style.backdropFilter = `blur(${blurPx.toFixed(1)}px) brightness(${(1 + eGlow * 0.5).toFixed(2)})`;
-      } else {
-        glowEl.style.opacity = '0';
-      }
-    }
 
     requestAnimationFrame(animate);
   }
@@ -422,12 +383,15 @@
   // ─── Init ─────────────────────────────────────────────────
   function init() {
     injectSVGFilters();
-    createGlowOverlay();
-    createPanel();
+    if (!isDisplayMode) {
+      createPanel();
+    }
     requestAnimationFrame(animate);
 
-    // Periodically save state (for ramp progress)
-    setInterval(() => { if (S.rampActive) save(); }, 5000);
+    // Periodically save state for ramp progress (control mode only)
+    if (!isDisplayMode) {
+      setInterval(() => { if (S.rampActive) save(); }, 5000);
+    }
   }
 
   if (document.readyState === 'loading') {
