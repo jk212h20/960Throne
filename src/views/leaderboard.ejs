@@ -414,7 +414,7 @@
                         </td>
                         <td class="player-name"><%= p.name %></td>
                         <td class="sats-cell"><%= p.total_sats_earned.toLocaleString() %></td>
-                        <% var _ts = Math.floor(p.total_sats_earned / 21); %>
+                        <% var _ts = Math.floor(p.total_reign_seconds || 0); %>
                         <td class="data-cell throne-time"><%= Math.floor(_ts / 3600) %>:<%= String(Math.floor((_ts % 3600) / 60)).padStart(2, '0') %>:<%= String(_ts % 60).padStart(2, '0') %></td>
                         <td class="data-cell wins"><%= p.games_won %></td>
                         <td class="data-cell losses"><%= p.games_lost %></td>
@@ -507,7 +507,7 @@
             if (cells.length < 8) return;
             cells[1].textContent = p.name;
             cells[2].textContent = p.total_sats_earned.toLocaleString();
-            const ts = Math.floor(p.total_sats_earned / 21);
+            const ts = Math.floor(p.total_reign_seconds || 0);
             cells[3].textContent = formatTime(ts);
             cells[4].textContent = p.games_won;
             cells[5].textContent = p.games_lost;
