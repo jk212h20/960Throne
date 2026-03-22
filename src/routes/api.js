@@ -602,6 +602,11 @@ router.get('/auth/lightning/callback', (req, res) => {
     let isNewPlayer = false;
 
     if (!player) {
+        // Check if registrations are locked
+        const regLocked = db.getConfig('registrations_locked');
+        if (regLocked === '1' || regLocked === 'true') {
+            return res.json({ status: 'ERROR', reason: 'Registrations are currently closed. Thanks for playing!' });
+        }
         // New player — create account with lightning auth
         const playerId = db.createPlayerWithAuth('lightning', authId);
         player = db.getPlayerById(playerId);

@@ -263,8 +263,9 @@
     // Thank you overlay runs regardless of master level
     tickThankYou();
 
+    // When Thank You overlay is visible, disable SVG filters to save CPU
     const m = S.master;
-    if (m < 0.001) {
+    if (m < 0.001 || S.showThankYou) {
       body.style.filter = '';
       if (rightPanel) { rightPanel.style.filter = ''; rightPanel.style.transform = ''; }
       if (leftPanel) { leftPanel.style.filter = ''; leftPanel.style.transform = ''; }
