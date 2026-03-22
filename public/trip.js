@@ -27,12 +27,51 @@
 
   let S = Object.assign({}, defaults);
   try { const s = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (s) Object.assign(S, s); } catch(e) {}
-  function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch(e) {} }
 
+  // Socket.io — reuse existing connection if the page already has one,
+  // otherwise create a new one. Avoids duplicate connections.
+  let _socket = null;
+  function getSocket() {
+    if (_socket) return _socket;
+    // Check if the page already has a socket (throne.ejs creates one as `socket`)
+    if (typeof socket !== 'undefined' && socket && socket.emit) { _socket = socket; return _socket; }
+    // Fallback: create our own connection
+    if (typeof io !== 'undefined') { _socket = io(); return _socket; }
+    return null;
+  }
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch(e) {}
+    // Broadcast to other devices via Socket.io
+    const sock = getSocket();
+    if (sock) sock.emit('trip_state', S);
+  }
+
+  // Display mode: listen for trip_state via Socket.io (works cross-device)
+  // Also poll localStorage as fallback (same-device)
   if (isDisplayMode) {
+    // localStorage fallback (same device)
     setInterval(() => {
       try { const s = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (s) Object.assign(S, s); } catch(e) {}
-    }, 250);
+    }, 500);
+  }
+
+  // Socket.io listener — works for both control and display mode
+  // Display mode: receives state from control on another device
+  // Control mode: receives state if another control page changes it
+  function initSocket() {
+    const sock = getSocket();
+    if (!sock) return;
+    sock.on('trip_state', (data) => {
+      if (data) {
+        Object.assign(S, data);
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch(e) {}
+        // Update sliders if control panel is visible
+        if (!isDisplayMode) syncSliders();
+      }
+    });
+    // Request latest state from server on connect (in case we missed updates)
+    sock.emit('request_trip_state');
   }
 
   // ─── Control Panel ────────────────────────────────────────
@@ -289,6 +328,7 @@
     findPanels();
     setupTransitions();
     if (!isDisplayMode) createPanel();
+    initSocket(); // Cross-device sync via Socket.io
     setInterval(tick, 100);
     if (!isDisplayMode) setInterval(() => { if (S.rampActive) save(); }, 5000);
   }

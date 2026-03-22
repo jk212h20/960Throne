@@ -98,6 +98,20 @@ async function start() {
             socket.emit('throne_state', gameEngine.getThoneState());
         });
 
+        // ─── Trip Mode: relay state between control and display devices ──
+        socket.on('trip_state', (data) => {
+            // Store latest trip state on server so new connections get it
+            if (!global._tripState) global._tripState = {};
+            Object.assign(global._tripState, data);
+            // Broadcast to all OTHER clients (display pages on different devices)
+            socket.broadcast.emit('trip_state', data);
+        });
+        socket.on('request_trip_state', () => {
+            if (global._tripState) {
+                socket.emit('trip_state', global._tripState);
+            }
+        });
+
         socket.on('disconnect', () => {
             // cleanup if needed
         });
