@@ -244,6 +244,17 @@
                     </div>
                     <% }) %>
                 </div>
+                <!-- Lock Event Button -->
+                <div class="mt-3 pt-3 border-t border-gray-700">
+                    <% const isLocked = config['registrations_locked'] === '1' || config['registrations_locked'] === 'true'; %>
+                    <% const satsOff = config['sat_rate_per_second'] === '0'; %>
+                    <% if (isLocked && satsOff) { %>
+                        <div class="text-xs text-green-400 mb-2">✅ Event is locked — no new signups, sats stopped</div>
+                        <button onclick="unlockEvent()" class="w-full text-sm bg-green-900 hover:bg-green-800 text-green-300 px-3 py-2 rounded">🔓 Unlock Event (re-enable signups + sats)</button>
+                    <% } else { %>
+                        <button onclick="lockEvent()" class="w-full text-sm bg-red-900 hover:bg-red-800 text-red-300 px-3 py-2 rounded">🔒 Lock Event (stop signups + sats)</button>
+                    <% } %>
+                </div>
             </div>
 
             <!-- Lightning Node -->
@@ -466,6 +477,18 @@
             if (await api('/api/admin/queue/insert', { playerId: parseInt(id), position: pos })) setTimeout(() => location.reload(), 500);
         }
         async function updateConfig(key, value) { await api('/api/admin/config', { key, value }); }
+        async function lockEvent() {
+            if (!confirm('🔒 Lock event?\n\n• New registrations will be blocked\n• Sats will stop accumulating')) return;
+            await api('/api/admin/config', { key: 'registrations_locked', value: '1' });
+            await api('/api/admin/config', { key: 'sat_rate_per_second', value: '0' });
+            setTimeout(() => location.reload(), 500);
+        }
+        async function unlockEvent() {
+            if (!confirm('🔓 Unlock event?\n\n• Registrations will be re-enabled\n• Sats will resume at 21/sec')) return;
+            await api('/api/admin/config', { key: 'registrations_locked', value: '0' });
+            await api('/api/admin/config', { key: 'sat_rate_per_second', value: '21' });
+            setTimeout(() => location.reload(), 500);
+        }
         async function mergeAccounts() {
             const targetId = document.getElementById('merge-target').value.trim();
             const sourceId = document.getElementById('merge-source').value.trim();
