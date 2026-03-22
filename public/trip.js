@@ -20,7 +20,7 @@
 
   const STORAGE_KEY = '_trip';
   const defaults = {
-    master: 0, hueRotate: 0, kaleidoscope: 0,
+    master: 0, hueRotate: 0, kaleidoscope: 0, goombas: 0,
     rampStart: null, rampDuration: 60, rampTarget: 1, rampActive: false,
     panelOpen: true,
   };
@@ -111,6 +111,7 @@
       <div class="trip-section"><h4>Effects</h4>
         ${makeSlider('hueRotate', 'Hue Cycle')}
         ${makeSlider('kaleidoscope', 'Lens Warp')}
+        ${makeSlider('goombas', '🍄 Goombas')}
       </div>
       <div class="trip-section"><h4>⏱ Timeline Scheduler</h4>
         <div class="trip-time-row"><label>Duration</label><input type="number" id="trip-ramp-dur" value="${S.rampDuration}" min="1" max="480" step="1"> min</div>
@@ -141,16 +142,16 @@
     document.body.appendChild(hint);
     if (!S.panelOpen) panel.classList.add('hidden');
 
-    wireSlider('master'); wireSlider('hueRotate'); wireSlider('kaleidoscope');
+    wireSlider('master'); wireSlider('hueRotate'); wireSlider('kaleidoscope'); wireSlider('goombas');
     const rts = document.getElementById('trip-ramp-target'), rtv = document.getElementById('trip-v-ramp-target');
     rts.addEventListener('input', () => { S.rampTarget=parseInt(rts.value)/100; rtv.textContent=rts.value+'%'; save(); });
     document.getElementById('trip-ramp-dur').addEventListener('change', e => { S.rampDuration=Math.max(1,parseInt(e.target.value)||60); save(); });
     document.getElementById('trip-ramp-start').addEventListener('click', () => { S.rampStart=Date.now(); S.rampActive=true; save(); });
     document.getElementById('trip-ramp-stop').addEventListener('click', () => { S.rampActive=false; S.rampStart=null; save(); });
-    document.getElementById('trip-kill').addEventListener('click', () => { S.master=0;S.hueRotate=0;S.kaleidoscope=0;S.rampActive=false;S.rampStart=null; save();syncSliders(); });
-    document.getElementById('trip-preset-mild').addEventListener('click', () => { S.hueRotate=0.3;S.kaleidoscope=0.15;S.master=0.4; save();syncSliders(); });
-    document.getElementById('trip-preset-medium').addEventListener('click', () => { S.hueRotate=0.6;S.kaleidoscope=0.4;S.master=0.7; save();syncSliders(); });
-    document.getElementById('trip-preset-full').addEventListener('click', () => { S.hueRotate=1;S.kaleidoscope=0.8;S.master=1; save();syncSliders(); });
+    document.getElementById('trip-kill').addEventListener('click', () => { S.master=0;S.hueRotate=0;S.kaleidoscope=0;S.goombas=0;S.rampActive=false;S.rampStart=null; save();syncSliders(); });
+    document.getElementById('trip-preset-mild').addEventListener('click', () => { S.hueRotate=0.3;S.kaleidoscope=0.15;S.goombas=0.2;S.master=0.4; save();syncSliders(); });
+    document.getElementById('trip-preset-medium').addEventListener('click', () => { S.hueRotate=0.6;S.kaleidoscope=0.4;S.goombas=0.5;S.master=0.7; save();syncSliders(); });
+    document.getElementById('trip-preset-full').addEventListener('click', () => { S.hueRotate=1;S.kaleidoscope=0.8;S.goombas=1;S.master=1; save();syncSliders(); });
     document.getElementById('trip-hot-reload').addEventListener('click', () => triggerHotReload());
     document.addEventListener('keydown', e => {
       if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
@@ -168,7 +169,7 @@
     sl.addEventListener('input', () => { S[key]=parseInt(sl.value)/100; vl.textContent=sl.value+'%'; save(); });
   }
   function syncSliders() {
-    ['master','hueRotate','kaleidoscope'].forEach(k => {
+    ['master','hueRotate','kaleidoscope','goombas'].forEach(k => {
       const sl=document.getElementById('trip-s-'+k), vl=document.getElementById('trip-v-'+k);
       if (sl) sl.value=Math.round(S[k]*100);
       if (vl) vl.textContent=Math.round(S[k]*100)+'%';
@@ -325,6 +326,98 @@
       if (leftPanel) { leftPanel.style.filter = ''; leftPanel.style.transform = ''; }
       if (topBar) topBar.style.transform = '';
     }
+
+    // ── Goombas ──
+    tickGoombas();
+  }
+
+  // ─── Goombas ──────────────────────────────────────────────
+  // Classic NES-style goombas walking across the top bar.
+  // Controlled by goombas slider (0–1) × master.
+  // At 100% = one goomba every ~2 seconds. At 10% = one every ~20s.
+  const GOOMBA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="40" height="40" style="image-rendering:pixelated">
+    <rect x="5" y="0" width="6" height="2" fill="#8B4513"/>
+    <rect x="3" y="2" width="10" height="2" fill="#8B4513"/>
+    <rect x="2" y="4" width="12" height="2" fill="#D2691E"/>
+    <rect x="1" y="6" width="14" height="2" fill="#D2691E"/>
+    <rect x="2" y="8" width="4" height="2" fill="#FFF"/>
+    <rect x="4" y="8" width="2" height="2" fill="#000"/>
+    <rect x="10" y="8" width="4" height="2" fill="#FFF"/>
+    <rect x="10" y="8" width="2" height="2" fill="#000"/>
+    <rect x="6" y="8" width="4" height="2" fill="#D2691E"/>
+    <rect x="1" y="10" width="14" height="2" fill="#F5DEB3"/>
+    <rect x="3" y="12" width="4" height="2" fill="#8B4513"/>
+    <rect x="9" y="12" width="4" height="2" fill="#8B4513"/>
+    <rect x="2" y="14" width="5" height="2" fill="#000"/>
+    <rect x="9" y="14" width="5" height="2" fill="#000"/>
+  </svg>`;
+
+  let _goombaInterval = null;
+  let _goombaContainer = null;
+
+  function initGoombas() {
+    if (_goombaContainer) return;
+    _goombaContainer = document.createElement('div');
+    _goombaContainer.id = 'trip-goombas';
+    _goombaContainer.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:60px;pointer-events:none;z-index:9999;overflow:hidden';
+    document.body.appendChild(_goombaContainer);
+
+    // Inject goomba walk keyframes
+    const style = document.createElement('style');
+    style.id = 'trip-goomba-style';
+    style.textContent = `
+      @keyframes goomba-walk {
+        0% { transform: translateX(100vw) scaleX(-1); }
+        100% { transform: translateX(-60px) scaleX(-1); }
+      }
+      @keyframes goomba-walk-r {
+        0% { transform: translateX(-60px); }
+        100% { transform: translateX(100vw); }
+      }
+      @keyframes goomba-bob {
+        0%, 100% { margin-top: 0px; }
+        50% { margin-top: -3px; }
+      }
+      .trip-goomba {
+        position: absolute;
+        bottom: 0;
+        animation-timing-function: linear;
+        animation-fill-mode: forwards;
+      }
+      .trip-goomba-inner {
+        animation: goomba-bob 0.4s steps(2) infinite;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function spawnGoomba() {
+    if (!_goombaContainer) return;
+    const goesRight = Math.random() > 0.5;
+    const speed = 8 + Math.random() * 12; // 8-20 seconds to cross
+    const goomba = document.createElement('div');
+    goomba.className = 'trip-goomba';
+    goomba.style.animationName = goesRight ? 'goomba-walk-r' : 'goomba-walk';
+    goomba.style.animationDuration = speed + 's';
+    goomba.innerHTML = `<div class="trip-goomba-inner">${GOOMBA_SVG}</div>`;
+    _goombaContainer.appendChild(goomba);
+    // Remove after animation completes
+    setTimeout(() => goomba.remove(), (speed + 1) * 1000);
+  }
+
+  function tickGoombas() {
+    const eGoombas = S.goombas * S.master;
+    if (eGoombas < 0.001) return;
+    // Spawn probability per tick (100ms): higher slider = more goombas
+    // At 100%: ~one every 2 seconds. At 10%: ~one every 20 seconds.
+    const spawnChance = eGoombas * 0.05; // 5% per tick at full = avg 2s
+    if (Math.random() < spawnChance) spawnGoomba();
+  }
+
+  function cleanupGoombas() {
+    if (_goombaContainer) { _goombaContainer.remove(); _goombaContainer = null; }
+    const style = document.getElementById('trip-goomba-style');
+    if (style) style.remove();
   }
 
   // ─── Hot Reload ───────────────────────────────────────────
@@ -351,6 +444,8 @@
     // Remove SVG filters
     const svgs = document.querySelectorAll('svg');
     svgs.forEach(s => { if (s.querySelector('#trip-lens')) s.remove(); });
+    // Cleanup goombas
+    cleanupGoombas();
     // Remove the old script tag
     const oldScript = document.querySelector('script[src^="/trip.js"]');
     if (oldScript) oldScript.remove();
@@ -376,6 +471,7 @@
   // ─── Init ─────────────────────────────────────────────────
   function init() {
     injectSVGFilters();
+    initGoombas();
     findPanels();
     setupTransitions();
     if (!isDisplayMode) createPanel();
