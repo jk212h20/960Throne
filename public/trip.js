@@ -22,7 +22,7 @@
   const defaults = {
     master: 0, hueRotate: 0, kaleidoscope: 0, goombas: 0,
     rampStart: null, rampDuration: 60, rampTarget: 1, rampActive: false,
-    panelOpen: true,
+    panelOpen: true, showThankYou: false,
   };
 
   let S = Object.assign({}, defaults);
@@ -130,8 +130,8 @@
         <button class="trip-btn" id="trip-preset-full">Full Send</button>
       </div>
       <div class="trip-section" style="display:flex;gap:8px;align-items:center">
-        <button class="trip-btn" id="trip-hot-reload" style="border-color:rgba(168,85,247,0.4);color:#a855f7;background:rgba(168,85,247,0.1)">🔄 Hot Reload All</button>
-        <span style="font-size:10px;color:#555">Re-fetch trip.js on all pages (no page reload)</span>
+        <button class="trip-btn" id="trip-thankyou-btn" style="border-color:rgba(34,197,94,0.4);color:#22c55e;background:rgba(34,197,94,0.1);font-size:14px">🏆 Thank You Screen</button>
+        <button class="trip-btn" id="trip-hot-reload" style="border-color:rgba(168,85,247,0.4);color:#a855f7;background:rgba(168,85,247,0.1)">🔄 Hot Reload</button>
       </div>
     `;
     document.body.appendChild(panel);
@@ -152,6 +152,7 @@
     document.getElementById('trip-preset-mild').addEventListener('click', () => { S.hueRotate=0.3;S.kaleidoscope=0.15;S.goombas=0.2;S.master=0.4; save();syncSliders(); });
     document.getElementById('trip-preset-medium').addEventListener('click', () => { S.hueRotate=0.6;S.kaleidoscope=0.4;S.goombas=0.5;S.master=0.7; save();syncSliders(); });
     document.getElementById('trip-preset-full').addEventListener('click', () => { S.hueRotate=1;S.kaleidoscope=0.8;S.goombas=1;S.master=1; save();syncSliders(); });
+    document.getElementById('trip-thankyou-btn').addEventListener('click', () => toggleThankYou());
     document.getElementById('trip-hot-reload').addEventListener('click', () => triggerHotReload());
     document.addEventListener('keydown', e => {
       if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
@@ -258,6 +259,9 @@
       if (stopBtn) stopBtn.style.display='';
       if (status) { const rem=Math.max(0,S.rampDuration-elapsed); status.textContent=rem>0?Math.floor(rem)+'m '+Math.floor((rem%1)*60)+'s → '+Math.round(S.rampTarget*100)+'%':'Ramp complete!'; }
     }
+
+    // Thank you overlay runs regardless of master level
+    tickThankYou();
 
     const m = S.master;
     if (m < 0.001) {
@@ -423,6 +427,102 @@
     if (style) style.remove();
   }
 
+  // ─── Thank You Overlay ────────────────────────────────────
+  let _thankYouEl = null;
+  let _thankYouVisible = false;
+
+  function formatTime(totalSecs) {
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = Math.floor(totalSecs % 60);
+    if (h > 0) return h + 'h ' + m + 'm ' + s + 's';
+    if (m > 0) return m + 'm ' + s + 's';
+    return s + 's';
+  }
+
+  function createThankYouOverlay() {
+    if (_thankYouEl) return;
+    _thankYouEl = document.createElement('div');
+    _thankYouEl.id = 'trip-thankyou';
+    _thankYouEl.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui,sans-serif;pointer-events:none;opacity:0;transition:opacity 1s ease';
+    _thankYouEl.innerHTML = `
+      <style>
+        #trip-thankyou h1{font-size:clamp(2rem,5vw,4rem);color:#FFD700;text-align:center;margin:0 0 10px;text-shadow:0 0 30px rgba(255,215,0,0.5)}
+        #trip-thankyou h2{font-size:clamp(1rem,2.5vw,1.8rem);color:#fff;text-align:center;margin:0 0 40px;font-weight:400;opacity:0.8}
+        #trip-thankyou .podium{display:flex;gap:clamp(16px,4vw,48px);align-items:flex-end;margin-bottom:30px}
+        .podium-entry{display:flex;flex-direction:column;align-items:center;gap:8px}
+        .podium-rank{font-size:clamp(2rem,4vw,3.5rem);line-height:1}
+        .podium-name{font-size:clamp(1rem,2.5vw,1.6rem);color:#fff;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,0.5)}
+        .podium-stats{font-size:clamp(0.7rem,1.5vw,1rem);color:#aaa;text-align:center;line-height:1.5}
+        .podium-sats{color:#FFD700;font-weight:600;font-size:clamp(0.9rem,2vw,1.3rem)}
+        .podium-bar{width:clamp(80px,12vw,140px);border-radius:8px 8px 0 0;background:linear-gradient(180deg,rgba(255,215,0,0.3),rgba(255,215,0,0.05))}
+        .p1 .podium-bar{height:clamp(120px,18vw,200px);border:2px solid rgba(255,215,0,0.5)}
+        .p2 .podium-bar{height:clamp(80px,12vw,140px);border:2px solid rgba(192,192,192,0.4)}
+        .p3 .podium-bar{height:clamp(50px,8vw,100px);border:2px solid rgba(205,127,50,0.4)}
+      </style>
+      <h1>👑 Thank You Everyone For Participating!</h1>
+      <h2>960 Throne — King of the Hill Chess960</h2>
+      <div class="podium" id="trip-podium">
+        <div style="color:#aaa;font-size:1.2rem">Loading leaderboard...</div>
+      </div>
+    `;
+    document.body.appendChild(_thankYouEl);
+  }
+
+  function showThankYou() {
+    if (!_thankYouEl) createThankYouOverlay();
+    _thankYouEl.style.opacity = '1';
+    _thankYouVisible = true;
+    // Fetch leaderboard
+    fetch('/api/leaderboard')
+      .then(r => r.json())
+      .then(data => {
+        const lb = (data.leaderboard || []).slice(0, 3);
+        const podium = document.getElementById('trip-podium');
+        if (!podium || lb.length === 0) return;
+        const medals = ['🥇', '🥈', '🥉'];
+        const classes = ['p1', 'p2', 'p3'];
+        // Render in order: #2, #1, #3 (classic podium layout)
+        const order = lb.length >= 3 ? [1, 0, 2] : lb.length >= 2 ? [1, 0] : [0];
+        podium.innerHTML = order.map(i => {
+          const p = lb[i];
+          return `<div class="podium-entry ${classes[i]}">
+            <div class="podium-rank">${medals[i]}</div>
+            <div class="podium-name">${p.name || 'Player ' + p.id}</div>
+            <div class="podium-stats">
+              <div class="podium-sats">⚡ ${(p.total_sats_earned || 0).toLocaleString()} sats</div>
+              <div>${p.games_won || 0}W / ${p.games_lost || 0}L / ${p.games_drawn || 0}D</div>
+              <div>👑 ${p.times_as_king || 0}× King</div>
+              <div>⏱ ${formatTime(p.total_reign_seconds || 0)} total reign</div>
+            </div>
+            <div class="podium-bar"></div>
+          </div>`;
+        }).join('');
+      })
+      .catch(() => {});
+  }
+
+  function hideThankYou() {
+    if (_thankYouEl) _thankYouEl.style.opacity = '0';
+    _thankYouVisible = false;
+  }
+
+  function toggleThankYou() {
+    S.showThankYou = !S.showThankYou;
+    save();
+    if (S.showThankYou) showThankYou(); else hideThankYou();
+  }
+
+  // Tick check for thank-you visibility (for display mode receiving state)
+  function tickThankYou() {
+    if (S.showThankYou && !_thankYouVisible) showThankYou();
+    if (!S.showThankYou && _thankYouVisible) hideThankYou();
+  }
+
+  function cleanupThankYou() {
+    if (_thankYouEl) { _thankYouEl.remove(); _thankYouEl = null; _thankYouVisible = false; }
+  }
+
   // ─── Hot Reload ───────────────────────────────────────────
   // Allows deploying new trip.js without reloading the page.
   // Control panel has a "Hot Reload" button. All connected pages
@@ -447,8 +547,9 @@
     // Remove SVG filters
     const svgs = document.querySelectorAll('svg');
     svgs.forEach(s => { if (s.querySelector('#trip-lens')) s.remove(); });
-    // Cleanup goombas
+    // Cleanup goombas + thank you
     cleanupGoombas();
+    cleanupThankYou();
     // Remove the old script tag
     const oldScript = document.querySelector('script[src^="/trip.js"]');
     if (oldScript) oldScript.remove();
