@@ -307,13 +307,16 @@
       if (rightPanel && !rightPanel.style.filter.includes('trip-lens')) rightPanel.style.filter = 'url(#trip-lens)';
       if (leftPanel && !leftPanel.style.filter.includes('trip-lens-soft')) leftPanel.style.filter = 'url(#trip-lens-soft)';
 
-      // CSS perspective sway on top (lightweight addition)
+      // CSS perspective sway + slow leftward drift
       const maxTilt = eKaleid * 3;
       const rx = wave(t, 0.13, 0.29, 0.07) * maxTilt;
       const ry = wave(t, 0.11, 0.23, 0.05) * maxTilt;
-      if (rightPanel) rightPanel.style.transform = `perspective(800px) rotateX(${rx.toFixed(1)}deg) rotateY(${ry.toFixed(1)}deg)`;
-      if (leftPanel) leftPanel.style.transform = `perspective(1200px) rotateX(${(rx*0.25).toFixed(1)}deg) rotateY(${(ry*0.25).toFixed(1)}deg)`;
-      if (topBar) topBar.style.transform = `perspective(1600px) rotateX(${(rx*0.1).toFixed(1)}deg) rotateY(${(ry*0.1).toFixed(1)}deg)`;
+      // Slow drift: oscillates left-right over ~60s, max ~15px at full intensity
+      const drift = Math.sin(t * 0.05) * eKaleid * 15;
+      const driftY = Math.sin(t * 0.037) * eKaleid * 8;
+      if (rightPanel) rightPanel.style.transform = `perspective(800px) rotateX(${rx.toFixed(1)}deg) rotateY(${ry.toFixed(1)}deg) translate(${drift.toFixed(1)}px, ${driftY.toFixed(1)}px)`;
+      if (leftPanel) leftPanel.style.transform = `perspective(1200px) rotateX(${(rx*0.25).toFixed(1)}deg) rotateY(${(ry*0.25).toFixed(1)}deg) translate(${(drift*0.25).toFixed(1)}px, ${(driftY*0.25).toFixed(1)}px)`;
+      if (topBar) topBar.style.transform = `perspective(1600px) rotateX(${(rx*0.1).toFixed(1)}deg) rotateY(${(ry*0.1).toFixed(1)}deg) translateX(${(drift*0.5).toFixed(1)}px)`;
     } else {
       if (lastDispScale !== 0) {
         const d = document.getElementById('trip-disp');
