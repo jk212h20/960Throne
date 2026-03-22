@@ -494,7 +494,7 @@
               <div class="podium-sats">⚡ ${(p.total_sats_earned || 0).toLocaleString()} sats</div>
               <div>${p.games_won || 0}W / ${p.games_lost || 0}L / ${p.games_drawn || 0}D</div>
               <div>👑 ${p.times_as_king || 0}× King</div>
-              <div>⏱ ${formatTime(p.total_reign_seconds || 0)} total reign</div>
+              <div>⏱ ${formatTime(Math.floor((p.total_sats_earned || 0) / 21))} total reign</div>
             </div>
             <div class="podium-bar"></div>
           </div>`;
