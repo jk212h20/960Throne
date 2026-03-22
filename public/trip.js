@@ -128,6 +128,10 @@
         <button class="trip-btn" id="trip-preset-medium">Medium</button>
         <button class="trip-btn" id="trip-preset-full">Full Send</button>
       </div>
+      <div class="trip-section" style="display:flex;gap:8px;align-items:center">
+        <button class="trip-btn" id="trip-hot-reload" style="border-color:rgba(168,85,247,0.4);color:#a855f7;background:rgba(168,85,247,0.1)">🔄 Hot Reload All</button>
+        <span style="font-size:10px;color:#555">Re-fetch trip.js on all pages (no page reload)</span>
+      </div>
     `;
     document.body.appendChild(panel);
     const hint = document.createElement('div');
@@ -147,6 +151,7 @@
     document.getElementById('trip-preset-mild').addEventListener('click', () => { S.hueRotate=0.3;S.kaleidoscope=0.15;S.master=0.4; save();syncSliders(); });
     document.getElementById('trip-preset-medium').addEventListener('click', () => { S.hueRotate=0.6;S.kaleidoscope=0.4;S.master=0.7; save();syncSliders(); });
     document.getElementById('trip-preset-full').addEventListener('click', () => { S.hueRotate=1;S.kaleidoscope=0.8;S.master=1; save();syncSliders(); });
+    document.getElementById('trip-hot-reload').addEventListener('click', () => triggerHotReload());
     document.addEventListener('keydown', e => {
       if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
       if (e.key==='t'||e.key==='T') { S.panelOpen=!S.panelOpen; panel.classList.toggle('hidden',!S.panelOpen); hint.style.display=S.panelOpen?'none':'block'; save(); }
@@ -322,6 +327,52 @@
     }
   }
 
+  // ─── Hot Reload ───────────────────────────────────────────
+  // Allows deploying new trip.js without reloading the page.
+  // Control panel has a "Hot Reload" button. All connected pages
+  // (including display) will tear down and re-fetch the script.
+  let _tickInterval = null;
+  let _rampInterval = null;
+
+  function cleanup() {
+    // Stop intervals
+    if (_tickInterval) clearInterval(_tickInterval);
+    if (_rampInterval) clearInterval(_rampInterval);
+    // Reset all visual effects
+    document.body.style.filter = '';
+    if (rightPanel) { rightPanel.style.filter = ''; rightPanel.style.transform = ''; }
+    if (leftPanel) { leftPanel.style.filter = ''; leftPanel.style.transform = ''; }
+    if (topBar) topBar.style.transform = '';
+    // Remove DOM elements we created
+    const panel = document.getElementById('trip-panel');
+    if (panel) panel.remove();
+    const hint = document.getElementById('trip-hint');
+    if (hint) hint.remove();
+    // Remove SVG filters
+    const svgs = document.querySelectorAll('svg');
+    svgs.forEach(s => { if (s.querySelector('#trip-lens')) s.remove(); });
+    // Remove the old script tag
+    const oldScript = document.querySelector('script[src^="/trip.js"]');
+    if (oldScript) oldScript.remove();
+  }
+
+  function hotReload() {
+    cleanup();
+    // Load fresh trip.js with cache-busting param
+    const s = document.createElement('script');
+    s.src = '/trip.js?v=' + Date.now();
+    if (isDisplayMode) s.setAttribute('data-display', '');
+    document.body.appendChild(s);
+  }
+
+  function triggerHotReload() {
+    // Tell all other pages to reload too
+    const sock = getSocket();
+    if (sock) sock.emit('trip_reload');
+    // Reload ourselves
+    hotReload();
+  }
+
   // ─── Init ─────────────────────────────────────────────────
   function init() {
     injectSVGFilters();
@@ -329,8 +380,15 @@
     setupTransitions();
     if (!isDisplayMode) createPanel();
     initSocket(); // Cross-device sync via Socket.io
-    setInterval(tick, 100);
-    if (!isDisplayMode) setInterval(() => { if (S.rampActive) save(); }, 5000);
+
+    // Listen for hot reload from server
+    const sock = getSocket();
+    if (sock) {
+      sock.on('trip_reload', () => hotReload());
+    }
+
+    _tickInterval = setInterval(tick, 100);
+    if (!isDisplayMode) _rampInterval = setInterval(() => { if (S.rampActive) save(); }, 5000);
   }
 
   if (document.readyState === 'loading') {

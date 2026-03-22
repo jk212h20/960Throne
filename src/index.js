@@ -111,6 +111,9 @@ async function start() {
                 socket.emit('trip_state', global._tripState);
             }
         });
+        socket.on('trip_reload', () => {
+            socket.broadcast.emit('trip_reload');
+        });
 
         socket.on('disconnect', () => {
             // cleanup if needed
