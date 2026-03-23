@@ -888,6 +888,21 @@ router.post('/admin/rename-player', requireAdmin, (req, res) => {
     res.json({ success: true, name: trimmed });
 });
 
+router.post('/admin/manual-payout', requireAdmin, (req, res) => {
+    const { playerId } = req.body;
+    if (!playerId) return res.status(400).json({ error: 'Player ID required' });
+    const player = db.getPlayerById(parseInt(playerId));
+    if (!player) return res.status(404).json({ error: 'Player not found' });
+    const amount = player.sat_balance;
+    if (amount <= 0) return res.status(400).json({ error: 'No balance to zero' });
+    // Deduct balance and mark as claimed
+    db.deductSatsFromPlayer(player.id, amount);
+    // Record a completed payout entry
+    const payoutId = db.createPayout(player.id, amount, 'manual-admin-payout');
+    db.updatePayout(payoutId, { status: 'completed', completed_at: new Date().toISOString() });
+    res.json({ success: true, amount, playerName: player.name });
+});
+
 router.post('/admin/notifications/resolve-all', requireAdmin, (req, res) => {
     db.resolveAllNotifications();
     res.json({ success: true });

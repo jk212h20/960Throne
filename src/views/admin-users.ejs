@@ -61,6 +61,7 @@
                             <th class="py-2 text-right cursor-pointer hover:text-white" onclick="sortTable('games_lost')">
                                 L <span id="sort-games_lost" class="text-xs"></span>
                             </th>
+                            <th class="py-2 text-center">Payout</th>
                         </tr>
                     </thead>
                     <tbody id="users-tbody">
@@ -122,6 +123,13 @@
                     <td class="py-2 text-right text-yellow-400 font-mono">${p.sat_balance.toLocaleString()}</td>
                     <td class="py-2 text-right text-green-400">${p.games_won}</td>
                     <td class="py-2 text-right text-red-400">${p.games_lost}</td>
+                    <td class="py-2 text-center">
+                        ${p.sat_balance > 0
+                            ? `<button onclick="zeroPayout(${p.id}, '${(p.name || '').replace(/'/g, "\\'")}', ${p.sat_balance})" 
+                                class="text-xs px-2 py-1 rounded bg-yellow-600 hover:bg-yellow-500 text-black font-bold" 
+                                id="payout-btn-${p.id}">Zero (${p.sat_balance.toLocaleString()})</button>`
+                            : '<span class="text-gray-600 text-xs">—</span>'}
+                    </td>
                 </tr>
             `).join('');
         }
@@ -166,6 +174,35 @@
             } catch (err) {
                 alert('Connection error');
                 input.disabled = false;
+            }
+        }
+
+        async function zeroPayout(playerId, playerName, amount) {
+            if (!confirm(`Zero balance for ${playerName}?\n\nThis will mark ${amount.toLocaleString()} sats as paid out manually.`)) return;
+            const btn = document.getElementById('payout-btn-' + playerId);
+            if (btn) { btn.disabled = true; btn.textContent = '...'; }
+            try {
+                const res = await fetch('/api/admin/manual-payout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ playerId })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(data.error || 'Payout failed');
+                    if (btn) { btn.disabled = false; btn.textContent = `Zero (${amount.toLocaleString()})`; }
+                    return;
+                }
+                // Update local data
+                const p = players.find(p => p.id === playerId);
+                if (p) {
+                    p.total_sats_claimed += p.sat_balance;
+                    p.sat_balance = 0;
+                }
+                renderTable();
+            } catch (err) {
+                alert('Connection error');
+                if (btn) { btn.disabled = false; btn.textContent = `Zero (${amount.toLocaleString()})`; }
             }
         }
     </script>
