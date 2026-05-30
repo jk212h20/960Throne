@@ -1,0 +1,43 @@
+const assert = require('assert');
+const os = require('os');
+const path = require('path');
+process.env.DATABASE_PATH = path.join(os.tmpdir(), `throne-v2-test-${Date.now()}.db`);
+process.env.SESSION_SECRET = 'test-secret';
+process.env.ADMIN_PASSWORD = 'test-admin';
+process.env.DGT_RELAY_SECRET = 'test-relay';
+process.env.BOARD_PASSWORD = 'test-board';
+
+const db = require('../src/db');
+const engine = require('../src/domain/eventEngine');
+
+(async () => {
+  await db.initialize(process.env.DATABASE_PATH);
+  engine.init({ emit() {} });
+  const a = engine.registerPlayer('Alice').player;
+  const b = engine.registerPlayer('Bob').player;
+  let r = engine.joinQueue(a.id);
+  assert.equal(r.success, true);
+  assert.equal(r.autoCrowned, true);
+  assert.equal(engine.getState().king.name, 'Alice');
+  r = engine.joinQueue(b.id);
+  assert.equal(r.success, true);
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  let s = engine.getState();
+  assert(s.game, 'game should auto-start');
+  assert.equal(s.game.king_name, 'Alice');
+  assert.equal(s.game.challenger_name, 'Bob');
+  assert.equal(s.game.king_color, 'black');
+  engine.finalizeGame(s.game.id, 'challenger_won');
+  s = engine.getState();
+  assert.equal(s.king.name, 'Bob');
+  db.addSats(b.id, 100);
+  const p = db.reservePayout(b.id, 60, 'test');
+  assert(p.payoutId);
+  assert.equal(db.getPlayer(b.id).sat_balance, 40);
+  assert.equal(db.getPlayer(b.id).reserved_sats, 60);
+  db.payoutFail(p.payoutId, 'no route');
+  assert.equal(db.getPlayer(b.id).sat_balance, 100);
+  assert.equal(db.getPlayer(b.id).reserved_sats, 0);
+  db.shutdown();
+  console.log('v2 smoke tests passed');
+})().catch(err => { console.error(err); process.exit(1); });
