@@ -22,5 +22,10 @@ router.get('/admin', (req, res) => {
   return render('admin', { isAdmin: true })(req, res);
 });
 router.get('/ops', requireAdmin, render('ops'));
-router.get('/report', requireAdmin, render('report'));
+router.get('/report', (req, res) => {
+  req.cookies = req.cookies || parseCookies(req);
+  const isAdmin = validAdminToken(req.cookies.v2_admin || '');
+  if (!isAdmin) return res.render('admin', { state: null, player: null, baseUrl: publicBaseUrl(req), joinUrl: `${publicBaseUrl(req)}/join`, isAdmin: false });
+  return render('report', { isAdmin: true })(req, res);
+});
 module.exports = router;
