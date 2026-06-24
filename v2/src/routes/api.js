@@ -88,7 +88,8 @@ function readinessChecks() {
 router.get('/admin/status', requireAdmin, (req, res) => res.json({ config: redactedStatus(), readiness: readinessChecks(), state: engine.getState(), log: db.eventLog(50) }));
 router.get('/admin/readiness', requireAdmin, (req, res) => res.json(readinessChecks()));
 router.post('/admin/crown', requireAdmin, (req, res) => res.json(engine.crownKing(parseInt(req.body.playerId, 10))));
-router.post('/admin/result', requireAdmin, (req, res) => res.json(engine.finalizeGame(parseInt(req.body.gameId, 10), req.body.result)));
+router.post('/admin/game/start', requireAdmin, (req, res) => { const r = engine.startTableGame(); if (r.error) return res.status(400).json(r); res.json(r); });
+router.post('/admin/result', requireAdmin, (req, res) => { const r = engine.finalizeGame(parseInt(req.body.gameId, 10), req.body.result); if (r.error) return res.status(400).json(r); res.json(r); });
 router.post('/admin/start-next', requireAdmin, async (req, res) => res.json(await engine.callNextChallenger(req.body.position ?? null)));
 router.post('/admin/queue/add', requireAdmin, (req, res) => { const r = engine.adminAddToQueue(parseInt(req.body.playerId, 10)); if (r.error) return res.status(400).json(r); res.json(r); });
 router.post('/admin/queue/remove', requireAdmin, (req, res) => res.json(engine.adminRemoveFromQueue(parseInt(req.body.playerId, 10))));

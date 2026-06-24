@@ -42,12 +42,13 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;
       <p>King: <b><%= state.king ? state.king.name : 'none' %></b></p>
       <p>Game: <%= state.game ? '#'+state.game.id+' '+state.game.king_name+' vs '+state.game.challenger_name : 'none' %></p>
       <% if (state.game) { %>
-        <p>Position: <b>#<%= state.game.chess960_position %></b> · King color: <%= state.game.king_color %></p>
+        <p>Position: <b>#<%= state.game.chess960_position %></b> · King color: <%= state.game.king_color %> · Table: <b class="<%= state.game.table_started_at ? 'ok' : 'warn' %>"><%= state.game.table_started_at ? 'STARTED' : 'NOT STARTED' %></b></p>
       <% } %>
       <div class="row">
-        <button onclick="result('king_won')" <%= state.game ? '' : 'disabled' %>>King won</button>
-        <button onclick="result('challenger_won')" <%= state.game ? '' : 'disabled' %>>Challenger won</button>
-        <button onclick="result('draw')" <%= state.game ? '' : 'disabled' %>>Draw</button>
+        <button class="good" onclick="post('/api/admin/game/start')" <%= (state.game && !state.game.table_started_at) ? '' : 'disabled' %>>Start Table Game</button>
+        <button onclick="result('king_won')" <%= (state.game && state.game.table_started_at) ? '' : 'disabled' %>>King won</button>
+        <button onclick="result('challenger_won')" <%= (state.game && state.game.table_started_at) ? '' : 'disabled' %>>Challenger won</button>
+        <button onclick="result('draw')" <%= (state.game && state.game.table_started_at) ? '' : 'disabled' %>>Draw</button>
         <button class="danger" onclick="result('no_show')" <%= state.game ? '' : 'disabled' %>>No show</button>
       </div>
       <div class="row">

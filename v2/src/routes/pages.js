@@ -22,4 +22,5 @@ router.get('/admin', (req, res) => {
   return render('admin', { isAdmin: true })(req, res);
 });
 router.get('/ops', requireAdmin, render('ops'));
+router.get('/report', requireAdmin, render('report'));
 module.exports = router;

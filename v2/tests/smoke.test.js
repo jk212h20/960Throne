@@ -63,6 +63,12 @@ const { makeAdminToken, validAdminToken } = require('../src/routes/middleware');
   assert.equal(s.game.king_name, 'Alice');
   assert.equal(s.game.challenger_name, 'Bob');
   assert.equal(s.game.king_color, 'black');
+  assert.equal(s.game.table_started_at, null, 'new pairing should not be table-started yet');
+  assert.equal(engine.reportResult(a.id, 'king_won').error, 'Game has not started at the table');
+  assert.equal(engine.finalizeGame(s.game.id, 'king_won').error, 'Game has not started at the table');
+  assert.equal(engine.startTableGame().success, true);
+  s = engine.getState();
+  assert(s.game.table_started_at, 'startTableGame should mark pairing as started');
 
   r = engine.joinQueue(c.id);
   assert.equal(r.success, true);
@@ -91,6 +97,9 @@ const { makeAdminToken, validAdminToken } = require('../src/routes/middleware');
   assert.equal(s.event.paused, false);
   assert(s.game, 'resume should start waiting challenger');
   assert.equal(s.game.challenger_name, 'Charlie');
+  assert.equal(s.game.table_started_at, null, 'resumed next pairing should still wait for table start');
+  assert.equal(engine.startTableGame().success, true);
+  s = engine.getState();
 
   engine.finalizeGame(s.game.id, 'challenger_won');
   s = engine.getState();

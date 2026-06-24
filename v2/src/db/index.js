@@ -88,6 +88,7 @@ function createTables() {
     king_color TEXT DEFAULT 'black',
     started_at TEXT DEFAULT CURRENT_TIMESTAMP,
     ended_at TEXT,
+    table_started_at TEXT,
     king_reported TEXT,
     challenger_reported TEXT,
     result TEXT,
@@ -121,6 +122,7 @@ function migrate() {
   const columns = table => exec(`PRAGMA table_info(${table})`).map(r => r.name);
   if (!columns('players').includes('reserved_sats')) conn().run(`ALTER TABLE players ADD COLUMN reserved_sats INTEGER DEFAULT 0`);
   if (!columns('games').includes('king_color')) conn().run(`ALTER TABLE games ADD COLUMN king_color TEXT DEFAULT 'black'`);
+  if (!columns('games').includes('table_started_at')) conn().run(`ALTER TABLE games ADD COLUMN table_started_at TEXT`);
   if (!columns('payouts').includes('method')) conn().run(`ALTER TABLE payouts ADD COLUMN method TEXT DEFAULT 'lnurl-withdraw'`);
   if (!columns('payouts').includes('invoice')) conn().run(`ALTER TABLE payouts ADD COLUMN invoice TEXT`);
   if (!columns('payouts').includes('updated_at')) {
@@ -184,9 +186,10 @@ function updateReignStats(id, updates) { const keys = Object.keys(updates); run(
 
 function createGame({ kingId, challengerId, position, reignId }) {
   const id = insert('INSERT INTO games(king_id,challenger_id,chess960_position,reign_id,king_color) VALUES(?,?,?,?,?)', [kingId, challengerId, position, reignId, 'black']);
-  setConfig('current_game_id', id); log('game_started', `Game #${id} started`, { gameId: id, kingId, challengerId, position }); return id;
+  setConfig('current_game_id', id); log('game_called', `Game #${id} called`, { gameId: id, kingId, challengerId, position }); return id;
 }
 function getGame(id) { return get(`SELECT g.*, k.name AS king_name, c.name AS challenger_name FROM games g JOIN players k ON k.id=g.king_id JOIN players c ON c.id=g.challenger_id WHERE g.id=?`, [id]); }
+function startGame(id) { const game = getGame(id); if (!game || game.result) return { error: 'No active game' }; const ts = game.table_started_at || now(); run('UPDATE games SET table_started_at=? WHERE id=?', [ts, id]); log('game_table_started', `Game #${id} started at table`, { gameId: id }); return getGame(id); }
 function activeGame() { const id = parseInt(getConfig('current_game_id') || '0', 10); const g = id ? getGame(id) : null; return g && !g.result ? g : null; }
 function finalizeGame(id, result, satsEarned = 0) { run('UPDATE games SET result=?, sats_earned=?, ended_at=? WHERE id=?', [result, satsEarned, now(), id]); setConfig('current_game_id', ''); log('game_finalized', `Game #${id}: ${result}`, { gameId: id, result, satsEarned }); }
 function recentGames(limit = 10) { return exec(`SELECT g.*, k.name AS king_name, c.name AS challenger_name FROM games g JOIN players k ON k.id=g.king_id JOIN players c ON c.id=g.challenger_id WHERE g.result IS NOT NULL ORDER BY g.id DESC LIMIT ?`, [limit]); }
@@ -240,5 +243,5 @@ function resetEventData() {
   log('event_reset', 'Event data reset; player identities and balances preserved');
 }
 
-const api = { initialize, shutdown, save, backup, resetEventData, exec, get, run, log, getConfig, setConfig, createPlayer, getPlayer, getPlayerByToken, getPlayerByAuth, listPlayers, touchPlayer, setPlayerToken, setPlayerName, addToQueue, removeQueueId, removePlayerFromQueue, isPlayerInQueue, getQueue, getNextInQueue, reorderQueue, startReign, getReign, currentReign, endReign, updateReignStats, createGame, getGame, activeGame, finalizeGame, recentGames, addSats, reservePayout, payoutPaying, payoutComplete, payoutFail, listPayouts, activeVenueCode, createVenueCode, notifications, notify, eventLog };
+const api = { initialize, shutdown, save, backup, resetEventData, exec, get, run, log, getConfig, setConfig, createPlayer, getPlayer, getPlayerByToken, getPlayerByAuth, listPlayers, touchPlayer, setPlayerToken, setPlayerName, addToQueue, removeQueueId, removePlayerFromQueue, isPlayerInQueue, getQueue, getNextInQueue, reorderQueue, startReign, getReign, currentReign, endReign, updateReignStats, createGame, getGame, startGame, activeGame, finalizeGame, recentGames, addSats, reservePayout, payoutPaying, payoutComplete, payoutFail, listPayouts, activeVenueCode, createVenueCode, notifications, notify, eventLog };
 module.exports = api;

@@ -30,10 +30,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:radial-g
       <button class="secondary" onclick="post('/api/queue/leave')">Leave Queue</button>
       <% if (state.game && (state.game.king_id===player.id || state.game.challenger_id===player.id)) { %>
         <hr style="border-color:rgba(255,255,255,.12)">
-        <p class="muted">Current game report</p>
-        <button onclick="post('/api/game/report',{result:'king_won'})">Report King Won</button>
-        <button onclick="post('/api/game/report',{result:'challenger_won'})">Report Challenger Won</button>
-        <button onclick="post('/api/game/report',{result:'draw'})">Report Draw</button>
+        <p class="muted">You are in the current table pairing. Results are reported on the table tablet.</p>
       <% } %>
     <% } %>
   <% } else { %>
