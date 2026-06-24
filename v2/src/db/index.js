@@ -123,7 +123,10 @@ function migrate() {
   if (!columns('games').includes('king_color')) conn().run(`ALTER TABLE games ADD COLUMN king_color TEXT DEFAULT 'black'`);
   if (!columns('payouts').includes('method')) conn().run(`ALTER TABLE payouts ADD COLUMN method TEXT DEFAULT 'lnurl-withdraw'`);
   if (!columns('payouts').includes('invoice')) conn().run(`ALTER TABLE payouts ADD COLUMN invoice TEXT`);
-  if (!columns('payouts').includes('updated_at')) conn().run(`ALTER TABLE payouts ADD COLUMN updated_at TEXT DEFAULT CURRENT_TIMESTAMP`);
+  if (!columns('payouts').includes('updated_at')) {
+    conn().run(`ALTER TABLE payouts ADD COLUMN updated_at TEXT`);
+    conn().run(`UPDATE payouts SET updated_at = COALESCE(created_at, ?) WHERE updated_at IS NULL`, [now()]);
+  }
 }
 
 function seedConfig() {
