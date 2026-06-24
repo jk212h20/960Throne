@@ -3,5 +3,6 @@ node_modules/
 data/*.db
 v2/data/*.db
 backups/*.db
+backups/*password*.txt
 public/styles.css
 .DS_Store
