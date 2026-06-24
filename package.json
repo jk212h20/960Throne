@@ -6,7 +6,7 @@
   "scripts": {
     "build:css": "tailwindcss -i src/styles/input.css -o public/styles.css --minify",
     "build": "npm run build:css",
-    "start": "node v2/src/server.js",
+    "start": "node src/index.js",
     "start:v1": "node src/index.js",
     "start:v2": "node v2/src/server.js",
     "dev": "node --watch src/index.js",
