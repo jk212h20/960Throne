@@ -1,7 +1,7 @@
 const express = require('express');
 const engine = require('../domain/eventEngine');
 const db = require('../db');
-const { requireAdmin, parseCookies } = require('./middleware');
+const { requireAdmin, parseCookies, validAdminToken } = require('./middleware');
 const { config } = require('../config/env');
 const router = express.Router();
 function publicBaseUrl(req) {
@@ -13,7 +13,13 @@ function render(name, extra = {}) { return (req, res) => { req.cookies = req.coo
 router.get('/', render('stage'));
 router.get('/stage', render('stage'));
 router.get('/watch', render('watch'));
+router.get('/leaderboard', render('leaderboard'));
 router.get('/join', render('join'));
-router.get('/admin', render('admin'));
+router.get('/admin', (req, res) => {
+  req.cookies = req.cookies || parseCookies(req);
+  const isAdmin = validAdminToken(req.cookies.v2_admin || '');
+  if (!isAdmin) return res.render('admin', { state: null, player: null, baseUrl: publicBaseUrl(req), joinUrl: `${publicBaseUrl(req)}/join`, isAdmin: false });
+  return render('admin', { isAdmin: true })(req, res);
+});
 router.get('/ops', requireAdmin, render('ops'));
 module.exports = router;

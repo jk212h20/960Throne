@@ -90,10 +90,17 @@ When `NODE_ENV=production`, v2 refuses unsafe missing/default secrets for:
 
 This is a first extracted v2 scaffold, not yet a full replacement for every v1 feature. Not yet ported:
 
-- Real LNURL-auth UI/crypto flow.
 - Real LNURL-withdraw callback and LND payment execution.
 - Telegram notifications.
 - Multi-board stream operator pages.
 - Full styling parity for admin/player pages.
 
 The stage display is intentionally reimagined and ready for visual iteration.
+
+## Lightning queue gate
+
+v2 requires LNURL-auth Lightning wallet login before a player can join the queue. This proves every queued player has a Lightning wallet, but it does not require a payout address before play. The current local/simple `/api/players/register` endpoint is development-only and creates non-Lightning players that are rejected by `/api/queue/join`.
+
+## Account/balance continuity
+
+For production, point `DATABASE_PATH` at the existing persisted DB (for example Railway's `/app/data/throne.db`) so returning Lightning-auth players are matched by `auth_type='lightning'` + `auth_id` and do not need to enter their name again. v2 migrations add the small fields it needs. Event reset preserves player identities, claimable `sat_balance`, reserved sats, claimed totals, and payout history, while clearing this-event games/reigns/queue and competitive counters (`total_sats_earned`, W/L/D, reign stats) so leaderboard/winnings counters start fresh for the new event.

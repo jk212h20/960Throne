@@ -16,14 +16,26 @@ function init(socketIo) {
   startSatAccumulator();
   console.log('♛ v2 event engine ready');
 }
+function shutdown() { if (satTimer) clearInterval(satTimer); satTimer = null; io = null; }
 function broadcast(type, payload = {}) { if (io) io.emit(type, payload); if (io) io.emit('state', getState()); }
 function generateVenueCode() { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join(''); }
 function ensureVenueCode() { if (!db.activeVenueCode()) db.createVenueCode(generateVenueCode()); }
 function rotateVenueCode() { const code = generateVenueCode(); db.createVenueCode(code); broadcast('venue_code_updated', { code }); return code; }
+function isPaused() { return db.getConfig('event_paused') === '1'; }
+function setPaused(paused) {
+  db.setConfig('event_paused', paused ? '1' : '0');
+  broadcast(paused ? 'event_paused' : 'event_resumed', { paused: Boolean(paused) });
+  if (!paused && !db.activeGame()) callNextChallenger();
+  return { success: true, paused: Boolean(paused) };
+}
 
-function registerPlayer(name) { const token = uuidv4(); const id = db.createPlayer({ name: String(name || '').trim(), sessionToken: token }); return { player: db.getPlayer(id), token }; }
+function registerPlayer(name, opts = {}) { const token = uuidv4(); const id = db.createPlayer({ name: String(name || '').trim(), authType: opts.authType || 'pin', authId: opts.authId || null, sessionToken: token }); return { player: db.getPlayer(id), token }; }
 function joinQueue(playerId) {
   if (db.getConfig('event_locked') === '1') return { error: 'Event is locked' };
+  const player = db.getPlayer(playerId);
+  if (!player) return { error: 'Player not found' };
+  if (player.auth_type !== 'lightning') return { error: 'Lightning wallet login required' };
+  if (!String(player.name || '').trim()) return { error: 'Display name required' };
   const kingId = parseInt(db.getConfig('current_king_id') || '0', 10);
   if (kingId === playerId) return { error: "You're the King" };
   if (db.isPlayerInQueue(playerId)) return { error: 'Already in queue' };
@@ -32,12 +44,23 @@ function joinQueue(playerId) {
   if (!kingId) {
     const first = db.getNextInQueue();
     if (first) { db.removeQueueId(first.id); crownKing(first.player_id); return { success: true, queueId, autoCrowned: true }; }
-  } else if (!db.activeGame()) {
+  } else if (!db.activeGame() && !isPaused()) {
     callNextChallenger();
   }
   return { success: true, queueId };
 }
 function leaveQueue(playerId) { db.removePlayerFromQueue(playerId); broadcast('queue_updated', { queue: db.getQueue() }); return { success: true }; }
+function adminAddToQueue(playerId) {
+  const player = db.getPlayer(playerId);
+  if (!player) return { error: 'Player not found' };
+  if (player.auth_type !== 'lightning') return { error: 'Lightning wallet login required' };
+  if (!String(player.name || '').trim()) return { error: 'Display name required' };
+  if (db.isPlayerInQueue(playerId)) return { error: 'Already in queue' };
+  const queueId = db.addToQueue(playerId);
+  broadcast('queue_updated', { queue: db.getQueue() });
+  return { success: true, queueId };
+}
+function adminRemoveFromQueue(playerId) { db.removePlayerFromQueue(playerId); broadcast('queue_updated', { queue: db.getQueue() }); return { success: true }; }
 function crownKing(playerId) {
   const oldReign = db.currentReign();
   if (oldReign && !oldReign.dethroned_at) db.endReign(oldReign.id, 0);
@@ -45,7 +68,7 @@ function crownKing(playerId) {
   const reignId = db.startReign(playerId);
   dgt.clearExpectedPosition();
   broadcast('king_crowned', { king: db.getPlayer(playerId), reignId });
-  callNextChallenger();
+  if (!isPaused()) callNextChallenger();
   return { success: true, reignId };
 }
 async function choosePosition(forced) {
@@ -56,6 +79,7 @@ async function choosePosition(forced) {
 async function callNextChallenger(forcedPosition = null) {
   const kingId = parseInt(db.getConfig('current_king_id') || '0', 10);
   if (!kingId || db.activeGame()) return null;
+  if (isPaused()) { broadcast('next_game_paused', { queue: db.getQueue() }); return null; }
   const next = db.getNextInQueue(); if (!next) { broadcast('queue_empty'); return null; }
   const pos = await choosePosition(forcedPosition);
   const reignId = parseInt(db.getConfig('current_reign_id') || '0', 10) || null;
@@ -95,7 +119,11 @@ function finalizeGame(gameId, result) {
     db.startReign(game.challenger_id);
   }
   broadcast('game_finalized', { gameId, result });
-  if (result === 'no_show') callNextChallenger(game.chess960_position); else callNextChallenger();
+  if (!isPaused()) {
+    if (result === 'no_show') callNextChallenger(game.chess960_position); else callNextChallenger();
+  } else {
+    broadcast('next_game_paused', { queue: db.getQueue() });
+  }
   return { success: true };
 }
 function updateStats(game, result) {
@@ -107,7 +135,10 @@ function updateStats(game, result) {
 }
 function reportResult(playerId, result) { const game = db.activeGame(); if (!game) return { error: 'No active game' }; if (playerId !== game.king_id && playerId !== game.challenger_id) return { error: 'Not in current game' }; return finalizeGame(game.id, result); }
 function adminReorder(order) { if (!Array.isArray(order) || !order.length) return { error: 'Order required' }; const currentKingId = parseInt(db.getConfig('current_king_id') || '0', 10); const newKing = order[0]; const active = db.activeGame(); if (active && (newKing !== currentKingId || order[1] !== active.challenger_id)) finalizeGame(active.id, 'no_show'); db.reorderQueue(order.slice(1)); if (newKing !== currentKingId) crownKing(newKing); broadcast('queue_updated', { queue: db.getQueue() }); return { success: true }; }
+function adminReorderQueue(order) { if (!Array.isArray(order)) return { error: 'Order required' }; db.reorderQueue(order.map(Number).filter(Boolean)); broadcast('queue_updated', { queue: db.getQueue() }); return { success: true }; }
 function lockEvent(locked) { db.setConfig('event_locked', locked ? '1' : '0'); broadcast('event_lock', { locked: Boolean(locked) }); return { success: true }; }
+function pauseEvent() { return setPaused(true); }
+function resumeEvent() { return setPaused(false); }
 function resetEvent() { const backup = db.backup('pre-reset'); db.resetEventData(); dgt.clearExpectedPosition(); gameStartedAt = null; broadcast('event_reset', { backup }); return { success: true, backup }; }
-function getState() { flushSats(); const kingId = parseInt(db.getConfig('current_king_id') || '0', 10); const game = db.activeGame(); const reign = db.currentReign(); return { event: { name: db.getConfig('event_name'), day: db.getConfig('event_day'), locked: db.getConfig('event_locked') === '1', venueCode: db.activeVenueCode()?.code || null }, king: kingId ? db.getPlayer(kingId) : null, reign, game, queue: db.getQueue(), recentGames: db.recentGames(8), players: db.listPlayers(), payouts: db.listPayouts(10), dgt: dgt.snapshot(), config: { satRate: parseInt(db.getConfig('sat_rate_per_second') || config.satRatePerSecond, 10), timeControl: timeControl(), dgtClockSwapSides: config.dgtClockSwapSides }, liveSats: reign ? reign.total_sats_earned : 0 } }
-module.exports = { init, getState, registerPlayer, joinQueue, leaveQueue, crownKing, callNextChallenger, finalizeGame, reportResult, adminReorder, lockEvent, resetEvent, rotateVenueCode, flushSats };
+function getState() { flushSats(); const kingId = parseInt(db.getConfig('current_king_id') || '0', 10); const game = db.activeGame(); const reign = db.currentReign(); return { event: { name: db.getConfig('event_name'), day: db.getConfig('event_day'), locked: db.getConfig('event_locked') === '1', paused: isPaused(), venueCode: db.activeVenueCode()?.code || null }, king: kingId ? db.getPlayer(kingId) : null, reign, game, queue: db.getQueue(), recentGames: db.recentGames(8), players: db.listPlayers(), payouts: db.listPayouts(10), dgt: dgt.snapshot(), config: { satRate: parseInt(db.getConfig('sat_rate_per_second') || config.satRatePerSecond, 10), timeControl: timeControl(), dgtClockSwapSides: config.dgtClockSwapSides }, liveSats: reign ? reign.total_sats_earned : 0 } }
+module.exports = { init, shutdown, getState, registerPlayer, joinQueue, leaveQueue, adminAddToQueue, adminRemoveFromQueue, crownKing, callNextChallenger, finalizeGame, reportResult, adminReorder, adminReorderQueue, lockEvent, pauseEvent, resumeEvent, resetEvent, rotateVenueCode, flushSats };

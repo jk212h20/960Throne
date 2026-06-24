@@ -1,1 +1,158 @@
-<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>960 Admin v2</title><style>body{font-family:system-ui;background:#0b0b12;color:#eee;margin:0;padding:24px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}.card{background:#171725;border:1px solid #333;border-radius:18px;padding:18px}button,input,select{padding:10px;border-radius:10px;margin:4px}button{background:#ffd166;border:0;font-weight:800}pre{white-space:pre-wrap;background:#06060a;padding:12px;border-radius:12px;max-height:360px;overflow:auto}</style></head><body><h1>♛ 960 Throne v2 Admin</h1><div class="card"><input id="pw" type="password" placeholder="admin password"><button onclick="post('/api/admin/login',{password:pw.value})">Login</button><a href="/ops">Ops</a> · <a href="/stage">Stage</a></div><div class="grid"><div class="card"><h2>Game</h2><p>King: <b><%= state.king ? state.king.name : 'none' %></b></p><p>Game: <%= state.game ? '#'+state.game.id+' '+state.game.king_name+' vs '+state.game.challenger_name : 'none' %></p><button onclick="result('king_won')">King won</button><button onclick="result('challenger_won')">Challenger won</button><button onclick="result('draw')">Draw</button><button onclick="result('no_show')">No show</button></div><div class="card"><h2>Event</h2><button onclick="post('/api/admin/rotate-code')">Rotate Code</button><button onclick="post('/api/admin/lock',{locked:true})">Lock</button><button onclick="post('/api/admin/lock',{locked:false})">Unlock</button><button onclick="post('/api/admin/backup')">Backup</button><button onclick="confirm('Reset event?')&&post('/api/admin/reset')">Reset</button></div><div class="card"><h2>Queue</h2><ol><% state.queue.forEach(q=>{ %><li><%= q.player_name %> (#<%= q.player_id %>)</li><% }) %></ol></div><div class="card"><h2>Players</h2><% state.players.forEach(p=>{ %><div><button onclick="post('/api/admin/crown',{playerId:<%= p.id %>})">Crown</button> <%= p.name %> — <%= p.sat_balance %> sats</div><% }) %></div></div><pre id="out"></pre><script>async function post(u,b={}){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});out.textContent=JSON.stringify(await r.json(),null,2);if(r.ok)setTimeout(()=>location.reload(),600)}function result(x){post('/api/admin/result',{gameId:<%= state.game ? state.game.id : 0 %>,result:x})}</script></body></html>
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>960 Admin v2</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;color:#eee;margin:0;padding:20px}.wrap{max-width:1280px;margin:0 auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}.card{background:#171725;border:1px solid #333;border-radius:18px;padding:18px;margin-bottom:16px}button,input,select{padding:10px 12px;border-radius:10px;margin:4px;border:1px solid #3b3b4d;background:#0f0f19;color:#fff}button{background:#ffd166;color:#100511;border:0;font-weight:800;cursor:pointer}button.secondary{background:#33334a;color:#fff}button.danger{background:#ef4444;color:#fff}button.good{background:#22c55e;color:#041108}button:disabled{opacity:.45;cursor:not-allowed}pre{white-space:pre-wrap;background:#06060a;padding:12px;border-radius:12px;max-height:360px;overflow:auto}.muted{color:#aaa}.ok{color:#86efac}.bad{color:#fca5a5}.warn{color:#ffd166}a{color:#ffd166}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.split{display:flex;justify-content:space-between;gap:12px;align-items:center}.mini{font-size:12px}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#26263a;color:#ddd}.queue-item,.player-item,.game-item,.payout-item{padding:8px 0;border-bottom:1px solid #2b2b3a}.queue-item:last-child,.player-item:last-child,.game-item:last-child,.payout-item:last-child{border-bottom:0}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.login{max-width:430px}.qr{width:180px;height:180px;background:#fff;border-radius:12px;padding:8px}</style>
+</head>
+<body>
+<div class="wrap">
+<h1>♛ 960 Throne v2 Admin</h1>
+
+<% if (!isAdmin) { %>
+  <div class="card login">
+    <h2>Admin Login</h2>
+    <p class="muted">Admin controls are hidden until authenticated.</p>
+    <input id="pw" type="password" placeholder="admin password" autofocus onkeydown="if(event.key==='Enter')login()">
+    <button onclick="login()">Login</button>
+    <p><a href="/stage">Stage</a> · <a href="/join">Join</a></p>
+    <pre id="out"></pre>
+  </div>
+  <script>
+  async function login(){const r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw.value})});const j=await r.json().catch(()=>({error:'Bad JSON'}));out.textContent=JSON.stringify(j,null,2);if(r.ok)location.reload()}
+  </script>
+<% } else { %>
+  <div class="card split">
+    <div>
+      <div class="row"><a href="/stage">Stage</a><a href="/watch">Watch</a><a href="/join">Join</a><a href="/ops">Ops</a></div>
+      <p class="muted mini">Public join: <span class="mono"><%= joinUrl %></span></p>
+    </div>
+    <button class="secondary" onclick="post('/api/admin/logout')">Logout</button>
+  </div>
+
+  <div class="card">
+    <h2>Readiness</h2>
+    <div id="readiness" class="muted">Loading checks…</div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Game Control</h2>
+      <p>King: <b><%= state.king ? state.king.name : 'none' %></b></p>
+      <p>Game: <%= state.game ? '#'+state.game.id+' '+state.game.king_name+' vs '+state.game.challenger_name : 'none' %></p>
+      <% if (state.game) { %>
+        <p>Position: <b>#<%= state.game.chess960_position %></b> · King color: <%= state.game.king_color %></p>
+      <% } %>
+      <div class="row">
+        <button onclick="result('king_won')" <%= state.game ? '' : 'disabled' %>>King won</button>
+        <button onclick="result('challenger_won')" <%= state.game ? '' : 'disabled' %>>Challenger won</button>
+        <button onclick="result('draw')" <%= state.game ? '' : 'disabled' %>>Draw</button>
+        <button class="danger" onclick="result('no_show')" <%= state.game ? '' : 'disabled' %>>No show</button>
+      </div>
+      <div class="row">
+        <input id="forced-position" type="number" min="0" max="959" placeholder="optional 0-959" style="width:130px">
+        <button onclick="startNext()" <%= (!state.king || state.game || state.event.paused || !state.queue.length) ? 'disabled' : '' %>>Start Next</button>
+      </div>
+      <% if (state.event.paused) { %><p class="warn">Next game start is paused.</p><% } %>
+    </div>
+
+    <div class="card">
+      <h2>Event Gate</h2>
+      <p>Queue joins: <b class="<%= state.event.locked ? 'bad' : 'ok' %>"><%= state.event.locked ? 'LOCKED' : 'OPEN' %></b></p>
+      <p>Next game: <b class="<%= state.event.paused ? 'bad' : 'ok' %>"><%= state.event.paused ? 'PAUSED' : 'RUNNING' %></b></p>
+      <p class="muted mini">Pause keeps the current game and king sat accrual running, but blocks the next challenger from starting until Resume.</p>
+      <div class="row">
+        <button onclick="post('/api/admin/pause')">Pause Next Game</button>
+        <button class="good" onclick="post('/api/admin/resume')">Resume</button>
+        <button onclick="post('/api/admin/lock',{locked:true})">Lock Queue</button>
+        <button onclick="post('/api/admin/lock',{locked:false})">Unlock Queue</button>
+      </div>
+      <hr style="border-color:#2b2b3a">
+      <p>Venue code: <b class="mono"><%= state.event.venueCode || '------' %></b></p>
+      <button onclick="post('/api/admin/rotate-code')">Rotate Code</button>
+    </div>
+
+    <div class="card">
+      <h2>DGT / Board</h2>
+      <p>Status: <b class="<%= state.dgt && !state.dgt.stale ? 'ok' : 'bad' %>"><%= state.dgt && !state.dgt.stale ? 'LIVE' : 'STALE/OFFLINE' %></b></p>
+      <p>Setup: <b class="<%= state.dgt && state.dgt.setupOk ? 'ok' : 'warn' %>"><%= state.dgt ? state.dgt.setupMessage : 'No board data' %></b></p>
+      <p class="mini muted">Age: <%= state.dgt && state.dgt.ageMs != null ? state.dgt.ageMs + 'ms' : 'n/a' %></p>
+      <% if (state.dgt && state.dgt.fen) { %><p class="mono mini"><%= state.dgt.fen %></p><% } %>
+      <% if (state.dgt && state.dgt.clock) { %><p>Clock W/B: <%= state.dgt.clock.white %> / <%= state.dgt.clock.black %> · Active: <%= state.dgt.clock.activeSide || '—' %></p><% } %>
+    </div>
+
+    <div class="card">
+      <h2>Sat Accrual</h2>
+      <p>Live reign sats: <b><%= (state.liveSats || 0).toLocaleString() %></b></p>
+      <p>Rate: <%= state.config.satRate %> sats/sec</p>
+      <p>Time control: <%= state.config.timeControl.base %>+<%= state.config.timeControl.increment %></p>
+      <% if (state.reign) { %><p class="mini muted">Reign #<%= state.reign.id %>, games played <%= state.reign.games_played %>, streak <%= state.reign.consecutive_wins %></p><% } %>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Queue</h2>
+      <% if (!state.queue.length) { %><p class="muted">Queue empty.</p><% } %>
+      <% state.queue.forEach((q,i)=>{ %>
+        <div class="queue-item split"><span>#<%= i+1 %> <b><%= q.player_name %></b> <span class="muted mini">id <%= q.player_id %></span></span><span class="row"><button class="secondary" onclick="moveQueue(<%= i %>,-1)" <%= i===0 ? 'disabled' : '' %>>↑</button><button class="secondary" onclick="moveQueue(<%= i %>,1)" <%= i===state.queue.length-1 ? 'disabled' : '' %>>↓</button><button class="danger" onclick="post('/api/admin/queue/remove',{playerId:<%= q.player_id %>})">Remove</button></span></div>
+      <% }) %>
+      <hr style="border-color:#2b2b3a">
+      <div class="row">
+        <select id="add-player"><option value="">Add Lightning player…</option><% state.players.filter(p=>p.auth_type==='lightning' && p.name).forEach(p=>{ %><option value="<%= p.id %>"><%= p.name %></option><% }) %></select>
+        <button onclick="addQueue()">Add</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Players</h2>
+      <% state.players.forEach(p=>{ %>
+        <div class="player-item">
+          <div class="split"><span><b><%= p.name || '(unnamed)' %></b> <span class="pill"><%= p.auth_type %></span></span><button onclick="post('/api/admin/crown',{playerId:<%= p.id %>})">Crown</button></div>
+          <div class="muted mini">id <%= p.id %> · claimable <%= p.sat_balance %> sats · reserved <%= p.reserved_sats || 0 %> sats · event earned <%= (p.total_sats_earned||0).toLocaleString() %> sats · W/L/D <%= p.games_won %>/<%= p.games_lost %>/<%= p.games_drawn %></div>
+          <% if (p.sat_balance > 0) { %><div class="row"><input id="pay-amount-<%= p.id %>" type="number" min="1" max="<%= p.sat_balance %>" placeholder="<%= p.sat_balance %>" style="width:120px"><button class="good" onclick="manualPayout(<%= p.id %>)">Mark Manual Payout Paid</button><button onclick="reservePayout(<%= p.id %>)">Reserve Payout</button></div><% } %>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Recent Games</h2>
+      <% if (!state.recentGames.length) { %><p class="muted">No completed games yet.</p><% } %>
+      <% state.recentGames.forEach(g=>{ %><div class="game-item">#<%= g.id %> <b><%= g.king_name %></b> vs <b><%= g.challenger_name %></b> — <%= g.result || 'active' %> — pos #<%= g.chess960_position %></div><% }) %>
+    </div>
+    <div class="card">
+      <h2>Payout Ledger</h2>
+      <% if (!state.payouts.length) { %><p class="muted">No payouts yet.</p><% } %>
+      <% state.payouts.forEach(p=>{ %><div class="payout-item"><div>#<%= p.id %> <b><%= p.player_name || ('player '+p.player_id) %></b> — <%= p.amount_sats %> sats — <b><%= p.status %></b> <span class="muted mini"><%= p.method %></span></div><% if (['reserved','paying','requested'].includes(p.status)) { %><div class="row"><button class="good" onclick="completePayout(<%= p.id %>)">Mark Complete</button><button class="danger" onclick="failPayout(<%= p.id %>)">Mark Failed / Refund</button></div><% } %><% if (p.error_message) { %><div class="bad mini"><%= p.error_message %></div><% } %></div><% }) %>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Danger / Maintenance</h2>
+    <button onclick="post('/api/admin/backup')">Backup DB</button>
+    <button class="danger" onclick="confirm('Reset event? This backs up first, then clears event data.')&&post('/api/admin/reset')">Reset Event</button>
+  </div>
+
+  <pre id="out"></pre>
+  <script>
+  const queueOrder=<%- JSON.stringify(state.queue.map(q=>q.player_id)) %>;
+  async function loadReadiness(){const r=await fetch('/api/admin/readiness');const j=await r.json();const el=document.getElementById('readiness');el.innerHTML=j.checks.map(c=>`<div><b class="${c.ok?'ok':'bad'}">${c.ok?'✓':'✗'}</b> ${c.name}${c.detail?' — <span class="mono">'+c.detail+'</span>':''}</div>`).join('')}
+  async function post(u,b={}){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});const j=await r.json().catch(()=>({error:'Bad JSON'}));out.textContent=JSON.stringify(j,null,2);if(r.ok)setTimeout(()=>location.reload(),500);return j}
+  function result(x){post('/api/admin/result',{gameId:<%= state.game ? state.game.id : 0 %>,result:x})}
+  function addQueue(){const v=document.getElementById('add-player').value;if(v)post('/api/admin/queue/add',{playerId:Number(v)})}
+  function moveQueue(idx,dir){const next=queueOrder.slice();const j=idx+dir;if(j<0||j>=next.length)return;[next[idx],next[j]]=[next[j],next[idx]];post('/api/admin/queue/reorder',{order:next})}
+  function startNext(){const raw=document.getElementById('forced-position').value;const body={};if(raw!=='')body.position=Number(raw);post('/api/admin/start-next',body)}
+  function payoutAmount(id){const el=document.getElementById('pay-amount-'+id);return el&&el.value?Number(el.value):undefined}
+  function manualPayout(id){if(confirm('Mark this player as manually paid?'))post('/api/admin/manual-payout-complete',{playerId:id,amount:payoutAmount(id)})}
+  function reservePayout(id){post('/api/admin/payout/reserve',{playerId:id,amount:payoutAmount(id),method:'manual-admin-payout'})}
+  function completePayout(id){if(confirm('Mark payout #'+id+' complete?'))post('/api/admin/payout/complete',{payoutId:id,paymentHash:'manual'})}
+  function failPayout(id){const error=prompt('Failure/refund reason','manual failure/refund');if(error!==null)post('/api/admin/payout/fail',{payoutId:id,error})}
+  loadReadiness();
+  </script>
+<% } %>
+</div>
+</body>
+</html>

@@ -1,5 +1,7 @@
 node_modules/
 .env
 data/*.db
+v2/data/*.db
+backups/*.db
 public/styles.css
 .DS_Store

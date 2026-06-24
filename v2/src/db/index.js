@@ -61,6 +61,7 @@ function createTables() {
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`);
+  d.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_players_auth_unique ON players(auth_type, auth_id) WHERE auth_id IS NOT NULL AND auth_id != ''`);
   d.run(`CREATE TABLE IF NOT EXISTS queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     player_id INTEGER NOT NULL UNIQUE,
@@ -131,7 +132,7 @@ function seedConfig() {
     sat_rate_per_second: String(config.satRatePerSecond),
     time_control_base: String(config.timeControlBase),
     time_control_increment: String(config.timeControlIncrement),
-    event_locked: '0', event_name: '960 Throne', event_day: '1'
+    event_locked: '0', event_paused: '0', event_name: '960 Throne', event_day: '1'
   };
   for (const [key, value] of Object.entries(defaults)) {
     if (!get('SELECT key FROM config WHERE key=?', [key])) run('INSERT INTO config(key,value) VALUES(?,?)', [key, value]);
@@ -144,13 +145,15 @@ function setConfig(key, value) { run('INSERT OR REPLACE INTO config(key,value) V
 
 function createPlayer({ name, authType = 'pin', authId = null, pin = '', sessionToken = null }) {
   const id = insert('INSERT INTO players(name,auth_type,auth_id,pin,session_token) VALUES(?,?,?,?,?)', [name, authType, authId, pin, sessionToken]);
-  log('player_created', `${name} registered`, { playerId: id }); return id;
+  log('player_created', `${name || 'Unnamed player'} registered`, { playerId: id, authType }); return id;
 }
 function getPlayer(id) { return get('SELECT * FROM players WHERE id=?', [id]); }
 function getPlayerByToken(token) { return token ? get('SELECT * FROM players WHERE session_token=?', [token]) : null; }
+function getPlayerByAuth(authType, authId) { return authType && authId ? get('SELECT * FROM players WHERE auth_type=? AND auth_id=?', [authType, authId]) : null; }
 function listPlayers() { return exec('SELECT * FROM players ORDER BY name COLLATE NOCASE'); }
 function touchPlayer(id) { run('UPDATE players SET last_seen_at=? WHERE id=?', [now(), id]); }
 function setPlayerToken(id, token) { run('UPDATE players SET session_token=?, last_seen_at=? WHERE id=?', [token, now(), id]); }
+function setPlayerName(id, name) { run('UPDATE players SET name=?, last_seen_at=? WHERE id=?', [name, now(), id]); log('player_named', `Player #${id} set display name`, { playerId: id, name }); }
 
 function addToQueue(playerId) {
   const pos = (scalar('SELECT COALESCE(MAX(position),0)+1 FROM queue') || 1);
@@ -195,8 +198,22 @@ function reservePayout(playerId, amount, method = 'lnurl-withdraw') {
   save(); const payoutId = get('SELECT id FROM payouts ORDER BY id DESC LIMIT 1').id; log('payout_reserved', `Reserved ${amount} sats`, { payoutId, playerId, amount }); return { payoutId };
 }
 function payoutPaying(id, invoice = null) { run('UPDATE payouts SET status=?, invoice=?, updated_at=? WHERE id=?', ['paying', invoice, now(), id]); }
-function payoutComplete(id, paymentHash = null) { const p = get('SELECT * FROM payouts WHERE id=?', [id]); if (!p) return { error: 'Payout not found' }; conn().run('UPDATE players SET reserved_sats=MAX(0,reserved_sats-?), total_sats_claimed=total_sats_claimed+? WHERE id=?', [p.amount_sats, p.amount_sats, p.player_id]); conn().run('UPDATE payouts SET status=?, payment_hash=?, updated_at=?, completed_at=? WHERE id=?', ['completed', paymentHash, now(), now(), id]); save(); log('payout_completed', `Completed ${p.amount_sats} sats`, { payoutId: id }); return { success: true }; }
-function payoutFail(id, error) { const p = get('SELECT * FROM payouts WHERE id=?', [id]); if (!p) return { error: 'Payout not found' }; conn().run('UPDATE players SET reserved_sats=MAX(0,reserved_sats-?), sat_balance=sat_balance+? WHERE id=?', [p.amount_sats, p.amount_sats, p.player_id]); conn().run('UPDATE payouts SET status=?, error_message=?, updated_at=? WHERE id=?', ['failed', error, now(), id]); save(); log('payout_failed', `Failed ${p.amount_sats} sats: ${error}`, { payoutId: id }); return { success: true }; }
+function payoutComplete(id, paymentHash = null) {
+  const p = get('SELECT * FROM payouts WHERE id=?', [id]);
+  if (!p) return { error: 'Payout not found' };
+  if (!['reserved', 'paying', 'requested'].includes(p.status)) return { error: `Payout already ${p.status}` };
+  conn().run('UPDATE players SET reserved_sats=MAX(0,reserved_sats-?), total_sats_claimed=total_sats_claimed+? WHERE id=?', [p.amount_sats, p.amount_sats, p.player_id]);
+  conn().run('UPDATE payouts SET status=?, payment_hash=?, updated_at=?, completed_at=? WHERE id=?', ['completed', paymentHash, now(), now(), id]);
+  save(); log('payout_completed', `Completed ${p.amount_sats} sats`, { payoutId: id }); return { success: true };
+}
+function payoutFail(id, error) {
+  const p = get('SELECT * FROM payouts WHERE id=?', [id]);
+  if (!p) return { error: 'Payout not found' };
+  if (!['reserved', 'paying', 'requested'].includes(p.status)) return { error: `Payout already ${p.status}` };
+  conn().run('UPDATE players SET reserved_sats=MAX(0,reserved_sats-?), sat_balance=sat_balance+? WHERE id=?', [p.amount_sats, p.amount_sats, p.player_id]);
+  conn().run('UPDATE payouts SET status=?, error_message=?, updated_at=? WHERE id=?', ['failed', error, now(), id]);
+  save(); log('payout_failed', `Failed ${p.amount_sats} sats: ${error}`, { payoutId: id }); return { success: true };
+}
 function listPayouts(limit = 50) { return exec(`SELECT po.*, p.name AS player_name FROM payouts po JOIN players p ON p.id=po.player_id ORDER BY po.id DESC LIMIT ?`, [limit]); }
 
 function activeVenueCode() { return get('SELECT * FROM venue_codes WHERE is_active=1 ORDER BY id DESC LIMIT 1'); }
@@ -206,7 +223,19 @@ function notify(type, message) { run('INSERT INTO admin_notifications(type,messa
 function eventLog(limit = 100) { return exec('SELECT * FROM event_log ORDER BY id DESC LIMIT ?', [limit]); }
 
 function backup(label = 'manual') { save(); const dir = path.dirname(db.__path); const stamp = new Date().toISOString().replace(/[:.]/g, '-'); const out = path.join(dir, `throne-v2-${label}-${stamp}.db`); fs.copyFileSync(db.__path, out); return out; }
-function resetEventData() { conn().run('DELETE FROM queue'); conn().run('DELETE FROM games'); conn().run('DELETE FROM reigns'); conn().run('DELETE FROM payouts'); conn().run('DELETE FROM admin_notifications'); conn().run('UPDATE players SET sat_balance=0,reserved_sats=0,total_sats_earned=0,total_sats_claimed=0,games_played=0,games_won=0,games_lost=0,games_drawn=0,times_as_king=0,total_reign_seconds=0,longest_reign_seconds=0,longest_win_streak=0'); conn().run(`UPDATE config SET value='' WHERE key IN ('current_king_id','current_reign_id','current_game_id')`); save(); log('event_reset', 'Event data reset'); }
+function resetEventData() {
+  conn().run('DELETE FROM queue');
+  conn().run('DELETE FROM games');
+  conn().run('DELETE FROM reigns');
+  conn().run('DELETE FROM admin_notifications');
+  // Preserve identity and claimable balances across events. The reset clears only
+  // this-event competitive counters so leaderboards/winnings counters start fresh.
+  conn().run('UPDATE players SET total_sats_earned=0,games_played=0,games_won=0,games_lost=0,games_drawn=0,times_as_king=0,total_reign_seconds=0,longest_reign_seconds=0,longest_win_streak=0');
+  conn().run(`UPDATE config SET value='' WHERE key IN ('current_king_id','current_reign_id','current_game_id')`);
+  setConfig('event_paused', '0');
+  save();
+  log('event_reset', 'Event data reset; player identities and balances preserved');
+}
 
-const api = { initialize, shutdown, save, backup, resetEventData, exec, get, run, log, getConfig, setConfig, createPlayer, getPlayer, getPlayerByToken, listPlayers, touchPlayer, setPlayerToken, addToQueue, removeQueueId, removePlayerFromQueue, isPlayerInQueue, getQueue, getNextInQueue, reorderQueue, startReign, getReign, currentReign, endReign, updateReignStats, createGame, getGame, activeGame, finalizeGame, recentGames, addSats, reservePayout, payoutPaying, payoutComplete, payoutFail, listPayouts, activeVenueCode, createVenueCode, notifications, notify, eventLog };
+const api = { initialize, shutdown, save, backup, resetEventData, exec, get, run, log, getConfig, setConfig, createPlayer, getPlayer, getPlayerByToken, getPlayerByAuth, listPlayers, touchPlayer, setPlayerToken, setPlayerName, addToQueue, removeQueueId, removePlayerFromQueue, isPlayerInQueue, getQueue, getNextInQueue, reorderQueue, startReign, getReign, currentReign, endReign, updateReignStats, createGame, getGame, activeGame, finalizeGame, recentGames, addSats, reservePayout, payoutPaying, payoutComplete, payoutFail, listPayouts, activeVenueCode, createVenueCode, notifications, notify, eventLog };
 module.exports = api;
