@@ -235,6 +235,9 @@ function resetEventData() {
   conn().run('DELETE FROM games');
   conn().run('DELETE FROM reigns');
   conn().run('DELETE FROM admin_notifications');
+  // Reset event-local AUTOINCREMENT counters so the next event starts at Game #1
+  // without changing persistent player/payout identity counters.
+  conn().run(`DELETE FROM sqlite_sequence WHERE name IN ('queue','games','reigns','admin_notifications')`);
   // Preserve identity and claimable balances across events. The reset clears only
   // this-event competitive counters so leaderboards/winnings counters start fresh.
   conn().run('UPDATE players SET total_sats_earned=0,games_played=0,games_won=0,games_lost=0,games_drawn=0,times_as_king=0,total_reign_seconds=0,longest_reign_seconds=0,longest_win_streak=0');
