@@ -43,14 +43,17 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:radial-g
     <% } %>
   <% } else { %>
     <h2>Log in with Lightning</h2>
-    <p class="muted">Open Phoenix Wallet to log in before entering the line.</p>
-    <button id="start" class="wallet-primary" onclick="startLightningLogin()">Open Phoenix and Log in</button>
-    <p class="muted">No Phoenix? <a class="gold" id="phoenix-install" href="https://play.google.com/store/apps/details?id=fr.acinq.phoenix.mainnet">Install Phoenix</a>. If another wallet opens, use the QR code below.</p>
-    <button id="show-qr" class="small-link" onclick="showQrFallback()" type="button">show QR code</button>
+    <p class="muted">Use Phoenix Wallet to log in before entering the line.</p>
+    <button id="start" class="wallet-primary" onclick="startLightningLogin()">Log in with Phoenix</button>
+    <p id="wallet-help" class="muted">Android opens Phoenix directly. iPhone copies a Phoenix login code — then open Phoenix and paste/use it there.</p>
+    <p class="muted">No Phoenix? <a class="gold" id="phoenix-install" href="https://play.google.com/store/apps/details?id=fr.acinq.phoenix.mainnet">Install Phoenix</a>.</p>
+    <button id="show-qr" class="small-link" onclick="showQrFallback()" type="button">show QR / copy code</button>
     <div class="queue"><h3>Camera not working?</h3><p class="muted">Type the code shown on the public screen.</p><input id="venue-code" placeholder="Screen code" autocomplete="off" autocapitalize="characters"><button class="secondary" onclick="verifyVenueCode()">Use Code</button></div>
     <div id="auth-box" class="hide fallback">
       <img id="qr" class="qr" alt="Lightning login QR">
-      <p id="auth-status" class="muted">Waiting for wallet login…</p>
+      <button class="secondary" onclick="copyLoginCode()" type="button">Copy Login Code</button>
+      <input id="login-code" readonly value="" onclick="this.select()" aria-label="Lightning login code">
+      <p id="auth-status" class="muted">Waiting for Phoenix login…</p>
     </div>
   <% } %>
 
@@ -76,7 +79,8 @@ async function startLightningLogin(){
   if(!r.ok){showMsg(j.error||'Could not start wallet login',false);document.getElementById('start').disabled=false;return}
   currentChallenge=j;
   document.getElementById('qr').src=j.qr;
-  status.textContent='Opening wallet…';
+  document.getElementById('login-code').value=j.deepLink||('lightning:'+j.lnurl);
+  status.textContent='Preparing Phoenix login…';
   if(pollTimer)clearInterval(pollTimer);
   pollTimer=setInterval(checkAuth,1200);
   openWallet();
@@ -87,19 +91,27 @@ function openWallet(){
   if(!currentChallenge||!currentChallenge.deepLink)return;
   const ua=navigator.userAgent||'';
   const lnurl=currentChallenge.lnurl||currentChallenge.deepLink.replace(/^lightning:/i,'');
+  if(/iPhone|iPad|iPod/i.test(ua))document.getElementById('phoenix-install').href=PHOENIX_APP_STORE;
   if(/Android/i.test(ua)){
-    // Package-targeted Android intent: prefer Phoenix, fallback to Play Store if it is not installed.
-    location.href='intent:'+lnurl+'#Intent;scheme=lightning;package='+PHOENIX_ANDROID_PACKAGE+';S.browser_fallback_url='+encodeURIComponent(PHOENIX_PLAY_STORE)+';end';
-    setTimeout(()=>{ if(currentChallenge) showMsg('If Phoenix did not open, install Phoenix or use the QR code.',true); },1200);
+    // Android Chrome package-targeted intent: open Phoenix only; fallback to Play Store if missing.
+    // Avoid the generic lightning: link here so Cash App/Blink do not win the chooser.
+    location.href='intent://'+lnurl+'#Intent;scheme=lightning;package='+PHOENIX_ANDROID_PACKAGE+';S.browser_fallback_url='+encodeURIComponent(PHOENIX_PLAY_STORE)+';end';
+    setTimeout(()=>{ if(currentChallenge) showMsg('If Phoenix did not open, install Phoenix or use the QR/login code.',true); },1200);
     return;
   }
   if(/iPhone|iPad|iPod/i.test(ua)){
-    document.getElementById('phoenix-install').href=PHOENIX_APP_STORE;
-    location.href=currentChallenge.deepLink;
-    setTimeout(()=>{ if(currentChallenge) showMsg('iPhone may choose another Lightning app. If that happens, install/open Phoenix or use the QR code.',true); },1200);
+    showQrFallback();
+    copyLoginCode(true);
+    setTimeout(()=>{ if(currentChallenge) showMsg('Login code copied. Now open Phoenix and paste/use the code there.',true); },250);
     return;
   }
   location.href=currentChallenge.deepLink;
+}
+async function copyLoginCode(silent=false){
+  if(!currentChallenge)return showMsg('Start login first.',false);
+  const code=currentChallenge.deepLink||('lightning:'+currentChallenge.lnurl);
+  document.getElementById('login-code').value=code;
+  try{await navigator.clipboard.writeText(code);if(!silent)showMsg('Login code copied. Open Phoenix and paste/use it there.',true)}catch(e){document.getElementById('login-code').select();if(!silent)showMsg('Copy failed; select/copy the code shown below, then open Phoenix.',false)}
 }
 async function checkAuth(){
   if(!currentChallenge)return;
