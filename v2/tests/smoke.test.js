@@ -107,10 +107,13 @@ const { makeAdminToken, validAdminToken } = require('../src/routes/middleware');
   await new Promise(resolve => setTimeout(resolve, 1100));
   s = engine.getState();
   assert(s.liveSats > previousReignSats, 'same-king next game should keep adding to reign sats');
+  const eventTotalBeforeThroneChange = s.eventTotalSats;
 
   engine.finalizeGame(s.game.id, 'challenger_won');
   s = engine.getState();
   assert.equal(s.king.name, 'Charlie');
+  assert.equal(s.liveSats, 0, 'new reign should reset reign sats');
+  assert(s.eventTotalSats >= eventTotalBeforeThroneChange, 'event total should not reset when throne changes');
   db.addSats(b.id, 100);
   const p = db.reservePayout(b.id, 60, 'test');
   assert(p.payoutId);
@@ -126,6 +129,7 @@ const { makeAdminToken, validAdminToken } = require('../src/routes/middleware');
   assert(db.payoutComplete(p2.payoutId, 'second click').error, 'completed payout should not complete twice');
 
   db.resetEventData();
+  assert.equal(db.eventTotalSatsEarned(), 0, 'event reset should clear event-wide sats total');
   const bobAfterReset = db.getPlayer(b.id);
   assert.equal(bobAfterReset.sat_balance, 60, 'event reset should preserve remaining claimable balance');
   assert.equal(bobAfterReset.total_sats_claimed, 40, 'event reset should preserve claimed total');

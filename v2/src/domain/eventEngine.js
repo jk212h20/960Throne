@@ -110,8 +110,9 @@ function flushSats() {
     db.addSats(game.king_id, delta);
     db.run('UPDATE games SET sats_earned=? WHERE id=?', [gameTarget, game.id]);
     db.updateReignStats(reign.id, { total_sats_earned: reignTotal });
+    const eventTotalSats = db.eventTotalSatsEarned();
     const king = db.getPlayer(game.king_id);
-    broadcast('sats_tick', { delta, liveSats: reignTotal, gameSats: gameTarget, kingTotal: king ? king.total_sats_earned : reignTotal });
+    broadcast('sats_tick', { delta, liveSats: reignTotal, gameSats: gameTarget, kingTotal: king ? king.total_sats_earned : reignTotal, eventTotalSats });
   }
   return delta;
 }
@@ -173,10 +174,10 @@ function lockEvent(locked) { db.setConfig('event_locked', locked ? '1' : '0'); b
 function pauseEvent() { return setPaused(true); }
 function resumeEvent() { return setPaused(false); }
 function resetEvent() { const backup = db.backup('pre-reset'); db.resetEventData(); dgt.clearExpectedPosition(); gameStartedAt = null; broadcast('event_reset', { backup }); return { success: true, backup }; }
-function getState() { flushSats(); const kingId = parseInt(db.getConfig('current_king_id') || '0', 10); const game = db.activeGame(); const reign = db.currentReign(); return { event: { name: db.getConfig('event_name'), day: db.getConfig('event_day'), locked: db.getConfig('event_locked') === '1', paused: isPaused(), venueCode: db.activeVenueCode()?.code || null }, king: kingId ? db.getPlayer(kingId) : null, reign, game, queue: db.getQueue(), recentGames: db.recentGames(8), players: db.listPlayers(), payouts: db.listPayouts(10), dgt: dgt.snapshot(), config: { satRate: parseInt(db.getConfig('sat_rate_per_second') || config.satRatePerSecond, 10), timeControl: timeControl(), dgtClockSwapSides: config.dgtClockSwapSides }, liveSats: reign ? reign.total_sats_earned : 0 } }
+function getState() { flushSats(); const kingId = parseInt(db.getConfig('current_king_id') || '0', 10); const game = db.activeGame(); const reign = db.currentReign(); return { event: { name: db.getConfig('event_name'), day: db.getConfig('event_day'), locked: db.getConfig('event_locked') === '1', paused: isPaused(), venueCode: db.activeVenueCode()?.code || null }, king: kingId ? db.getPlayer(kingId) : null, reign, game, queue: db.getQueue(), recentGames: db.recentGames(8), players: db.listPlayers(), payouts: db.listPayouts(10), dgt: dgt.snapshot(), config: { satRate: parseInt(db.getConfig('sat_rate_per_second') || config.satRatePerSecond, 10), timeControl: timeControl(), dgtClockSwapSides: config.dgtClockSwapSides }, liveSats: reign ? reign.total_sats_earned : 0, eventTotalSats: db.eventTotalSatsEarned() } }
 function publicState() {
   const s = getState();
   const publicDgt = s.dgt ? { stale: s.dgt.stale, setupOk: s.dgt.setupOk, setupMessage: s.dgt.setupMessage, setupDiff: (s.dgt.setupDiff || []).slice(0, 64).map(d => ({ square: d.square, message: d.message })), fen: s.dgt.fen || null, clock: s.dgt.clock } : {};
-  return { event: { day: s.event.day, locked: s.event.locked, paused: s.event.paused, venueCode: s.event.venueCode }, king: s.king ? { id: s.king.id, name: s.king.name, total_sats_earned: s.king.total_sats_earned || 0 } : null, game: s.game ? { id: s.game.id, king_id: s.game.king_id, challenger_id: s.game.challenger_id, king_name: s.game.king_name, challenger_name: s.game.challenger_name, chess960_position: s.game.chess960_position, king_color: s.game.king_color, table_started_at: s.game.table_started_at } : null, queue: s.queue.map(q => ({ player_id: q.player_id, player_name: q.player_name })), dgt: publicDgt, config: s.config, liveSats: s.liveSats };
+  return { event: { day: s.event.day, locked: s.event.locked, paused: s.event.paused, venueCode: s.event.venueCode }, king: s.king ? { id: s.king.id, name: s.king.name, total_sats_earned: s.king.total_sats_earned || 0 } : null, game: s.game ? { id: s.game.id, king_id: s.game.king_id, challenger_id: s.game.challenger_id, king_name: s.game.king_name, challenger_name: s.game.challenger_name, chess960_position: s.game.chess960_position, king_color: s.game.king_color, table_started_at: s.game.table_started_at } : null, queue: s.queue.map(q => ({ player_id: q.player_id, player_name: q.player_name })), dgt: publicDgt, config: s.config, liveSats: s.liveSats, eventTotalSats: s.eventTotalSats };
 }
 module.exports = { init, shutdown, getState, publicState, registerPlayer, joinQueue, leaveQueue, adminAddToQueue, adminRemoveFromQueue, crownKing, callNextChallenger, startTableGame, maybeAutoStartFromDgt, finalizeGame, reportResult, adminReorder, adminReorderQueue, lockEvent, pauseEvent, resumeEvent, resetEvent, rotateVenueCode, flushSats };

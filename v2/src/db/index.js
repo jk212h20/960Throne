@@ -195,6 +195,7 @@ function finalizeGame(id, result, satsEarned = 0) { run('UPDATE games SET result
 function recentGames(limit = 10) { return exec(`SELECT g.*, k.name AS king_name, c.name AS challenger_name FROM games g JOIN players k ON k.id=g.king_id JOIN players c ON c.id=g.challenger_id WHERE g.result IS NOT NULL ORDER BY g.id DESC LIMIT ?`, [limit]); }
 
 function addSats(playerId, amount) { run('UPDATE players SET sat_balance=sat_balance+?, total_sats_earned=total_sats_earned+? WHERE id=?', [amount, Math.max(0, amount), playerId]); }
+function eventTotalSatsEarned() { return get('SELECT COALESCE(SUM(total_sats_earned),0) AS total FROM players').total || 0; }
 function reservePayout(playerId, amount, method = 'lnurl-withdraw') {
   const p = getPlayer(playerId); if (!p) return { error: 'Player not found' };
   if (amount <= 0) return { error: 'Amount must be positive' };
@@ -247,5 +248,5 @@ function resetEventData() {
   log('event_reset', 'Event data reset; player identities and balances preserved');
 }
 
-const api = { initialize, shutdown, save, backup, resetEventData, exec, get, run, log, getConfig, setConfig, createPlayer, getPlayer, getPlayerByToken, getPlayerByAuth, listPlayers, touchPlayer, setPlayerToken, setPlayerName, addToQueue, removeQueueId, removePlayerFromQueue, isPlayerInQueue, getQueue, getNextInQueue, reorderQueue, startReign, getReign, currentReign, endReign, updateReignStats, createGame, getGame, startGame, activeGame, finalizeGame, recentGames, addSats, reservePayout, payoutPaying, payoutComplete, payoutFail, listPayouts, activeVenueCode, validateVenueCode, createVenueCode, notifications, notify, eventLog };
+const api = { initialize, shutdown, save, backup, resetEventData, exec, get, run, log, getConfig, setConfig, createPlayer, getPlayer, getPlayerByToken, getPlayerByAuth, listPlayers, touchPlayer, setPlayerToken, setPlayerName, addToQueue, removeQueueId, removePlayerFromQueue, isPlayerInQueue, getQueue, getNextInQueue, reorderQueue, startReign, getReign, currentReign, endReign, updateReignStats, createGame, getGame, startGame, activeGame, finalizeGame, recentGames, addSats, eventTotalSatsEarned, reservePayout, payoutPaying, payoutComplete, payoutFail, listPayouts, activeVenueCode, validateVenueCode, createVenueCode, notifications, notify, eventLog };
 module.exports = api;
