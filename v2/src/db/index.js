@@ -223,6 +223,7 @@ function payoutFail(id, error) {
 function listPayouts(limit = 50) { return exec(`SELECT po.*, p.name AS player_name FROM payouts po JOIN players p ON p.id=po.player_id ORDER BY po.id DESC LIMIT ?`, [limit]); }
 
 function activeVenueCode() { return get('SELECT * FROM venue_codes WHERE is_active=1 ORDER BY id DESC LIMIT 1'); }
+function validateVenueCode(code) { const active = activeVenueCode(); return Boolean(active && String(active.code).toUpperCase() === String(code || '').trim().toUpperCase()); }
 function createVenueCode(code) { run('UPDATE venue_codes SET is_active=0'); const id = insert('INSERT INTO venue_codes(code,is_active) VALUES(?,1)', [code]); log('venue_code', `Venue code rotated: ${code}`, { code }); return id; }
 function notifications() { return exec('SELECT * FROM admin_notifications WHERE resolved=0 ORDER BY id DESC LIMIT 25'); }
 function notify(type, message) { run('INSERT INTO admin_notifications(type,message) VALUES(?,?)', [type, message]); }
@@ -243,5 +244,5 @@ function resetEventData() {
   log('event_reset', 'Event data reset; player identities and balances preserved');
 }
 
-const api = { initialize, shutdown, save, backup, resetEventData, exec, get, run, log, getConfig, setConfig, createPlayer, getPlayer, getPlayerByToken, getPlayerByAuth, listPlayers, touchPlayer, setPlayerToken, setPlayerName, addToQueue, removeQueueId, removePlayerFromQueue, isPlayerInQueue, getQueue, getNextInQueue, reorderQueue, startReign, getReign, currentReign, endReign, updateReignStats, createGame, getGame, startGame, activeGame, finalizeGame, recentGames, addSats, reservePayout, payoutPaying, payoutComplete, payoutFail, listPayouts, activeVenueCode, createVenueCode, notifications, notify, eventLog };
+const api = { initialize, shutdown, save, backup, resetEventData, exec, get, run, log, getConfig, setConfig, createPlayer, getPlayer, getPlayerByToken, getPlayerByAuth, listPlayers, touchPlayer, setPlayerToken, setPlayerName, addToQueue, removeQueueId, removePlayerFromQueue, isPlayerInQueue, getQueue, getNextInQueue, reorderQueue, startReign, getReign, currentReign, endReign, updateReignStats, createGame, getGame, startGame, activeGame, finalizeGame, recentGames, addSats, reservePayout, payoutPaying, payoutComplete, payoutFail, listPayouts, activeVenueCode, validateVenueCode, createVenueCode, notifications, notify, eventLog };
 module.exports = api;

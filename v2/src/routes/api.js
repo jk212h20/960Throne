@@ -18,6 +18,10 @@ router.get('/join-qr-img', async (req, res) => {
   const png = await QRCode.toBuffer(url, { width: 320, margin: 1, color: { dark: '#05030a', light: '#ffffff' } });
   res.type('png').send(png);
 });
+router.post('/venue-code/verify', (req, res) => {
+  if (!db.validateVenueCode(req.body.code)) return res.status(400).json({ error: 'That code is not active' });
+  res.json({ success: true });
+});
 
 router.get('/auth/lightning', async (req, res) => {
   try {

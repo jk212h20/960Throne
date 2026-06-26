@@ -11,7 +11,6 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:radial-g
 <div class="card">
   <div class="pill">Lightning required</div>
   <h1>♛ Join the 960 Throne</h1>
-  <p class="muted">Venue code: <b><%= state.event.venueCode || '------' %></b></p>
 
   <% if (player) { %>
     <% if (!player.name) { %>
@@ -47,6 +46,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:radial-g
     <p class="muted">Open your Lightning wallet to log in before entering the line.</p>
     <button id="start" class="wallet-primary" onclick="startLightningLogin()">Open Wallet and Log in</button>
     <button id="show-qr" class="small-link" onclick="showQrFallback()" type="button">show QR code</button>
+    <div class="queue"><h3>Camera not working?</h3><p class="muted">Type the code shown on the public screen.</p><input id="venue-code" placeholder="Screen code" autocomplete="off" autocapitalize="characters"><button class="secondary" onclick="verifyVenueCode()">Use Code</button></div>
     <div id="auth-box" class="hide fallback">
       <img id="qr" class="qr" alt="Lightning login QR">
       <p id="auth-status" class="muted">Waiting for wallet login…</p>
@@ -63,6 +63,7 @@ async function setName(){const name=document.getElementById('display-name').valu
 async function joinQueue(){await post('/api/queue/join',{},true)}
 async function leaveQueue(){await post('/api/queue/leave',{},true)}
 async function reportResult(result){await post('/api/game/report',{result},true)}
+async function verifyVenueCode(){const code=document.getElementById('venue-code').value;const j=await post('/api/venue-code/verify',{code},false);if(j.success){showMsg('Code accepted. Open your wallet to log in.',true);setTimeout(startLightningLogin,250)}}
 async function startLightningLogin(){
   const status=document.getElementById('auth-status');
   document.getElementById('start').disabled=true;
