@@ -45,7 +45,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:radial-g
     <h2>Log in with Lightning</h2>
     <p class="muted">Use Phoenix Wallet to log in before entering the line.</p>
     <button id="start" class="wallet-primary" onclick="startLightningLogin()">Log in with Phoenix</button>
-    <p id="wallet-help" class="muted">Android opens Phoenix directly. iPhone copies a Phoenix login code — then open Phoenix and paste/use it there.</p>
+    <p id="wallet-help" class="muted">Android opens Phoenix directly. iPhone tries Phoenix directly, with copy-code fallback if needed.</p>
     <p class="muted">No Phoenix? <a class="gold" id="phoenix-install" href="https://play.google.com/store/apps/details?id=fr.acinq.phoenix.mainnet">Install Phoenix</a>.</p>
     <button id="show-qr" class="small-link" onclick="showQrFallback()" type="button">show QR / copy code</button>
     <div class="queue"><h3>Camera not working?</h3><p class="muted">Type the code shown on the public screen.</p><input id="venue-code" placeholder="Screen code" autocomplete="off" autocapitalize="characters"><button class="secondary" onclick="verifyVenueCode()">Use Code</button></div>
@@ -64,6 +64,7 @@ let currentChallenge=null,pollTimer=null;
 const PHOENIX_ANDROID_PACKAGE='fr.acinq.phoenix.mainnet';
 const PHOENIX_PLAY_STORE='https://play.google.com/store/apps/details?id=fr.acinq.phoenix.mainnet';
 const PHOENIX_APP_STORE='https://apps.apple.com/app/phoenix-wallet/id1544097028';
+function phoenixDeepLink(){return currentChallenge&&currentChallenge.deepLink?'phoenix:'+currentChallenge.deepLink:null}
 function showMsg(text, ok=true){out.style.display='block';out.textContent=text;out.className='msg '+(ok?'ok':'bad')}
 async function post(u,b={},reload=true){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});const j=await r.json().catch(()=>({error:'Request failed'}));if(!r.ok||j.error){showMsg(j.error||'Request failed',false);return j}showMsg(j.message||'Saved',true);if(reload)setTimeout(()=>location.reload(),450);return j}
 async function setName(){const name=document.getElementById('display-name').value;await post('/api/auth/set-name',{name})}
@@ -100,9 +101,12 @@ function openWallet(){
     return;
   }
   if(/iPhone|iPad|iPod/i.test(ua)){
+    // Phoenix-specific iOS scheme. This avoids the shared lightning: handler that Cash App/Blink can intercept.
     showQrFallback();
     copyLoginCode(true);
-    setTimeout(()=>{ if(currentChallenge) showMsg('Login code copied. Now open Phoenix and paste/use the code there.',true); },250);
+    const link=phoenixDeepLink();
+    if(link)location.href=link;
+    setTimeout(()=>{ if(currentChallenge) showMsg('If Phoenix did not open, tap Copy Login Code, open/install Phoenix, and paste/use the code there.',true); },1200);
     return;
   }
   location.href=currentChallenge.deepLink;
