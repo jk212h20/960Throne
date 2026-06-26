@@ -11,6 +11,7 @@ let satTimer = null;
 function init(socketIo) {
   io = socketIo;
   const game = db.activeGame();
+  if (game) dgt.setExpectedPosition(game.chess960_position);
   if (game && game.table_started_at) gameStartedAt = new Date(game.table_started_at).getTime();
   ensureVenueCode();
   startSatAccumulator();
