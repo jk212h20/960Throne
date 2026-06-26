@@ -103,7 +103,7 @@ function flushSats() {
   const rate = parseInt(db.getConfig('sat_rate_per_second') || config.satRatePerSecond, 10);
   const target = elapsed * rate;
   const delta = target - (reign.total_sats_earned || 0);
-  if (delta > 0) { db.addSats(game.king_id, delta); db.updateReignStats(reign.id, { total_sats_earned: target }); broadcast('sats_tick', { delta, liveSats: target }); }
+  if (delta > 0) { db.addSats(game.king_id, delta); db.updateReignStats(reign.id, { total_sats_earned: target }); const king = db.getPlayer(game.king_id); broadcast('sats_tick', { delta, liveSats: target, kingTotal: king ? king.total_sats_earned : target }); }
   return delta;
 }
 function startTableGame() {
@@ -155,6 +155,6 @@ function getState() { flushSats(); const kingId = parseInt(db.getConfig('current
 function publicState() {
   const s = getState();
   const publicDgt = s.dgt ? { stale: s.dgt.stale, setupOk: s.dgt.setupOk, clock: s.dgt.clock } : {};
-  return { event: { day: s.event.day, locked: s.event.locked, paused: s.event.paused, venueCode: s.event.venueCode }, king: s.king ? { id: s.king.id, name: s.king.name } : null, game: s.game ? { id: s.game.id, king_id: s.game.king_id, challenger_id: s.game.challenger_id, king_name: s.game.king_name, challenger_name: s.game.challenger_name, chess960_position: s.game.chess960_position, king_color: s.game.king_color, table_started_at: s.game.table_started_at } : null, queue: s.queue.map(q => ({ player_id: q.player_id, player_name: q.player_name })), dgt: publicDgt, config: s.config, liveSats: s.liveSats };
+  return { event: { day: s.event.day, locked: s.event.locked, paused: s.event.paused, venueCode: s.event.venueCode }, king: s.king ? { id: s.king.id, name: s.king.name, total_sats_earned: s.king.total_sats_earned || 0 } : null, game: s.game ? { id: s.game.id, king_id: s.game.king_id, challenger_id: s.game.challenger_id, king_name: s.game.king_name, challenger_name: s.game.challenger_name, chess960_position: s.game.chess960_position, king_color: s.game.king_color, table_started_at: s.game.table_started_at } : null, queue: s.queue.map(q => ({ player_id: q.player_id, player_name: q.player_name })), dgt: publicDgt, config: s.config, liveSats: s.liveSats };
 }
 module.exports = { init, shutdown, getState, publicState, registerPlayer, joinQueue, leaveQueue, adminAddToQueue, adminRemoveFromQueue, crownKing, callNextChallenger, startTableGame, finalizeGame, reportResult, adminReorder, adminReorderQueue, lockEvent, pauseEvent, resumeEvent, resetEvent, rotateVenueCode, flushSats };
