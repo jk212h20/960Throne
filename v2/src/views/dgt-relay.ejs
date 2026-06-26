@@ -56,6 +56,12 @@
                         <div class="text-xs text-gray-600">
                             ⚡ Reads raw DGT protocol — board position + clock with turn info every second
                         </div>
+                        <div class="grid grid-cols-2 gap-3 text-xs mt-3">
+                            <div><span class="text-gray-500">Bytes:</span> <b id="serial-bytes">0</b></div>
+                            <div><span class="text-gray-500">Messages:</span> <b id="serial-msgs">0</b></div>
+                            <div><span class="text-gray-500">Board dumps:</span> <b id="serial-dumps">0</b></div>
+                            <div><span class="text-gray-500">Field updates:</span> <b id="serial-fields">0</b></div>
+                        </div>
                     </div>
                 </div>
 
@@ -840,6 +846,14 @@
     let serialLastClock = null;
     let serialClockPollTimer = null;
     let serialBoardPollTimer = null;
+    let serialBytes = 0;
+    let serialMessages = 0;
+    let serialDumps = 0;
+    let serialFields = 0;
+    function updateSerialDiag(){
+        const set=(id,val)=>{const el=document.getElementById(id); if(el)el.textContent=val};
+        set('serial-bytes', serialBytes); set('serial-msgs', serialMessages); set('serial-dumps', serialDumps); set('serial-fields', serialFields);
+    }
     
     // DGT Protocol Constants
     const DGT_SEND_CLK         = 0x41;
@@ -912,8 +926,9 @@
             
         } catch (err) {
             log('Serial connect failed: ' + err.message, 'error');
+            log('If open failed, close DGT LiveChess/other relay tabs, unplug/replug the board, refresh, then choose DGT e-Board (usbmodem).', 'error');
             document.getElementById('serial-dot').className = 'status-dot dot-red';
-            document.getElementById('serial-status').textContent = 'Connection failed: ' + err.message;
+            document.getElementById('serial-status').textContent = 'Connection failed. Close other board apps/tabs, unplug/replug, refresh, and choose DGT e-Board.';
         }
     }
     
@@ -953,6 +968,8 @@
                         newBuf.set(serialBuffer);
                         newBuf.set(value, serialBuffer.length);
                         serialBuffer = newBuf;
+                        serialBytes += value.length;
+                        updateSerialDiag();
                         parseSerialBuffer();
                     }
                 }
@@ -974,6 +991,8 @@
             
             const msg = serialBuffer.slice(0, msgLen);
             serialBuffer = serialBuffer.slice(msgLen);
+            serialMessages++;
+            updateSerialDiag();
             
             switch (msgType) {
                 case DGT_MSG_BOARD_DUMP: handleSerialBoardDump(msg); break;
@@ -984,7 +1003,9 @@
     }
     
     function handleSerialBoardDump(msg) {
-        if (msg.length < 67) return;
+        serialDumps++;
+        updateSerialDiag();
+        if (msg.length < 67) { log('Short board dump: '+msg.length+' bytes', 'error'); return; }
         for (let i = 0; i < 64; i++) {
             serialBoard[i] = DGT_PIECES[msg[3 + i]] || null;
         }
@@ -994,6 +1015,7 @@
             lastFen = fen;
             renderBoard(fen);
             document.getElementById('fen-input').value = fen;
+            log('DGT board FEN: '+fen, 'success');
             pushToServer(fen, serialLastClock);
         }
     }
@@ -1054,6 +1076,8 @@
     }
     
     function handleSerialFieldUpdate(msg) {
+        serialFields++;
+        updateSerialDiag();
         if (msg.length < 5) return;
         const field = msg[3];
         const piece = msg[4];

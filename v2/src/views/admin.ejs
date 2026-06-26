@@ -80,6 +80,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;
       <p>Setup: <b class="<%= state.dgt && state.dgt.setupOk ? 'ok' : 'warn' %>"><%= state.dgt ? state.dgt.setupMessage : 'No board data' %></b></p>
       <p class="mini muted">Age: <%= state.dgt && state.dgt.ageMs != null ? state.dgt.ageMs + 'ms' : 'n/a' %></p>
       <% if (state.dgt && state.dgt.fen) { %><p class="mono mini"><%= state.dgt.fen %></p><% } %>
+      <% if (state.dgt && state.dgt.setupDiff && state.dgt.setupDiff.length) { %><div class="mini bad"><b>Squares to fix:</b><ul><% state.dgt.setupDiff.slice(0,16).forEach(d=>{ %><li><%= d.message %></li><% }) %></ul><% if (state.dgt.setupDiff.length > 16) { %><p>…and <%= state.dgt.setupDiff.length - 16 %> more.</p><% } %></div><% } %>
       <% if (state.dgt && state.dgt.clock) { %><p>Clock W/B: <%= state.dgt.clock.white %> / <%= state.dgt.clock.black %> · Active: <%= state.dgt.clock.activeSide || '—' %></p><% } %>
     </div>
 

@@ -10,6 +10,8 @@ const state = {
   expectedPosition: null,
   setupOk: false,
   setupMessage: 'No board data yet',
+  expectedFen: null,
+  setupDiff: [],
 };
 
 function init(socketIo) { io = socketIo; }
@@ -36,12 +38,42 @@ function normalizeClock(clock) {
     raw: clock,
   };
 }
+function parsePlacement(placement) {
+  const rows = String(placement || '').split('/');
+  const out = [];
+  for (const row of rows) {
+    for (const ch of row) {
+      if (/^[1-8]$/.test(ch)) for (let i = 0; i < parseInt(ch, 10); i++) out.push(null);
+      else out.push(ch);
+    }
+  }
+  return out.length === 64 ? out : [];
+}
+function pieceName(ch) {
+  if (!ch) return 'empty';
+  const color = ch === ch.toUpperCase() ? 'White' : 'Black';
+  const names = { p: 'pawn', r: 'rook', n: 'knight', b: 'bishop', q: 'queen', k: 'king' };
+  return `${color} ${names[ch.toLowerCase()] || ch}`;
+}
+function setupDiff(actualFen, expectedFen) {
+  const actual = parsePlacement(actualFen);
+  const expected = parsePlacement(expectedFen);
+  if (actual.length !== 64 || expected.length !== 64) return [];
+  const files = 'abcdefgh';
+  const diff = [];
+  for (let i = 0; i < 64; i++) {
+    if (actual[i] !== expected[i]) diff.push({ square: `${files[i % 8]}${8 - Math.floor(i / 8)}`, expected: expected[i], actual: actual[i], message: `${files[i % 8]}${8 - Math.floor(i / 8)}: expected ${pieceName(expected[i])}, found ${pieceName(actual[i])}` });
+  }
+  return diff;
+}
 function verify() {
+  state.expectedFen = state.expectedPosition == null ? null : chess960.positionToStartingFen(state.expectedPosition);
+  state.setupDiff = [];
   if (state.expectedPosition == null) { state.setupOk = false; state.setupMessage = 'Waiting for game'; return; }
   if (!state.fen) { state.setupOk = false; state.setupMessage = `Set board to position #${state.expectedPosition}`; return; }
-  const expected = chess960.positionToStartingFen(state.expectedPosition);
-  state.setupOk = normalizeFen(state.fen) === expected;
-  state.setupMessage = state.setupOk ? `Position #${state.expectedPosition} locked` : `Set board to #${state.expectedPosition}`;
+  state.setupDiff = setupDiff(normalizeFen(state.fen), state.expectedFen);
+  state.setupOk = state.setupDiff.length === 0;
+  state.setupMessage = state.setupOk ? `Position #${state.expectedPosition} locked` : `Set board to #${state.expectedPosition}: ${state.setupDiff.length} square${state.setupDiff.length === 1 ? '' : 's'} differ`;
 }
 function snapshot() {
   const ageMs = state.lastSeenAt ? Date.now() - new Date(state.lastSeenAt).getTime() : null;
