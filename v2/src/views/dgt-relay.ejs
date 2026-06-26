@@ -224,7 +224,7 @@
                     const light = (r + f) % 2 === 0;
                     const piece = FEN_PIECES[ch];
                     html += `<div class="board-square ${light ? 'sq-light' : 'sq-dark'}">`;
-                    if (piece) html += `<img src="${SERVER_URL}/pieces/${piece}.svg" class="piece-img" alt="${piece}">`;
+                    if (piece) html += `<img src="/public/pieces/${piece}.svg" class="piece-img" alt="${piece}">`;
                     html += '</div>';
                     f++;
                 }
