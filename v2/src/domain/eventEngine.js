@@ -116,9 +116,20 @@ function flushSats() {
   }
   return delta;
 }
-function startTableGame() {
+function dgtStartReadiness(dgtSnapshot) {
+  if (!dgtSnapshot || dgtSnapshot.stale) return { ok: false, reason: 'dgt_stale' };
+  if (!dgtSnapshot.setupOk) return { ok: false, reason: 'setup_not_ready' };
+  if (!dgtSnapshot.clock || !dgtSnapshot.clock.running) return { ok: false, reason: 'clock_not_running' };
+  const base = timeControl().base;
+  const resetTolerance = 5;
+  if (base > 0 && (Number(dgtSnapshot.clock.white) < base - resetTolerance || Number(dgtSnapshot.clock.black) < base - resetTolerance)) return { ok: false, reason: 'clock_not_reset' };
+  return { ok: true };
+}
+function startTableGame(options = {}) {
   const game = db.activeGame(); if (!game) return { error: 'No active game' };
   if (game.table_started_at) return { success: true, game };
+  const readiness = dgtStartReadiness(options.dgtSnapshot || dgt.snapshot());
+  if (!readiness.ok) return { error: readiness.reason };
   const started = db.startGame(game.id); if (started.error) return started;
   gameStartedAt = new Date(started.table_started_at).getTime();
   broadcast('game_started', { game: started, position: chess960.positionToDisplay(started.chess960_position), timeControl: timeControl() });
@@ -127,13 +138,9 @@ function startTableGame() {
 function maybeAutoStartFromDgt(dgtSnapshot) {
   const game = db.activeGame();
   if (!game || game.table_started_at) return { started: false, reason: 'no_unstarted_game' };
-  if (!dgtSnapshot || dgtSnapshot.stale) return { started: false, reason: 'dgt_stale' };
-  if (!dgtSnapshot.setupOk) return { started: false, reason: 'setup_not_ready' };
-  if (!dgtSnapshot.clock || !dgtSnapshot.clock.running) return { started: false, reason: 'clock_not_running' };
-  const base = timeControl().base;
-  const resetTolerance = 5;
-  if (base > 0 && (Number(dgtSnapshot.clock.white) < base - resetTolerance || Number(dgtSnapshot.clock.black) < base - resetTolerance)) return { started: false, reason: 'clock_not_reset' };
-  const r = startTableGame();
+  const readiness = dgtStartReadiness(dgtSnapshot);
+  if (!readiness.ok) return { started: false, reason: readiness.reason };
+  const r = startTableGame({ dgtSnapshot });
   return r.error ? { started: false, error: r.error } : { started: true, game: r.game };
 }
 function finalizeGame(gameId, result) {
