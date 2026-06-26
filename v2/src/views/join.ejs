@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Join 960 Throne</title>
 <style>
-body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:radial-gradient(circle at 20% 20%,rgba(255,209,102,.18),transparent 28%),#08040f;color:white;display:grid;place-items:center;min-height:100vh;margin:0}.card{width:min(540px,92vw);padding:30px;border-radius:28px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);box-shadow:0 24px 80px rgba(0,0,0,.45)}input,button{width:100%;padding:16px;border-radius:14px;border:0;margin:8px 0;font-size:18px;box-sizing:border-box}button{background:#ffd166;color:#100511;font-weight:900;cursor:pointer}button.secondary{background:#272238;color:#fff}button:disabled{opacity:.55;cursor:not-allowed}.muted{color:#aaa}.ok{color:#86efac}.bad{color:#fca5a5}.qr{display:block;width:min(320px,100%);margin:12px auto;border-radius:18px;background:#fff}.pill{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(255,209,102,.14);border:1px solid rgba(255,209,102,.35);color:#ffd166;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.hide{display:none}a{color:#ffd166}.msg{display:none;margin-top:14px;padding:12px 14px;border-radius:14px;background:rgba(0,0,0,.24)}.queue{margin-top:18px;border-top:1px solid rgba(255,255,255,.12);padding-top:14px}.q{padding:11px 13px;margin:8px 0;border-radius:14px;background:rgba(255,255,255,.08);font-weight:800}.q.me{background:rgba(255,209,102,.16);border:1px solid rgba(255,209,102,.45);color:#ffe29a}.small-link{display:inline-block;margin-top:10px;font-size:13px;color:#aaa;text-decoration:underline;background:none;border:0;padding:0;width:auto}.wallet-primary{font-size:20px;padding:18px}.fallback{margin-top:10px}
+body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:radial-gradient(circle at 20% 20%,rgba(255,209,102,.18),transparent 28%),#08040f;color:white;display:grid;place-items:center;min-height:100vh;margin:0}.card{width:min(540px,92vw);padding:30px;border-radius:28px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);box-shadow:0 24px 80px rgba(0,0,0,.45)}input,button{width:100%;padding:16px;border-radius:14px;border:0;margin:8px 0;font-size:18px;box-sizing:border-box}button{background:#ffd166;color:#100511;font-weight:900;cursor:pointer}button.secondary{background:#272238;color:#fff}button.danger{background:#7f1d1d;color:#fff}button.draw{background:#374151;color:#fff}button:disabled{opacity:.55;cursor:not-allowed}.muted{color:#aaa}.ok{color:#86efac}.bad{color:#fca5a5}.gold{color:#ffd166}.qr{display:block;width:min(320px,100%);margin:12px auto;border-radius:18px;background:#fff}.pill{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(255,209,102,.14);border:1px solid rgba(255,209,102,.35);color:#ffd166;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.hide{display:none}a{color:#ffd166}.msg{display:none;margin-top:14px;padding:12px 14px;border-radius:14px;background:rgba(0,0,0,.24)}.queue,.report{margin-top:18px;border-top:1px solid rgba(255,255,255,.12);padding-top:14px}.q{padding:11px 13px;margin:8px 0;border-radius:14px;background:rgba(255,255,255,.08);font-weight:800}.q.me{background:rgba(255,209,102,.16);border:1px solid rgba(255,209,102,.45);color:#ffe29a}.small-link{display:inline-block;margin-top:10px;font-size:13px;color:#aaa;text-decoration:underline;background:none;border:0;padding:0;width:auto}.wallet-primary{font-size:20px;padding:18px}.fallback{margin-top:10px}.status-card{padding:14px;border-radius:16px;background:rgba(255,255,255,.08);margin:14px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid button{margin:0}@media(max-width:520px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -26,18 +26,21 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:radial-g
       <p>Claimable balance: <%= player.sat_balance %> sats</p>
       <p>This event earned: <%= (player.total_sats_earned || 0).toLocaleString() %> sats</p>
       <p><a href="/leaderboard">Event leaderboard</a></p>
-      <% const myQueueIndex = state.queue.findIndex(q => q.player_id === player.id); const inQueue = myQueueIndex >= 0; %>
-      <% if (inQueue) { %>
+      <% const myQueueIndex = state.queue.findIndex(q => q.player_id === player.id); const inQueue = myQueueIndex >= 0; const isKing = state.king && state.king.id === player.id; const isChallenger = state.game && state.game.challenger_id === player.id; const isInCurrentGame = state.game && (state.game.king_id === player.id || state.game.challenger_id === player.id); const gameStarted = state.game && state.game.table_started_at; %>
+      <% if (isKing) { %>
+        <div class="status-card"><h2 class="gold">You are the king</h2><p class="muted"><%= state.game ? 'Defend the throne against ' + state.game.challenger_name + '.' : 'Waiting for the next challenger.' %></p></div>
+      <% } else if (isChallenger) { %>
+        <div class="status-card"><h2 class="gold">You are the challenger</h2><p class="muted">You are paired against <%= state.game.king_name %>.</p></div>
+      <% } else if (inQueue) { %>
         <p class="ok">You are #<%= myQueueIndex + 1 %> in line.</p>
         <button class="secondary" onclick="leaveQueue()">Leave Queue</button>
       <% } else { %>
         <button onclick="joinQueue()">Join Queue</button>
       <% } %>
-      <div class="queue"><h3>Current Line</h3><% if (state.queue.length) { %><% state.queue.forEach((q,i)=>{ %><div class="q <%= q.player_id===player.id ? 'me' : '' %>">#<%= i+1 %> <%= q.player_name %><%= q.player_id===player.id ? ' · you' : '' %></div><% }) %><% } else { %><p class="muted">The line is open.</p><% } %></div>
-      <% if (state.game && (state.game.king_id===player.id || state.game.challenger_id===player.id)) { %>
-        <hr style="border-color:rgba(255,255,255,.12)">
-        <p class="muted">You are in the current table pairing. Results are reported on the table tablet.</p>
+      <% if (isInCurrentGame) { %>
+        <div class="report"><h3>Report Result</h3><% if (!gameStarted) { %><p class="muted">Result buttons unlock when the table game is started.</p><% } %><div class="grid"><button onclick="reportResult('king_won')" <%= gameStarted ? '' : 'disabled' %>>King Won</button><button onclick="reportResult('challenger_won')" <%= gameStarted ? '' : 'disabled' %>>Challenger Won</button><button class="draw" onclick="reportResult('draw')" <%= gameStarted ? '' : 'disabled' %>>Draw</button></div></div>
       <% } %>
+      <div class="queue"><h3>Current Line</h3><% if (state.queue.length) { %><% state.queue.forEach((q,i)=>{ %><div class="q <%= q.player_id===player.id ? 'me' : '' %>">#<%= i+1 %> <%= q.player_name %><%= q.player_id===player.id ? ' · you' : '' %></div><% }) %><% } else { %><p class="muted">The line is open.</p><% } %></div>
     <% } %>
   <% } else { %>
     <h2>Log in with Lightning</h2>
@@ -59,6 +62,7 @@ async function post(u,b={},reload=true){const r=await fetch(u,{method:'POST',hea
 async function setName(){const name=document.getElementById('display-name').value;await post('/api/auth/set-name',{name})}
 async function joinQueue(){await post('/api/queue/join',{},true)}
 async function leaveQueue(){await post('/api/queue/leave',{},true)}
+async function reportResult(result){await post('/api/game/report',{result},true)}
 async function startLightningLogin(){
   const status=document.getElementById('auth-status');
   document.getElementById('start').disabled=true;
