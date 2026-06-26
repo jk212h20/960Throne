@@ -12,12 +12,29 @@ function init(socketIo) {
   io = socketIo;
   const game = db.activeGame();
   if (game) dgt.setExpectedPosition(game.chess960_position);
-  if (game && game.table_started_at) gameStartedAt = new Date(game.table_started_at).getTime();
+  if (game && game.table_started_at) gameStartedAt = parseTimeMs(game.table_started_at);
   ensureVenueCode();
+  ensureEventStartedAt();
   startSatAccumulator();
   console.log('♛ v2 event engine ready');
 }
 function shutdown() { if (satTimer) clearInterval(satTimer); satTimer = null; io = null; }
+function parseTimeMs(value) {
+  if (!value) return 0;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) return new Date(value.replace(' ', 'T') + 'Z').getTime();
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+function ensureEventStartedAt() {
+  let started = db.getConfig('event_started_at');
+  if (parseTimeMs(started)) return started;
+  const rate = parseInt(db.getConfig('sat_rate_per_second') || config.satRatePerSecond, 10);
+  const awarded = db.eventTotalSatsEarned();
+  const backfillMs = rate > 0 ? Math.floor(awarded / rate) * 1000 : 0;
+  started = new Date(Date.now() - backfillMs).toISOString();
+  db.setConfig('event_started_at', started);
+  return started;
+}
 function broadcast(type, payload = {}) { if (io) io.emit(type, payload); if (io) io.emit('state', publicState()); }
 function generateVenueCode() { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join(''); }
 function ensureVenueCode() { if (!db.activeVenueCode()) db.createVenueCode(generateVenueCode()); }
@@ -97,24 +114,30 @@ function timeControl() { return { base: parseInt(db.getConfig('time_control_base
 function startSatAccumulator() { if (satTimer) return; satTimer = setInterval(flushSats, 1000); }
 function flushSats() {
   const game = db.activeGame(); const reign = db.currentReign();
-  const startedAt = game?.table_started_at ? new Date(game.table_started_at).getTime() : gameStartedAt;
-  if (!game || !reign || !startedAt) return 0;
-  gameStartedAt = startedAt;
-  const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
   const rate = parseInt(db.getConfig('sat_rate_per_second') || config.satRatePerSecond, 10);
-  const gameTarget = elapsed * rate;
-  const alreadyAccruedForGame = game.sats_earned || 0;
-  const delta = gameTarget - alreadyAccruedForGame;
-  if (delta > 0) {
+  const eventStartedAt = parseTimeMs(ensureEventStartedAt());
+  if (!eventStartedAt || rate <= 0) return 0;
+  const eventElapsed = Math.max(0, Math.floor((Date.now() - eventStartedAt) / 1000));
+  const eventTarget = eventElapsed * rate;
+  const eventAwarded = db.eventTotalSatsEarned();
+  const delta = eventTarget - eventAwarded;
+  let gameTarget = game?.sats_earned || 0;
+  if (game?.table_started_at) {
+    const tableStartedAt = parseTimeMs(game.table_started_at);
+    gameStartedAt = tableStartedAt;
+    const gameElapsed = Math.max(0, Math.floor((Date.now() - tableStartedAt) / 1000));
+    gameTarget = gameElapsed * rate;
+    if (gameTarget > (game.sats_earned || 0)) db.run('UPDATE games SET sats_earned=? WHERE id=?', [gameTarget, game.id]);
+  }
+  if (delta > 0 && reign) {
     const reignTotal = (reign.total_sats_earned || 0) + delta;
-    db.addSats(game.king_id, delta);
-    db.run('UPDATE games SET sats_earned=? WHERE id=?', [gameTarget, game.id]);
+    db.addSats(reign.king_id, delta);
     db.updateReignStats(reign.id, { total_sats_earned: reignTotal });
     const eventTotalSats = db.eventTotalSatsEarned();
-    const king = db.getPlayer(game.king_id);
-    broadcast('sats_tick', { delta, liveSats: reignTotal, gameSats: gameTarget, kingTotal: king ? king.total_sats_earned : reignTotal, eventTotalSats });
+    const king = db.getPlayer(reign.king_id);
+    broadcast('sats_tick', { delta, liveSats: reignTotal, gameSats: gameTarget, kingTotal: king ? king.total_sats_earned : reignTotal, eventTotalSats, eventElapsed });
   }
-  return delta;
+  return Math.max(0, delta);
 }
 function dgtStartReadiness(dgtSnapshot) {
   if (!dgtSnapshot || dgtSnapshot.stale) return { ok: false, reason: 'dgt_stale' };
@@ -131,7 +154,7 @@ function startTableGame(options = {}) {
   const readiness = dgtStartReadiness(options.dgtSnapshot || dgt.snapshot());
   if (!readiness.ok) return { error: readiness.reason };
   const started = db.startGame(game.id); if (started.error) return started;
-  gameStartedAt = new Date(started.table_started_at).getTime();
+  gameStartedAt = parseTimeMs(started.table_started_at);
   broadcast('game_started', { game: started, position: chess960.positionToDisplay(started.chess960_position), timeControl: timeControl() });
   return { success: true, game: started };
 }
@@ -148,7 +171,7 @@ function finalizeGame(gameId, result) {
   const game = db.getGame(gameId); if (!game) return { error: 'Game not found' };
   const valid = ['king_won', 'challenger_won', 'draw', 'no_show']; if (!valid.includes(result)) return { error: 'Invalid result' };
   if (result !== 'no_show' && !game.table_started_at) return { error: 'Game has not started at the table' };
-  const startedAt = game.table_started_at ? new Date(game.table_started_at).getTime() : gameStartedAt;
+  const startedAt = game.table_started_at ? parseTimeMs(game.table_started_at) : gameStartedAt;
   const duration = startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0;
   const gameSats = duration * parseInt(db.getConfig('sat_rate_per_second') || config.satRatePerSecond, 10);
   db.finalizeGame(gameId, result, gameSats);
@@ -156,7 +179,8 @@ function finalizeGame(gameId, result) {
   gameStartedAt = null;
   if (result !== 'no_show') updateStats(game, result);
   if (result === 'challenger_won') {
-    const reign = db.currentReign(); if (reign) db.endReign(reign.id, duration);
+    const reign = db.currentReign();
+    if (reign) db.endReign(reign.id, Math.max(0, Math.floor((Date.now() - parseTimeMs(reign.crowned_at)) / 1000)));
     db.startReign(game.challenger_id);
   }
   broadcast('game_finalized', { gameId, result });

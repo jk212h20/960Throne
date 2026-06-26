@@ -64,6 +64,7 @@ const { makeAdminToken, validAdminToken } = require('../src/routes/middleware');
   assert.equal(s.game.challenger_name, 'Bob');
   assert.equal(s.game.king_color, 'black');
   assert.equal(s.game.table_started_at, null, 'new pairing should not be table-started yet');
+  assert(s.liveSats > 0, 'king sats should accrue even before table start');
   assert.equal(engine.reportResult(a.id, 'king_won').error, 'Game has not started at the table');
   assert.equal(engine.finalizeGame(s.game.id, 'king_won').error, 'Game has not started at the table');
   const wrongPosition = s.game.chess960_position === 0 ? 1 : 0;

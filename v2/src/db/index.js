@@ -174,7 +174,7 @@ function getNextInQueue() { return getQueue()[0] || null; }
 function reorderQueue(playerIds) { conn().run('DELETE FROM queue'); playerIds.forEach((pid, i) => conn().run('INSERT INTO queue(player_id,position) VALUES(?,?)', [pid, i + 1])); save(); log('queue_reorder', 'Queue reordered', { playerIds }); }
 
 function startReign(kingId) {
-  const id = insert('INSERT INTO reigns(king_id) VALUES(?)', [kingId]);
+  const id = insert('INSERT INTO reigns(king_id,crowned_at) VALUES(?,?)', [kingId, now()]);
   setConfig('current_reign_id', id); setConfig('current_king_id', kingId);
   run('UPDATE players SET times_as_king=times_as_king+1 WHERE id=?', [kingId]);
   log('king_crowned', `Player #${kingId} crowned`, { kingId, reignId: id }); return id;
@@ -244,6 +244,7 @@ function resetEventData() {
   conn().run('UPDATE players SET total_sats_earned=0,games_played=0,games_won=0,games_lost=0,games_drawn=0,times_as_king=0,total_reign_seconds=0,longest_reign_seconds=0,longest_win_streak=0');
   conn().run(`UPDATE config SET value='' WHERE key IN ('current_king_id','current_reign_id','current_game_id')`);
   setConfig('event_paused', '0');
+  setConfig('event_started_at', now());
   save();
   log('event_reset', 'Event data reset; player identities and balances preserved');
 }
