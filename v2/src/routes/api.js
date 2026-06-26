@@ -67,6 +67,11 @@ router.post('/auth/set-name', requirePlayer, (req, res) => {
   db.setPlayerName(req.player.id, name);
   res.json({ success: true, player: db.getPlayer(req.player.id) });
 });
+router.post('/auth/logout', requirePlayer, (req, res) => {
+  db.setPlayerToken(req.player.id, null);
+  res.clearCookie('v2_player', { path: '/', sameSite: 'lax', secure: config.isProduction });
+  res.json({ success: true, message: 'Logged out' });
+});
 
 router.post('/admin/login', (req, res) => {
   if (!config.adminPassword) return res.status(503).json({ error: 'ADMIN_PASSWORD not configured' });
