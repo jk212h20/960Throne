@@ -165,6 +165,17 @@
                         <code class="text-xs text-gray-600 font-mono" id="current-fen">No board data</code>
                     </div>
                 </div>
+
+                <div class="bg-gray-900 rounded-xl p-5 border border-gray-800 mt-4">
+                    <h2 class="font-bold text-lg mb-3">✅ Setup Check</h2>
+                    <p class="text-sm text-gray-500 mb-3">Compares the physical board to the current game’s required Chess960 starting position.</p>
+                    <div class="text-sm space-y-2">
+                        <div><span class="text-gray-500">Status:</span> <b id="setup-status" class="text-yellow-400">Waiting for game / board data</b></div>
+                        <div><span class="text-gray-500">Expected:</span> <code id="setup-expected" class="font-mono text-gray-400">—</code></div>
+                        <div><span class="text-gray-500">Actual:</span> <code id="setup-actual" class="font-mono text-gray-400">—</code></div>
+                    </div>
+                    <div id="setup-diff" class="text-sm mt-3 text-gray-400">No setup diff yet.</div>
+                </div>
             </div>
         </div>
     </div>
@@ -282,6 +293,7 @@
                 document.getElementById('change-count').textContent = changeCount;
                 log('Board updated on server ✓', 'success');
             }
+            if (data.dgt) renderSetupState(data.dgt);
             document.getElementById('server-dot').className = 'status-dot dot-green';
         } catch (err) {
             errorCount++;
@@ -291,6 +303,32 @@
         }
     }
     
+    // ─── Setup diff / expected position ──────────────────
+    function renderSetupState(dgt){
+        if(!dgt)return;
+        const status=document.getElementById('setup-status');
+        const expected=document.getElementById('setup-expected');
+        const actual=document.getElementById('setup-actual');
+        const diff=document.getElementById('setup-diff');
+        if(status){
+            status.textContent=dgt.setupMessage||'Waiting for board data';
+            status.className=dgt.setupOk?'text-green-400':'text-yellow-400';
+        }
+        if(expected)expected.textContent=dgt.expectedFen||'—';
+        if(actual)actual.textContent=dgt.fen||'—';
+        if(!diff)return;
+        const items=dgt.setupDiff||[];
+        if(dgt.setupOk){diff.className='text-sm mt-3 text-green-400';diff.innerHTML='Board matches required start position.';return;}
+        if(!items.length){diff.className='text-sm mt-3 text-gray-400';diff.innerHTML='No setup diff yet. Call a game and connect/read the board.';return;}
+        diff.className='text-sm mt-3 text-red-400';
+        diff.innerHTML='<b>Squares to fix:</b><ul style="margin:8px 0 0 18px;padding:0">'+items.slice(0,24).map(x=>'<li>'+x.message+'</li>').join('')+'</ul>'+(items.length>24?'<div>…and '+(items.length-24)+' more.</div>':'');
+    }
+    async function refreshSetupState(){
+        try{const r=await fetch(SERVER_URL+'/api/dgt/state'); const d=await r.json(); renderSetupState(d);}catch(e){}
+    }
+    refreshSetupState();
+    setInterval(refreshSetupState,2500);
+
     // ─── Manual FEN ──────────────────────────────────────
     function pushManualFen() {
         const input = document.getElementById('fen-input');
