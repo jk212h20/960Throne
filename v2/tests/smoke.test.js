@@ -66,9 +66,11 @@ const { makeAdminToken, validAdminToken } = require('../src/routes/middleware');
   assert.equal(s.game.table_started_at, null, 'new pairing should not be table-started yet');
   assert.equal(engine.reportResult(a.id, 'king_won').error, 'Game has not started at the table');
   assert.equal(engine.finalizeGame(s.game.id, 'king_won').error, 'Game has not started at the table');
-  assert.equal(engine.startTableGame().success, true);
+  dgt.setExpectedPosition(s.game.chess960_position);
+  dgtState = dgt.update({ fen: chess960.positionToStartingFen(s.game.chess960_position), clock: { white: 180, black: 180, running: true, activeSide: 'white' } });
+  assert.equal(engine.maybeAutoStartFromDgt(dgtState).started, true, 'matching DGT setup plus running clock should auto-start table game');
   s = engine.getState();
-  assert(s.game.table_started_at, 'startTableGame should mark pairing as started');
+  assert(s.game.table_started_at, 'DGT auto-start should mark pairing as started');
 
   r = engine.joinQueue(c.id);
   assert.equal(r.success, true);
@@ -98,8 +100,13 @@ const { makeAdminToken, validAdminToken } = require('../src/routes/middleware');
   assert(s.game, 'resume should start waiting challenger');
   assert.equal(s.game.challenger_name, 'Charlie');
   assert.equal(s.game.table_started_at, null, 'resumed next pairing should still wait for table start');
-  assert.equal(engine.startTableGame().success, true);
+  const previousReignSats = s.reign.total_sats_earned;
+  dgt.setExpectedPosition(s.game.chess960_position);
+  dgtState = dgt.update({ fen: chess960.positionToStartingFen(s.game.chess960_position), clock: { white: 180, black: 180, running: true, activeSide: 'white' } });
+  assert.equal(engine.maybeAutoStartFromDgt(dgtState).started, true, 'DGT should auto-start the next game too');
+  await new Promise(resolve => setTimeout(resolve, 1100));
   s = engine.getState();
+  assert(s.liveSats > previousReignSats, 'same-king next game should keep adding to reign sats');
 
   engine.finalizeGame(s.game.id, 'challenger_won');
   s = engine.getState();

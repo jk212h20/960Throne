@@ -156,7 +156,11 @@ router.post('/claim/reserve', requirePlayer, (req, res) => { const amount = pars
 router.post('/claim/mock-complete', requireAdmin, (req, res) => res.json(db.payoutComplete(parseInt(req.body.payoutId, 10), 'mock')));
 router.post('/claim/mock-fail', requireAdmin, (req, res) => res.json(db.payoutFail(parseInt(req.body.payoutId, 10), req.body.error || 'mock failure')));
 
-router.post('/dgt/board-state', requireRelay, (req, res) => res.json({ success: true, dgt: dgt.update(req.body) }));
+router.post('/dgt/board-state', requireRelay, (req, res) => {
+  const snapshot = dgt.update(req.body);
+  const autoStart = engine.maybeAutoStartFromDgt(snapshot);
+  res.json({ success: true, dgt: snapshot, autoStart });
+});
 router.get('/dgt/state', (req, res) => res.json(dgt.snapshot()));
 
 module.exports = router;

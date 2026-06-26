@@ -17,7 +17,7 @@ function init(socketIo) {
   console.log('♛ v2 event engine ready');
 }
 function shutdown() { if (satTimer) clearInterval(satTimer); satTimer = null; io = null; }
-function broadcast(type, payload = {}) { if (io) io.emit(type, payload); if (io) io.emit('state', getState()); }
+function broadcast(type, payload = {}) { if (io) io.emit(type, payload); if (io) io.emit('state', publicState()); }
 function generateVenueCode() { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join(''); }
 function ensureVenueCode() { if (!db.activeVenueCode()) db.createVenueCode(generateVenueCode()); }
 function rotateVenueCode() { const code = generateVenueCode(); db.createVenueCode(code); broadcast('venue_code_updated', { code }); return code; }
@@ -101,17 +101,38 @@ function flushSats() {
   gameStartedAt = startedAt;
   const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
   const rate = parseInt(db.getConfig('sat_rate_per_second') || config.satRatePerSecond, 10);
-  const target = elapsed * rate;
-  const delta = target - (reign.total_sats_earned || 0);
-  if (delta > 0) { db.addSats(game.king_id, delta); db.updateReignStats(reign.id, { total_sats_earned: target }); const king = db.getPlayer(game.king_id); broadcast('sats_tick', { delta, liveSats: target, kingTotal: king ? king.total_sats_earned : target }); }
+  const gameTarget = elapsed * rate;
+  const alreadyAccruedForGame = game.sats_earned || 0;
+  const delta = gameTarget - alreadyAccruedForGame;
+  if (delta > 0) {
+    const reignTotal = (reign.total_sats_earned || 0) + delta;
+    db.addSats(game.king_id, delta);
+    db.run('UPDATE games SET sats_earned=? WHERE id=?', [gameTarget, game.id]);
+    db.updateReignStats(reign.id, { total_sats_earned: reignTotal });
+    const king = db.getPlayer(game.king_id);
+    broadcast('sats_tick', { delta, liveSats: reignTotal, gameSats: gameTarget, kingTotal: king ? king.total_sats_earned : reignTotal });
+  }
   return delta;
 }
 function startTableGame() {
   const game = db.activeGame(); if (!game) return { error: 'No active game' };
+  if (game.table_started_at) return { success: true, game };
   const started = db.startGame(game.id); if (started.error) return started;
   gameStartedAt = new Date(started.table_started_at).getTime();
   broadcast('game_started', { game: started, position: chess960.positionToDisplay(started.chess960_position), timeControl: timeControl() });
   return { success: true, game: started };
+}
+function maybeAutoStartFromDgt(dgtSnapshot) {
+  const game = db.activeGame();
+  if (!game || game.table_started_at) return { started: false, reason: 'no_unstarted_game' };
+  if (!dgtSnapshot || dgtSnapshot.stale) return { started: false, reason: 'dgt_stale' };
+  if (!dgtSnapshot.setupOk) return { started: false, reason: 'setup_not_ready' };
+  if (!dgtSnapshot.clock || !dgtSnapshot.clock.running) return { started: false, reason: 'clock_not_running' };
+  const base = timeControl().base;
+  const resetTolerance = 5;
+  if (base > 0 && (Number(dgtSnapshot.clock.white) < base - resetTolerance || Number(dgtSnapshot.clock.black) < base - resetTolerance)) return { started: false, reason: 'clock_not_reset' };
+  const r = startTableGame();
+  return r.error ? { started: false, error: r.error } : { started: true, game: r.game };
 }
 function finalizeGame(gameId, result) {
   flushSats();
@@ -154,7 +175,7 @@ function resetEvent() { const backup = db.backup('pre-reset'); db.resetEventData
 function getState() { flushSats(); const kingId = parseInt(db.getConfig('current_king_id') || '0', 10); const game = db.activeGame(); const reign = db.currentReign(); return { event: { name: db.getConfig('event_name'), day: db.getConfig('event_day'), locked: db.getConfig('event_locked') === '1', paused: isPaused(), venueCode: db.activeVenueCode()?.code || null }, king: kingId ? db.getPlayer(kingId) : null, reign, game, queue: db.getQueue(), recentGames: db.recentGames(8), players: db.listPlayers(), payouts: db.listPayouts(10), dgt: dgt.snapshot(), config: { satRate: parseInt(db.getConfig('sat_rate_per_second') || config.satRatePerSecond, 10), timeControl: timeControl(), dgtClockSwapSides: config.dgtClockSwapSides }, liveSats: reign ? reign.total_sats_earned : 0 } }
 function publicState() {
   const s = getState();
-  const publicDgt = s.dgt ? { stale: s.dgt.stale, setupOk: s.dgt.setupOk, setupMessage: s.dgt.setupMessage, setupDiff: (s.dgt.setupDiff || []).slice(0, 16).map(d => ({ square: d.square, message: d.message })), fen: s.dgt.fen || null, clock: s.dgt.clock } : {};
+  const publicDgt = s.dgt ? { stale: s.dgt.stale, setupOk: s.dgt.setupOk, setupMessage: s.dgt.setupMessage, setupDiff: (s.dgt.setupDiff || []).slice(0, 64).map(d => ({ square: d.square, message: d.message })), fen: s.dgt.fen || null, clock: s.dgt.clock } : {};
   return { event: { day: s.event.day, locked: s.event.locked, paused: s.event.paused, venueCode: s.event.venueCode }, king: s.king ? { id: s.king.id, name: s.king.name, total_sats_earned: s.king.total_sats_earned || 0 } : null, game: s.game ? { id: s.game.id, king_id: s.game.king_id, challenger_id: s.game.challenger_id, king_name: s.game.king_name, challenger_name: s.game.challenger_name, chess960_position: s.game.chess960_position, king_color: s.game.king_color, table_started_at: s.game.table_started_at } : null, queue: s.queue.map(q => ({ player_id: q.player_id, player_name: q.player_name })), dgt: publicDgt, config: s.config, liveSats: s.liveSats };
 }
-module.exports = { init, shutdown, getState, publicState, registerPlayer, joinQueue, leaveQueue, adminAddToQueue, adminRemoveFromQueue, crownKing, callNextChallenger, startTableGame, finalizeGame, reportResult, adminReorder, adminReorderQueue, lockEvent, pauseEvent, resumeEvent, resetEvent, rotateVenueCode, flushSats };
+module.exports = { init, shutdown, getState, publicState, registerPlayer, joinQueue, leaveQueue, adminAddToQueue, adminRemoveFromQueue, crownKing, callNextChallenger, startTableGame, maybeAutoStartFromDgt, finalizeGame, reportResult, adminReorder, adminReorderQueue, lockEvent, pauseEvent, resumeEvent, resetEvent, rotateVenueCode, flushSats };
