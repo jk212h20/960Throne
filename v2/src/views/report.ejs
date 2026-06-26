@@ -1,1 +1,67 @@
-<!DOCTYPE html><html><head><title>Report Result · 960 Throne</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/public/styles.css"><style>body{background:#07070b;color:#fff;font-family:system-ui;margin:0}.wrap{max-width:720px;margin:0 auto;padding:24px}.card{background:#15151f;border:1px solid #2b2b3a;border-radius:18px;padding:22px;margin:16px 0}.muted{color:rgba(255,255,255,.62)}.gold{color:#f6c453}.row{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}button{border:0;border-radius:16px;padding:20px 22px;font-weight:900;font-size:18px;background:#2b2b3a;color:#fff;cursor:pointer;min-height:64px}button:disabled{opacity:.35;cursor:not-allowed}.good{background:#166534}.danger{background:#7f1d1d}.draw{background:#374151}.big{font-size:28px}.ok{color:#86efac}.warn{color:#ffd166}.bad{color:#fca5a5}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.grid button{width:100%}@media(max-width:680px){.grid{grid-template-columns:1fr}.wrap{padding:14px}}</style></head><body><div class="wrap"><h1>♛ Table Report</h1><p class="muted">Use this tablet next to the board. Results are disabled until the table game is explicitly started.</p><p><a href="/stage">Stage</a> · <a href="/admin">Admin</a></p><div class="card" id="main"><% if (!state.game) { %><h2>No active pairing</h2><p class="muted">Call the next challenger from admin when players are ready.</p><% } else { const started=!!state.game.table_started_at; %><div class="row"><div><div class="muted">Game #<%= state.game.id %> · Position #<%= state.game.chess960_position %></div><div class="big"><span class="gold"><%= state.game.king_name %></span> vs <span><%= state.game.challenger_name %></span></div><div class="muted">King color: <%= state.game.king_color || 'black' %></div></div><div><b class="<%= started ? 'ok' : 'warn' %>"><%= started ? 'STARTED' : 'NOT STARTED' %></b></div></div><hr style="border-color:#2b2b3a"><% if (!started) { %><p class="warn">Do not start until both players are seated and clocks/board are ready.</p><button class="good" onclick="post('/api/admin/game/start')">Start Table Game</button><% } else { %><p class="ok">Game is started. Report the final result below.</p><% } %><div class="grid" style="margin-top:16px"><button class="good" onclick="result('king_won')" <%= started ? '' : 'disabled' %>>King Won</button><button onclick="result('challenger_won')" <%= started ? '' : 'disabled' %>>Challenger Won</button><button class="draw" onclick="result('draw')" <%= started ? '' : 'disabled' %>>Draw</button><button class="danger" onclick="confirmNoShow()">No Show / Cancel</button></div><% } %></div><div id="msg" class="card muted" style="display:none"></div></div><script src="/socket.io/socket.io.js"></script><script>const gameId=<%= state.game ? state.game.id : 0 %>;async function post(url,body={}){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json().catch(()=>({error:'Bad response'}));if(!r.ok||j.error){show(j.error||'Request failed',false);return null}show('Saved',true);setTimeout(()=>location.reload(),600);return j}function result(x){post('/api/admin/result',{gameId,result:x})}function confirmNoShow(){if(confirm('Mark this pairing no-show/cancel? This ends the current pairing.'))result('no_show')}function show(t,ok){const el=document.getElementById('msg');el.style.display='block';el.className='card '+(ok?'ok':'bad');el.textContent=t}const socket=io();socket.on('game_called',()=>location.reload());socket.on('game_started',()=>location.reload());socket.on('game_ended',()=>location.reload());</script></body></html>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Report Result · 960 Throne</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/public/styles.css">
+  <style>
+    body{background:#07070b;color:#fff;font-family:system-ui;margin:0}.wrap{max-width:720px;margin:0 auto;padding:24px}.card{background:#15151f;border:1px solid #2b2b3a;border-radius:18px;padding:22px;margin:16px 0}.muted{color:rgba(255,255,255,.62)}.gold{color:#f6c453}.row{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}button{border:0;border-radius:16px;padding:20px 22px;font-weight:900;font-size:18px;background:#2b2b3a;color:#fff;cursor:pointer;min-height:64px}button:disabled{opacity:.35;cursor:not-allowed}.good{background:#166534}.danger{background:#7f1d1d}.draw{background:#374151}.big{font-size:28px}.ok{color:#86efac}.warn{color:#ffd166}.bad{color:#fca5a5}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.grid button{width:100%}.placeholder{color:rgba(255,255,255,.38)}hr{border:0;border-top:1px solid #2b2b3a;margin:18px 0}@media(max-width:680px){.grid{grid-template-columns:1fr}.wrap{padding:14px}}
+  </style>
+</head>
+<body>
+<% const hasGame = !!state.game; const started = hasGame && !!state.game.table_started_at; %>
+<div class="wrap">
+  <h1>♛ Table Report</h1>
+  <p class="muted">Use this tablet next to the board. Results are disabled until the table game is explicitly started.</p>
+  <p><a href="/stage">Stage</a> · <a href="/admin">Admin</a></p>
+
+  <div class="card" id="main">
+    <div class="row">
+      <div>
+        <div class="muted"><%= hasGame ? 'Game #' + state.game.id + ' · Position ' + state.game.chess960_position : 'No active pairing' %></div>
+        <div class="big">
+          <span class="gold"><%= hasGame ? state.game.king_name : 'King' %></span>
+          <span class="muted"> vs </span>
+          <span class="<%= hasGame ? '' : 'placeholder' %>"><%= hasGame ? state.game.challenger_name : 'Challenger' %></span>
+        </div>
+        <div class="muted">King color: <%= hasGame ? (state.game.king_color || 'black') : 'black' %></div>
+      </div>
+      <div>
+        <b class="<%= !hasGame ? 'bad' : (started ? 'ok' : 'warn') %>"><%= !hasGame ? 'NO PAIRING' : (started ? 'STARTED' : 'NOT STARTED') %></b>
+      </div>
+    </div>
+
+    <hr>
+
+    <% if (!hasGame) { %>
+      <p class="muted">Call the next challenger from admin when players are ready. This layout will activate automatically when a pairing is called.</p>
+      <button class="good" disabled>Start Table Game</button>
+    <% } else if (!started) { %>
+      <p class="warn">Do not start until both players are seated and clocks/board are ready.</p>
+      <button class="good" onclick="post('/api/admin/game/start')">Start Table Game</button>
+    <% } else { %>
+      <p class="ok">Game is started. Report the final result below.</p>
+      <button class="good" disabled>Table Game Started</button>
+    <% } %>
+
+    <div class="grid" style="margin-top:16px">
+      <button class="good" onclick="result('king_won')" <%= started ? '' : 'disabled' %>>King Won</button>
+      <button onclick="result('challenger_won')" <%= started ? '' : 'disabled' %>>Challenger Won</button>
+      <button class="draw" onclick="result('draw')" <%= started ? '' : 'disabled' %>>Draw</button>
+      <button class="danger" onclick="confirmNoShow()" <%= hasGame ? '' : 'disabled' %>>No Show / Cancel</button>
+    </div>
+  </div>
+
+  <div id="msg" class="card muted" style="display:none"></div>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const gameId=<%= hasGame ? state.game.id : 0 %>;
+async function post(url,body={}){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json().catch(()=>({error:'Bad response'}));if(!r.ok||j.error){show(j.error||'Request failed',false);return null}show('Saved',true);setTimeout(()=>location.reload(),600);return j}
+function result(x){if(!gameId)return show('No active pairing',false);post('/api/admin/result',{gameId,result:x})}
+function confirmNoShow(){if(!gameId)return show('No active pairing',false);if(confirm('Mark this pairing no-show/cancel? This ends the current pairing.'))result('no_show')}
+function show(t,ok){const el=document.getElementById('msg');el.style.display='block';el.className='card '+(ok?'ok':'bad');el.textContent=t}
+const socket=io();socket.on('game_called',()=>location.reload());socket.on('game_started',()=>location.reload());socket.on('game_ended',()=>location.reload());
+</script>
+</body>
+</html>
