@@ -10,8 +10,9 @@ function publicBaseUrl(req) {
   return host ? `${proto}://${host}` : config.baseUrl;
 }
 function render(name, extra = {}) { return (req, res) => { req.cookies = req.cookies || parseCookies(req); const baseUrl = publicBaseUrl(req); res.render(name, { state: engine.getState(), player: db.getPlayerByToken(req.cookies.v2_player), baseUrl, joinUrl: `${baseUrl}/join`, ...extra }); }; }
-router.get('/', render('stage'));
-router.get('/stage', render('stage'));
+function renderPublicStage(req, res) { const baseUrl = publicBaseUrl(req); res.render('stage', { state: engine.publicState(), player: null, baseUrl, joinUrl: `${baseUrl}/join` }); }
+router.get('/', renderPublicStage);
+router.get('/stage', renderPublicStage);
 router.get('/watch', render('watch'));
 router.get('/leaderboard', render('leaderboard'));
 router.get('/join', render('join'));

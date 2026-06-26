@@ -23,7 +23,7 @@ async function main() {
   app.use('/public', express.static(path.join(__dirname, 'public')));
   app.use('/api', require('./routes/api'));
   app.use('/', require('./routes/pages'));
-  io.on('connection', socket => { socket.emit('state', engine.getState()); socket.emit('dgt_state', dgt.snapshot()); });
+  io.on('connection', socket => { socket.emit('state', engine.publicState()); socket.emit('dgt_state', dgt.snapshot()); });
   const shutdown = sig => { console.log(`\n${sig}: saving v2 DB`); db.shutdown(); process.exit(0); };
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
