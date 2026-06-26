@@ -5,6 +5,7 @@ const engine = require('../domain/eventEngine');
 const dgt = require('../domain/dgtState');
 const db = require('../db');
 const lightningAuth = require('../domain/lightningAuth');
+const lightningNode = require('../domain/lightningNode');
 const { config, redactedStatus } = require('../config/env');
 const { makeAdminToken, requireAdmin, requirePlayer, requireRelay } = require('./middleware');
 
@@ -96,6 +97,18 @@ function readinessChecks() {
 }
 router.get('/admin/status', requireAdmin, (req, res) => res.json({ config: redactedStatus(), readiness: readinessChecks(), state: engine.getState(), log: db.eventLog(50) }));
 router.get('/admin/readiness', requireAdmin, (req, res) => res.json(readinessChecks()));
+router.get('/admin/lightning/balance', requireAdmin, async (req, res) => {
+  try { res.json(await lightningNode.getBalances()); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+router.post('/admin/lightning/topup-invoice', requireAdmin, async (req, res) => {
+  try {
+    const amount = parseInt(req.body.amountSats, 10);
+    const invoice = await lightningNode.createTopupInvoice(amount, req.body.memo || '960 Throne node top-up', parseInt(req.body.expiry || '3600', 10));
+    const qr = await QRCode.toDataURL(invoice.paymentRequest, { width: 420, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+    res.json({ success: true, invoice, qr });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
 router.post('/admin/config', requireAdmin, (req, res) => {
   const satRate = parseInt(req.body.satRate, 10);
   const base = parseInt(req.body.timeControlBase, 10);
