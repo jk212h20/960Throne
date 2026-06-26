@@ -23,6 +23,13 @@ router.get('/admin', (req, res) => {
   return render('admin', { isAdmin: true })(req, res);
 });
 router.get('/ops', requireAdmin, render('ops'));
+
+router.get('/admin/dgt-relay', (req, res) => {
+  req.cookies = req.cookies || parseCookies(req);
+  const isAdmin = validAdminToken(req.cookies.v2_admin || '');
+  if (!isAdmin) return res.render('admin', { state: null, player: null, baseUrl: publicBaseUrl(req), joinUrl: `${publicBaseUrl(req)}/join`, isAdmin: false });
+  res.render('dgt-relay', { relaySecret: config.dgtRelaySecret, serverUrl: publicBaseUrl(req), state: engine.getState(), player: null, baseUrl: publicBaseUrl(req), joinUrl: `${publicBaseUrl(req)}/join` });
+});
 router.get('/report', (req, res) => {
   req.cookies = req.cookies || parseCookies(req);
   const isAdmin = validAdminToken(req.cookies.v2_admin || '');
