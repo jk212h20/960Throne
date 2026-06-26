@@ -93,7 +93,7 @@ async function callNextChallenger(forcedPosition = null) {
   return game;
 }
 function timeControl() { return { base: parseInt(db.getConfig('time_control_base') || config.timeControlBase, 10), increment: parseInt(db.getConfig('time_control_increment') || config.timeControlIncrement, 10) }; }
-function startSatAccumulator() { if (satTimer) return; satTimer = setInterval(flushSats, 10000); }
+function startSatAccumulator() { if (satTimer) return; satTimer = setInterval(flushSats, 1000); }
 function flushSats() {
   const game = db.activeGame(); const reign = db.currentReign();
   const startedAt = game?.table_started_at ? new Date(game.table_started_at).getTime() : gameStartedAt;
