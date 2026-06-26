@@ -96,6 +96,18 @@ function readinessChecks() {
 }
 router.get('/admin/status', requireAdmin, (req, res) => res.json({ config: redactedStatus(), readiness: readinessChecks(), state: engine.getState(), log: db.eventLog(50) }));
 router.get('/admin/readiness', requireAdmin, (req, res) => res.json(readinessChecks()));
+router.post('/admin/config', requireAdmin, (req, res) => {
+  const satRate = parseInt(req.body.satRate, 10);
+  const base = parseInt(req.body.timeControlBase, 10);
+  const increment = parseInt(req.body.timeControlIncrement, 10);
+  if (!Number.isInteger(satRate) || satRate < 0 || satRate > 100000) return res.status(400).json({ error: 'Sat rate must be 0-100000 sats/sec' });
+  if (!Number.isInteger(base) || base < 1 || base > 86400) return res.status(400).json({ error: 'Base time must be 1-86400 seconds' });
+  if (!Number.isInteger(increment) || increment < 0 || increment > 3600) return res.status(400).json({ error: 'Increment must be 0-3600 seconds' });
+  db.setConfig('sat_rate_per_second', satRate);
+  db.setConfig('time_control_base', base);
+  db.setConfig('time_control_increment', increment);
+  res.json({ success: true, config: engine.getState().config });
+});
 router.post('/admin/crown', requireAdmin, (req, res) => res.json(engine.crownKing(parseInt(req.body.playerId, 10))));
 router.post('/admin/game/start', requireAdmin, (req, res) => { const r = engine.startTableGame(); if (r.error) return res.status(400).json(r); res.json(r); });
 router.post('/admin/result', requireAdmin, (req, res) => { const r = engine.finalizeGame(parseInt(req.body.gameId, 10), req.body.result); if (r.error) return res.status(400).json(r); res.json(r); });

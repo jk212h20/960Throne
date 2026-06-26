@@ -88,6 +88,13 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;
       <p>Live reign sats: <b><%= (state.liveSats || 0).toLocaleString() %></b></p>
       <p>Rate: <%= state.config.satRate %> sats/sec</p>
       <p>Time control: <%= state.config.timeControl.base %>+<%= state.config.timeControl.increment %></p>
+      <div class="row">
+        <label class="mini">Rate <input id="sat-rate" type="number" min="0" value="<%= state.config.satRate %>" style="width:90px"> sats/sec</label>
+        <label class="mini">Base <input id="tc-base" type="number" min="1" value="<%= state.config.timeControl.base %>" style="width:90px"> sec</label>
+        <label class="mini">Inc <input id="tc-inc" type="number" min="0" value="<%= state.config.timeControl.increment %>" style="width:70px"> sec</label>
+        <button class="secondary" onclick="saveConfig()">Save Config</button>
+      </div>
+      <p class="mini muted">A rate of 0 means no sats accrue. Changes affect accrual immediately and clocks for newly rendered games.</p>
       <% if (state.reign) { %><p class="mini muted">Reign #<%= state.reign.id %>, games played <%= state.reign.games_played %>, streak <%= state.reign.consecutive_wins %></p><% } %>
     </div>
   </div>
@@ -151,6 +158,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;
   function reservePayout(id){post('/api/admin/payout/reserve',{playerId:id,amount:payoutAmount(id),method:'manual-admin-payout'})}
   function completePayout(id){if(confirm('Mark payout #'+id+' complete?'))post('/api/admin/payout/complete',{payoutId:id,paymentHash:'manual'})}
   function failPayout(id){const error=prompt('Failure/refund reason','manual failure/refund');if(error!==null)post('/api/admin/payout/fail',{payoutId:id,error})}
+  function saveConfig(){post('/api/admin/config',{satRate:document.getElementById('sat-rate').value,timeControlBase:document.getElementById('tc-base').value,timeControlIncrement:document.getElementById('tc-inc').value})}
   loadReadiness();
   </script>
 <% } %>
