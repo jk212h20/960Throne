@@ -156,8 +156,9 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;
     </div>
     <div class="card">
       <h2>Payout Ledger</h2>
+      <p class="muted mini">Showing latest <%= state.payouts.length %> cashout attempts. Times are UTC/server timestamps.</p>
       <% if (!state.payouts.length) { %><p class="muted">No payouts yet.</p><% } %>
-      <% state.payouts.forEach(p=>{ %><div class="payout-item"><div>#<%= p.id %> <b><%= p.player_name || ('player '+p.player_id) %></b> — <%= p.amount_sats %> sats — <b><%= p.status %></b> <span class="muted mini"><%= p.method %></span></div><% if (['reserved','paying','requested'].includes(p.status)) { %><div class="row"><button class="good" onclick="completePayout(<%= p.id %>)">Mark Complete</button><button class="danger" onclick="failPayout(<%= p.id %>)">Mark Failed / Refund</button></div><% } %><% if (p.error_message) { %><div class="bad mini"><%= p.error_message %></div><% } %></div><% }) %>
+      <% state.payouts.forEach(p=>{ %><div class="payout-item"><div>#<%= p.id %> <b><%= p.player_name || ('player '+p.player_id) %></b> — <%= p.amount_sats %> sats — <b><%= p.status %></b> <span class="muted mini"><%= p.method %></span></div><div class="muted mini mono">created <%= p.created_at || '—' %> · updated <%= p.updated_at || '—' %><% if (p.completed_at) { %> · completed <%= p.completed_at %><% } %><% if (p.destination) { %> · dest <%= String(p.destination).slice(0,80) %><% } %></div><% if (['reserved','paying','requested'].includes(p.status)) { %><div class="row"><button class="good" onclick="completePayout(<%= p.id %>)">Mark Complete</button><button class="danger" onclick="failPayout(<%= p.id %>)">Mark Failed / Refund</button></div><% } %><% if (p.error_message) { %><div class="bad mini"><%= p.error_message %></div><% } %></div><% }) %>
     </div>
   </div>
 
