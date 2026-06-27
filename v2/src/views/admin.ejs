@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>960 Admin v2</title>
 <style>
-body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;color:#eee;margin:0;padding:20px}.wrap{max-width:1280px;margin:0 auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}.card{background:#171725;border:1px solid #333;border-radius:18px;padding:18px;margin-bottom:16px}button,input,select{padding:10px 12px;border-radius:10px;margin:4px;border:1px solid #3b3b4d;background:#0f0f19;color:#fff}button{background:#ffd166;color:#100511;border:0;font-weight:800;cursor:pointer}button.secondary{background:#33334a;color:#fff}button.danger{background:#ef4444;color:#fff}button.good{background:#22c55e;color:#041108}button:disabled{opacity:.45;cursor:not-allowed}pre{white-space:pre-wrap;background:#06060a;padding:12px;border-radius:12px;max-height:360px;overflow:auto}.muted{color:#aaa}.ok{color:#86efac}.bad{color:#fca5a5}.warn{color:#ffd166}a{color:#ffd166}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.split{display:flex;justify-content:space-between;gap:12px;align-items:center}.mini{font-size:12px}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#26263a;color:#ddd}.queue-item,.player-item,.game-item,.payout-item{padding:8px 0;border-bottom:1px solid #2b2b3a}.queue-item:last-child,.player-item:last-child,.game-item:last-child,.payout-item:last-child{border-bottom:0}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.login{max-width:430px}.qr{width:180px;height:180px;background:#fff;border-radius:12px;padding:8px}</style>
+body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;color:#eee;margin:0;padding:20px}.wrap{max-width:1280px;margin:0 auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}.card{background:#171725;border:1px solid #333;border-radius:18px;padding:18px;margin-bottom:16px}button,input,select{padding:10px 12px;border-radius:10px;margin:4px;border:1px solid #3b3b4d;background:#0f0f19;color:#fff}button{background:#ffd166;color:#100511;border:0;font-weight:800;cursor:pointer}button.secondary{background:#33334a;color:#fff}button.danger{background:#ef4444;color:#fff}button.good{background:#22c55e;color:#041108}button:disabled{opacity:.45;cursor:not-allowed}pre{white-space:pre-wrap;background:#06060a;padding:12px;border-radius:12px;max-height:360px;overflow:auto}.muted{color:#aaa}.ok{color:#86efac}.bad{color:#fca5a5}.warn{color:#ffd166}a{color:#ffd166}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.split{display:flex;justify-content:space-between;gap:12px;align-items:center}.mini{font-size:12px}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#26263a;color:#ddd}.queue-item,.player-item,.game-item,.payout-item{padding:8px 0;border-bottom:1px solid #2b2b3a}.queue-item:last-child,.player-item:last-child,.game-item:last-child,.payout-item:last-child{border-bottom:0}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.login{max-width:430px}.qr{width:180px;height:180px;background:#fff;border-radius:12px;padding:8px}.hide-inactive .player-item.inactive-event{display:none}</style>
 </head>
 <body>
 <div class="wrap">
@@ -56,14 +56,22 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;
       <% } %>
       <div class="row">
         <button class="good" onclick="post('/api/admin/game/start')" <%= (state.game && !state.game.table_started_at) ? '' : 'disabled' %>>Start Table Game</button>
-        <button onclick="result('king_won')" <%= (state.game && state.game.table_started_at) ? '' : 'disabled' %>>King won</button>
-        <button onclick="result('challenger_won')" <%= (state.game && state.game.table_started_at) ? '' : 'disabled' %>>Challenger won</button>
-        <button onclick="result('draw')" <%= (state.game && state.game.table_started_at) ? '' : 'disabled' %>>Draw</button>
+        <button onclick="result('king_won')" <%= (state.game && state.game.table_started_at) ? '' : 'disabled' %>>King won / Rey ganó</button>
+        <button onclick="result('challenger_won')" <%= (state.game && state.game.table_started_at) ? '' : 'disabled' %>>Challenger won / Retador ganó</button>
+        <button onclick="result('draw')" <%= (state.game && state.game.table_started_at) ? '' : 'disabled' %>>Draw / Empate</button>
         <button class="danger" onclick="result('no_show')" <%= state.game ? '' : 'disabled' %>>No show</button>
       </div>
       <div class="row">
         <input id="forced-position" type="number" min="0" max="959" placeholder="optional 0-959" style="width:130px">
         <button onclick="startNext()" <%= (!state.king || state.game || state.event.paused || !state.queue.length) ? 'disabled' : '' %>>Start Next</button>
+      </div>
+      <hr style="border-color:#2b2b3a">
+      <p class="warn mini">Manual recovery: use only to fix mistaken reports/pairings.</p>
+      <div class="row">
+        <select id="manual-king"><option value="">Set king…</option><% state.players.filter(p=>p.auth_type==='lightning' && p.name).forEach(p=>{ %><option value="<%= p.id %>" <%= state.king && state.king.id===p.id ? 'selected' : '' %>><%= p.name %></option><% }) %></select>
+        <select id="manual-challenger"><option value="">Set challenger…</option><% state.players.filter(p=>p.auth_type==='lightning' && p.name).forEach(p=>{ %><option value="<%= p.id %>" <%= state.game && state.game.challenger_id===p.id ? 'selected' : '' %>><%= p.name %></option><% }) %></select>
+        <input id="manual-position" type="number" min="0" max="959" placeholder="optional 0-959" style="width:130px">
+        <button class="danger" onclick="setManualPairing()">Set King + Challenger</button>
       </div>
       <% if (state.event.paused) { %><p class="warn">Next game start is paused.</p><% } %>
     </div>
@@ -125,14 +133,18 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;
     </div>
 
     <div class="card">
-      <h2>Players</h2>
-      <% state.players.forEach(p=>{ %>
-        <div class="player-item">
+      <% const activePlayerIds = new Set([...(state.queue||[]).map(q=>q.player_id), ...(state.game ? [state.game.king_id,state.game.challenger_id] : []), ...(state.king ? [state.king.id] : [])]); const eventPlayers = state.players.filter(p => (p.games_played||0)>0 || (p.total_sats_earned||0)>0 || activePlayerIds.has(p.id)); %>
+      <div class="split"><h2>Players</h2><button class="secondary" id="toggle-players" onclick="togglePlayers()">Show all players (<%= state.players.length %>)</button></div>
+      <p class="muted mini" id="player-filter-note">Showing current-event players by default: <%= eventPlayers.length %> of <%= state.players.length %>.</p>
+      <div id="players-list" class="hide-inactive">
+      <% state.players.forEach(p=>{ const activeEventPlayer = eventPlayers.some(ep => ep.id === p.id); %>
+        <div class="player-item <%= activeEventPlayer ? 'active-event' : 'inactive-event' %>">
           <div class="split"><span><b><%= p.name || '(unnamed)' %></b> <span class="pill"><%= p.auth_type %></span></span><button onclick="post('/api/admin/crown',{playerId:<%= p.id %>})">Crown</button></div>
           <div class="muted mini">id <%= p.id %> · claimable <%= p.sat_balance %> sats · reserved <%= p.reserved_sats || 0 %> sats · event earned <%= (p.total_sats_earned||0).toLocaleString() %> sats · W/L/D <%= p.games_won %>/<%= p.games_lost %>/<%= p.games_drawn %></div>
           <% if (p.sat_balance > 0) { %><div class="row"><input id="pay-amount-<%= p.id %>" type="number" min="1" max="<%= p.sat_balance %>" placeholder="<%= p.sat_balance %>" style="width:120px"><button class="good" onclick="manualPayout(<%= p.id %>)">Mark Manual Payout Paid</button><button onclick="reservePayout(<%= p.id %>)">Reserve Payout</button></div><% } %>
         </div>
       <% }) %>
+      </div>
     </div>
   </div>
 
@@ -167,12 +179,14 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;
   function addQueue(){const v=document.getElementById('add-player').value;if(v)post('/api/admin/queue/add',{playerId:Number(v)})}
   function moveQueue(idx,dir){const next=queueOrder.slice();const j=idx+dir;if(j<0||j>=next.length)return;[next[idx],next[j]]=[next[j],next[idx]];post('/api/admin/queue/reorder',{order:next})}
   function startNext(){const raw=document.getElementById('forced-position').value;const body={};if(raw!=='')body.position=Number(raw);post('/api/admin/start-next',body)}
+  function setManualPairing(){const kingId=Number(document.getElementById('manual-king').value);const challengerId=Number(document.getElementById('manual-challenger').value);const raw=document.getElementById('manual-position').value;if(!kingId||!challengerId)return alert('Choose both king and challenger');if(kingId===challengerId)return alert('King and challenger must be different');if(confirm('Replace current king/challenger pairing? Use only for recovery.'))post('/api/admin/pairing/set',{kingId,challengerId,position:raw})}
   function payoutAmount(id){const el=document.getElementById('pay-amount-'+id);return el&&el.value?Number(el.value):undefined}
   function manualPayout(id){if(confirm('Mark this player as manually paid?'))post('/api/admin/manual-payout-complete',{playerId:id,amount:payoutAmount(id)})}
   function reservePayout(id){post('/api/admin/payout/reserve',{playerId:id,amount:payoutAmount(id),method:'manual-admin-payout'})}
   function completePayout(id){if(confirm('Mark payout #'+id+' complete?'))post('/api/admin/payout/complete',{payoutId:id,paymentHash:'manual'})}
   function failPayout(id){const error=prompt('Failure/refund reason','manual failure/refund');if(error!==null)post('/api/admin/payout/fail',{payoutId:id,error})}
   function saveConfig(){post('/api/admin/config',{satRate:document.getElementById('sat-rate').value,timeControlBase:document.getElementById('tc-base').value,timeControlIncrement:document.getElementById('tc-inc').value})}
+  function togglePlayers(){const list=document.getElementById('players-list');const showingAll=!list.classList.toggle('hide-inactive');document.getElementById('toggle-players').textContent=showingAll?'Hide unplayed players':'Show all players (<%= state.players.length %>)';document.getElementById('player-filter-note').textContent=showingAll?'Showing all players, including returning players who have not played this event.':'Showing current-event players by default: <%= eventPlayers.length %> of <%= state.players.length %>.'}
   loadReadiness();
   loadLightningBalance();
   </script>

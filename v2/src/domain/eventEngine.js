@@ -94,6 +94,32 @@ async function choosePosition(forced) {
   if (process.env.CHESS960_SOURCE !== 'bitcoin') return chess960.randomPositionNumber();
   try { return (await chess960.fetchBitcoinPosition()).positionNumber; } catch (e) { return chess960.randomPositionNumber(); }
 }
+async function adminSetPairing({ kingId, challengerId, position = null } = {}) {
+  const king = db.getPlayer(parseInt(kingId, 10));
+  const challenger = db.getPlayer(parseInt(challengerId, 10));
+  if (!king || !challenger) return { error: 'King and challenger are required' };
+  if (king.id === challenger.id) return { error: 'King and challenger must be different players' };
+  if (king.auth_type !== 'lightning' || challenger.auth_type !== 'lightning') return { error: 'Both players must have Lightning login' };
+  flushSats();
+  const current = db.activeGame();
+  if (current) db.finalizeGame(current.id, 'admin_replaced', current.sats_earned || 0);
+  const currentKingId = parseInt(db.getConfig('current_king_id') || '0', 10);
+  let reignId = parseInt(db.getConfig('current_reign_id') || '0', 10) || null;
+  if (currentKingId !== king.id || !reignId) {
+    const oldReign = db.currentReign();
+    if (oldReign && !oldReign.dethroned_at) db.endReign(oldReign.id, Math.max(0, Math.floor((Date.now() - parseTimeMs(oldReign.crowned_at)) / 1000)));
+    reignId = db.startReign(king.id);
+  }
+  db.removePlayerFromQueue(king.id);
+  db.removePlayerFromQueue(challenger.id);
+  const pos = await choosePosition(position);
+  const gameId = db.createGame({ kingId: king.id, challengerId: challenger.id, position: pos, reignId });
+  gameStartedAt = null;
+  dgt.setExpectedPosition(pos);
+  const game = db.getGame(gameId);
+  broadcast('admin_pairing_set', { game, position: chess960.positionToDisplay(pos) });
+  return { success: true, game };
+}
 async function callNextChallenger(forcedPosition = null) {
   const kingId = parseInt(db.getConfig('current_king_id') || '0', 10);
   if (!kingId || db.activeGame()) return null;
@@ -211,4 +237,4 @@ function publicState() {
   const publicDgt = s.dgt ? { stale: s.dgt.stale, setupOk: s.dgt.setupOk, setupMessage: s.dgt.setupMessage, setupDiff: (s.dgt.setupDiff || []).slice(0, 64).map(d => ({ square: d.square, message: d.message })), fen: s.dgt.fen || null, clock: s.dgt.clock } : {};
   return { event: { day: s.event.day, locked: s.event.locked, paused: s.event.paused, venueCode: s.event.venueCode }, king: s.king ? { id: s.king.id, name: s.king.name, total_sats_earned: s.king.total_sats_earned || 0 } : null, game: s.game ? { id: s.game.id, king_id: s.game.king_id, challenger_id: s.game.challenger_id, king_name: s.game.king_name, challenger_name: s.game.challenger_name, chess960_position: s.game.chess960_position, king_color: s.game.king_color, table_started_at: s.game.table_started_at } : null, queue: s.queue.map(q => ({ player_id: q.player_id, player_name: q.player_name })), dgt: publicDgt, config: s.config, liveSats: s.liveSats, eventTotalSats: s.eventTotalSats };
 }
-module.exports = { init, shutdown, getState, publicState, registerPlayer, joinQueue, leaveQueue, adminAddToQueue, adminRemoveFromQueue, crownKing, callNextChallenger, startTableGame, maybeAutoStartFromDgt, finalizeGame, reportResult, adminReorder, adminReorderQueue, lockEvent, pauseEvent, resumeEvent, resetEvent, rotateVenueCode, flushSats };
+module.exports = { init, shutdown, getState, publicState, registerPlayer, joinQueue, leaveQueue, adminAddToQueue, adminRemoveFromQueue, crownKing, adminSetPairing, callNextChallenger, startTableGame, maybeAutoStartFromDgt, finalizeGame, reportResult, adminReorder, adminReorderQueue, lockEvent, pauseEvent, resumeEvent, resetEvent, rotateVenueCode, flushSats };

@@ -103,6 +103,7 @@ function createTables() {
     player_id INTEGER NOT NULL,
     amount_sats INTEGER NOT NULL,
     method TEXT DEFAULT 'lnurl-withdraw',
+    destination TEXT,
     invoice TEXT,
     payment_hash TEXT,
     status TEXT DEFAULT 'requested',
@@ -124,6 +125,7 @@ function migrate() {
   if (!columns('games').includes('king_color')) conn().run(`ALTER TABLE games ADD COLUMN king_color TEXT DEFAULT 'black'`);
   if (!columns('games').includes('table_started_at')) conn().run(`ALTER TABLE games ADD COLUMN table_started_at TEXT`);
   if (!columns('payouts').includes('method')) conn().run(`ALTER TABLE payouts ADD COLUMN method TEXT DEFAULT 'lnurl-withdraw'`);
+  if (!columns('payouts').includes('destination')) conn().run(`ALTER TABLE payouts ADD COLUMN destination TEXT`);
   if (!columns('payouts').includes('invoice')) conn().run(`ALTER TABLE payouts ADD COLUMN invoice TEXT`);
   if (!columns('payouts').includes('updated_at')) {
     conn().run(`ALTER TABLE payouts ADD COLUMN updated_at TEXT`);
@@ -196,12 +198,12 @@ function recentGames(limit = 10) { return exec(`SELECT g.*, k.name AS king_name,
 
 function addSats(playerId, amount) { run('UPDATE players SET sat_balance=sat_balance+?, total_sats_earned=total_sats_earned+? WHERE id=?', [amount, Math.max(0, amount), playerId]); }
 function eventTotalSatsEarned() { return get('SELECT COALESCE(SUM(total_sats_earned),0) AS total FROM players').total || 0; }
-function reservePayout(playerId, amount, method = 'lnurl-withdraw') {
+function reservePayout(playerId, amount, method = 'lnurl-withdraw', destination = null) {
   const p = getPlayer(playerId); if (!p) return { error: 'Player not found' };
   if (amount <= 0) return { error: 'Amount must be positive' };
   if (p.sat_balance < amount) return { error: `Insufficient balance: ${p.sat_balance}` };
   conn().run('UPDATE players SET sat_balance=sat_balance-?, reserved_sats=reserved_sats+? WHERE id=?', [amount, amount, playerId]);
-  conn().run('INSERT INTO payouts(player_id,amount_sats,method,status,updated_at) VALUES(?,?,?,?,?)', [playerId, amount, method, 'reserved', now()]);
+  conn().run('INSERT INTO payouts(player_id,amount_sats,method,destination,status,updated_at) VALUES(?,?,?,?,?,?)', [playerId, amount, method, destination, 'reserved', now()]);
   save(); const payoutId = get('SELECT id FROM payouts ORDER BY id DESC LIMIT 1').id; log('payout_reserved', `Reserved ${amount} sats`, { payoutId, playerId, amount }); return { payoutId };
 }
 function payoutPaying(id, invoice = null) { run('UPDATE payouts SET status=?, invoice=?, updated_at=? WHERE id=?', ['paying', invoice, now(), id]); }

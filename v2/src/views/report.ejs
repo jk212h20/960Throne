@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="/public/styles.css">
   <style>
-    body{background:#07070b;color:#fff;font-family:system-ui;margin:0}.wrap{max-width:720px;margin:0 auto;padding:24px}.card{background:#15151f;border:1px solid #2b2b3a;border-radius:18px;padding:22px;margin:16px 0}.muted{color:rgba(255,255,255,.62)}.gold{color:#f6c453}.row{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}button{border:0;border-radius:16px;padding:20px 22px;font-weight:900;font-size:18px;background:#2b2b3a;color:#fff;cursor:pointer;min-height:64px}button:disabled{opacity:.35;cursor:not-allowed}.good{background:#166534}.danger{background:#7f1d1d}.draw{background:#374151}.big{font-size:28px}.ok{color:#86efac}.warn{color:#ffd166}.bad{color:#fca5a5}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.grid button{width:100%}.placeholder{color:rgba(255,255,255,.38)}hr{border:0;border-top:1px solid #2b2b3a;margin:18px 0}@media(max-width:680px){.grid{grid-template-columns:1fr}.wrap{padding:14px}}
+    body{background:#07070b;color:#fff;font-family:system-ui;margin:0}.wrap{max-width:720px;margin:0 auto;padding:24px}.card{background:#15151f;border:1px solid #2b2b3a;border-radius:18px;padding:22px;margin:16px 0}.muted{color:rgba(255,255,255,.62)}.gold{color:#f6c453}.row{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}button{border:0;border-radius:16px;padding:20px 22px;font-weight:900;font-size:18px;background:#2b2b3a;color:#fff;cursor:pointer;min-height:64px}button span{display:block;font-size:.82em;opacity:.86;margin-top:4px}button:disabled{opacity:.35;cursor:not-allowed}.good{background:#166534}.danger{background:#7f1d1d}.draw{background:#374151}.big{font-size:28px}.ok{color:#86efac}.warn{color:#ffd166}.bad{color:#fca5a5}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.grid button{width:100%}.placeholder{color:rgba(255,255,255,.38)}hr{border:0;border-top:1px solid #2b2b3a;margin:18px 0}@media(max-width:680px){.grid{grid-template-columns:1fr}.wrap{padding:14px}}
   </style>
 </head>
 <body>
@@ -45,10 +45,10 @@
     <% } %>
 
     <div class="grid" style="margin-top:16px">
-      <button class="good" onclick="result('king_won')" <%= started ? '' : 'disabled' %>>King Won</button>
-      <button onclick="result('challenger_won')" <%= started ? '' : 'disabled' %>>Challenger Won</button>
-      <button class="draw" onclick="result('draw')" <%= started ? '' : 'disabled' %>>Draw</button>
-      <button class="danger" onclick="confirmNoShow()" <%= hasGame ? '' : 'disabled' %>>No Show / Cancel</button>
+      <button class="good" onclick="result('king_won')" <%= started ? '' : 'disabled' %>>King Won<br><span>Rey ganó</span></button>
+      <button onclick="result('challenger_won')" <%= started ? '' : 'disabled' %>>Challenger Won<br><span>Retador ganó</span></button>
+      <button class="draw" onclick="result('draw')" <%= started ? '' : 'disabled' %>>Draw<br><span>Empate</span></button>
+      <button class="danger" onclick="confirmNoShow()" <%= hasGame ? '' : 'disabled' %>>No Show / Cancel<br><span>Ausente / Cancelar</span></button>
     </div>
   </div>
 

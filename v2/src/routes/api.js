@@ -122,6 +122,7 @@ router.post('/admin/config', requireAdmin, (req, res) => {
   res.json({ success: true, config: engine.getState().config });
 });
 router.post('/admin/crown', requireAdmin, (req, res) => res.json(engine.crownKing(parseInt(req.body.playerId, 10))));
+router.post('/admin/pairing/set', requireAdmin, async (req, res) => { const r = await engine.adminSetPairing({ kingId: req.body.kingId, challengerId: req.body.challengerId, position: req.body.position === '' ? null : req.body.position }); if (r.error) return res.status(400).json(r); res.json(r); });
 router.post('/admin/game/start', requireAdmin, (req, res) => { const r = engine.startTableGame(); if (r.error) return res.status(400).json(r); res.json(r); });
 router.post('/admin/result', requireAdmin, (req, res) => { const r = engine.finalizeGame(parseInt(req.body.gameId, 10), req.body.result); if (r.error) return res.status(400).json(r); res.json(r); });
 router.post('/admin/start-next', requireAdmin, async (req, res) => res.json(await engine.callNextChallenger(req.body.position ?? null)));
@@ -153,6 +154,26 @@ router.post('/queue/leave', requirePlayer, (req, res) => res.json(engine.leaveQu
 router.post('/game/report', requirePlayer, (req, res) => { const r = engine.reportResult(req.player.id, req.body.result); if (r.error) return res.status(400).json(r); res.json(r); });
 
 router.post('/claim/reserve', requirePlayer, (req, res) => { const amount = parseInt(req.body.amount || req.player.sat_balance, 10); const r = db.reservePayout(req.player.id, amount, 'lnurl-withdraw'); if (r.error) return res.status(400).json(r); res.json({ success: true, ...r }); });
+router.post('/claim/lightning-address', requirePlayer, async (req, res) => {
+  const amount = parseInt(req.body.amount || req.player.sat_balance, 10);
+  let lightningAddress;
+  try { lightningAddress = lightningNode.normalizeLightningAddress(req.body.lightningAddress || ''); }
+  catch (err) { return res.status(400).json({ error: err.message }); }
+  if (!Number.isInteger(amount) || amount < 10) return res.status(400).json({ error: 'Minimum claim is 10 sats' });
+  if (!lightningNode.configured()) return res.status(503).json({ error: 'Lightning payments not available. Ask an admin to pay manually.' });
+  const reserved = db.reservePayout(req.player.id, amount, 'lightning-address', lightningAddress);
+  if (reserved.error) return res.status(400).json(reserved);
+  try {
+    const paid = await lightningNode.payLightningAddress(lightningAddress, amount, `960 Throne payout for ${req.player.name}`);
+    db.payoutPaying(reserved.payoutId, paid.invoice);
+    const completed = db.payoutComplete(reserved.payoutId, paid.paymentHash || 'lnd');
+    if (completed.error) return res.status(500).json(completed);
+    res.json({ success: true, amount, payoutId: reserved.payoutId, paymentHash: paid.paymentHash, message: `⚡ ${amount} sats sent to ${lightningAddress}` });
+  } catch (err) {
+    db.payoutFail(reserved.payoutId, err.message);
+    res.status(500).json({ error: `Payment failed: ${err.message}`, payoutId: reserved.payoutId, hint: err.message.includes('Bolt12') ? 'Try a standard LNURL Lightning Address wallet.' : undefined });
+  }
+});
 router.post('/claim/mock-complete', requireAdmin, (req, res) => res.json(db.payoutComplete(parseInt(req.body.payoutId, 10), 'mock')));
 router.post('/claim/mock-fail', requireAdmin, (req, res) => res.json(db.payoutFail(parseInt(req.body.payoutId, 10), req.body.error || 'mock failure')));
 
