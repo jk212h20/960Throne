@@ -211,7 +211,7 @@ function reservePayout(playerId, amount, method = 'lnurl-withdraw', destination 
   save(); const payoutId = get('SELECT id FROM payouts ORDER BY id DESC LIMIT 1').id; log('payout_reserved', `Reserved ${amount} sats`, { payoutId, playerId, amount }); return { payoutId };
 }
 function setPayoutWithdraw(id, k1, expiresAt) { run('UPDATE payouts SET withdraw_k1=?, expires_at=?, updated_at=? WHERE id=?', [k1, expiresAt, now(), id]); }
-function getPayoutByWithdrawK1(k1) { return get('SELECT * FROM payouts WHERE withdraw_k1=?', [k1]); }
+function getPayoutByWithdrawK1(k1) { if (!k1) return null; return get('SELECT * FROM payouts WHERE withdraw_k1=?', [String(k1)]); }
 function payoutPaying(id, invoice = null) { run('UPDATE payouts SET status=?, invoice=?, updated_at=? WHERE id=?', ['paying', invoice, now(), id]); }
 function payoutComplete(id, paymentHash = null) {
   const p = get('SELECT * FROM payouts WHERE id=?', [id]);
