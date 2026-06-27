@@ -260,6 +260,33 @@
     
     renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
     
+
+    async function postBoardState(payload, options = {}) {
+        const body = JSON.stringify(payload);
+        const headers = { 'Content-Type': 'application/json', 'x-relay-secret': RELAY_SECRET };
+        const urls = [SERVER_URL + '/api/dgt/board-state', '/api/dgt/board-state'];
+        let lastErr = null;
+        for (const url of urls) {
+            try {
+                const res = await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(options.timeout || 4000) });
+                let data = null;
+                try { data = await res.json(); } catch (_) { data = { error: 'Non-JSON server response: HTTP ' + res.status }; }
+                if (!res.ok || data.error) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                return data;
+            } catch (err) {
+                lastErr = err;
+            }
+        }
+        if (navigator.sendBeacon) {
+            try {
+                const beaconBody = JSON.stringify({ ...payload, relaySecret: RELAY_SECRET });
+                const blob = new Blob([beaconBody], { type: 'application/json' });
+                if (navigator.sendBeacon('/api/dgt/board-state', blob)) throw new Error('fetch failed; queued sendBeacon fallback');
+            } catch (_) {}
+        }
+        throw lastErr || new Error('Server push failed');
+    }
+
     // ─── Push to Server ──────────────────────────────────
     async function pushToServer(fen, clock) {
         pushCount++;
@@ -271,22 +298,7 @@
         else if (lastClock) payload.clock = lastClock;
         
         try {
-            const res = await fetch(SERVER_URL + '/api/dgt/board-state', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-relay-secret': RELAY_SECRET,
-                },
-                body: JSON.stringify(payload),
-            });
-            const data = await res.json();
-            
-            if (data.error) {
-                errorCount++;
-                document.getElementById('error-count').textContent = errorCount;
-                log('Server error: ' + data.error, 'error');
-                return;
-            }
+            const data = await postBoardState(payload);
             
             if (data.changed) {
                 changeCount++;
@@ -299,7 +311,7 @@
             errorCount++;
             document.getElementById('error-count').textContent = errorCount;
             document.getElementById('server-dot').className = 'status-dot dot-red';
-            log('Push failed: ' + err.message, 'error');
+            log('Server push failed: ' + err.message + ' (check Wi-Fi/Railway; local board may still be connected)', 'error');
         }
     }
     
@@ -641,10 +653,10 @@
             } catch (err) {
                 consecutiveErrors++;
                 if (consecutiveErrors <= 3) {
-                    log('HTTP poll error: ' + err.message, 'error');
+                    log('Local DGT/LiveChess fetch failed: ' + err.message, 'error');
                 }
                 if (consecutiveErrors >= 3) {
-                    updateConnectionUI(false, 'Cannot reach LiveChess. Is it running? Use manual FEN below.');
+                    updateConnectionUI(false, 'Cannot reach local DGT/LiveChess. Is it running and allowed by browser? Use manual FEN below.');
                     connected = false;
                 }
             }
@@ -859,14 +871,7 @@
     async function pushClockToServer(clock) {
         if (!lastFen) return; // No board state yet — nothing to attach clock to
         try {
-            await fetch(SERVER_URL + '/api/dgt/board-state', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-relay-secret': RELAY_SECRET,
-                },
-                body: JSON.stringify({ fen: lastFen, clock, source: 'relay-page' }),
-            });
+            await postBoardState({ fen: lastFen, clock, source: 'relay-page' }, { timeout: 2500 });
         } catch (err) { /* silent — clock-only updates are best-effort */ }
     }
     

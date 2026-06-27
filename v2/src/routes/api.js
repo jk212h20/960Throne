@@ -223,9 +223,15 @@ router.post('/claim/mock-complete', requireAdmin, (req, res) => res.json(db.payo
 router.post('/claim/mock-fail', requireAdmin, (req, res) => res.json(db.payoutFail(parseInt(req.body.payoutId, 10), req.body.error || 'mock failure')));
 
 router.post('/dgt/board-state', requireRelay, (req, res) => {
-  const snapshot = dgt.update(req.body);
-  const autoStart = engine.maybeAutoStartFromDgt(snapshot);
-  res.json({ success: true, dgt: snapshot, autoStart });
+  try {
+    const body = { ...req.body };
+    delete body.relaySecret;
+    const snapshot = dgt.update(body);
+    const autoStart = engine.maybeAutoStartFromDgt(snapshot);
+    res.json({ success: true, dgt: snapshot, autoStart });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'DGT update failed' });
+  }
 });
 router.get('/dgt/state', (req, res) => res.json(dgt.snapshot()));
 
