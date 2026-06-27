@@ -139,7 +139,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;
       <div id="players-list" class="hide-inactive">
       <% state.players.forEach(p=>{ const activeEventPlayer = eventPlayers.some(ep => ep.id === p.id); %>
         <div class="player-item <%= activeEventPlayer ? 'active-event' : 'inactive-event' %>">
-          <div class="split"><span><b><%= p.name || '(unnamed)' %></b> <span class="pill"><%= p.auth_type %></span></span><button onclick="post('/api/admin/crown',{playerId:<%= p.id %>})">Crown</button></div>
+          <div class="split"><span><b><%= p.name || '(unnamed)' %></b> <span class="pill"><%= p.auth_type %></span></span><span class="row"><button class="secondary" onclick="renamePlayer(<%= p.id %>,<%- JSON.stringify(p.name || '') %>)">Rename</button><button onclick="post('/api/admin/crown',{playerId:<%= p.id %>})">Crown</button></span></div>
           <div class="muted mini">id <%= p.id %> · claimable <%= p.sat_balance %> sats · reserved <%= p.reserved_sats || 0 %> sats · event earned <%= (p.total_sats_earned||0).toLocaleString() %> sats · W/L/D <%= p.games_won %>/<%= p.games_lost %>/<%= p.games_drawn %></div>
           <% if (p.sat_balance > 0) { %><div class="row"><input id="pay-amount-<%= p.id %>" type="number" min="1" max="<%= p.sat_balance %>" placeholder="<%= p.sat_balance %>" style="width:120px"><button class="good" onclick="manualPayout(<%= p.id %>)">Mark Manual Payout Paid</button><button onclick="reservePayout(<%= p.id %>)">Reserve Payout</button></div><% } %>
         </div>
@@ -181,6 +181,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b0b12;
   function startNext(){const raw=document.getElementById('forced-position').value;const body={};if(raw!=='')body.position=Number(raw);post('/api/admin/start-next',body)}
   function setManualPairing(){const kingId=Number(document.getElementById('manual-king').value);const challengerId=Number(document.getElementById('manual-challenger').value);const raw=document.getElementById('manual-position').value;if(!kingId||!challengerId)return alert('Choose both king and challenger');if(kingId===challengerId)return alert('King and challenger must be different');if(confirm('Replace current king/challenger pairing? Use only for recovery.'))post('/api/admin/pairing/set',{kingId,challengerId,position:raw})}
   function payoutAmount(id){const el=document.getElementById('pay-amount-'+id);return el&&el.value?Number(el.value):undefined}
+  function renamePlayer(id,current){const name=prompt('New player name',current||'');if(name&&name.trim())post('/api/admin/player/name',{playerId:id,name:name.trim()})}
   function manualPayout(id){if(confirm('Mark this player as manually paid?'))post('/api/admin/manual-payout-complete',{playerId:id,amount:payoutAmount(id)})}
   function reservePayout(id){post('/api/admin/payout/reserve',{playerId:id,amount:payoutAmount(id),method:'manual-admin-payout'})}
   function completePayout(id){if(confirm('Mark payout #'+id+' complete?'))post('/api/admin/payout/complete',{payoutId:id,paymentHash:'manual'})}
