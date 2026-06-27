@@ -196,15 +196,10 @@ function markTableStarted(game, reason) {
 function dgtLateStartReadiness(dgtSnapshot) {
   if (!dgtSnapshot || dgtSnapshot.stale) return { ok: false, reason: 'dgt_stale' };
   if (!dgtSnapshot.clock || !dgtSnapshot.clock.running) return { ok: false, reason: 'clock_not_running' };
-  const clock = dgtSnapshot.clock;
-  const base = timeControl().base;
-  const white = Number(clock.white || 0), black = Number(clock.black || 0);
-  const clockHasStarted = Boolean(clock.activeSide) || (base > 0 && (white < base || black < base));
-  if (!clockHasStarted) return { ok: false, reason: 'clock_has_not_started' };
   if (dgtSnapshot.setupOk) return { ok: true, reason: 'setup_ok_clock_started' };
   const diffCount = Array.isArray(dgtSnapshot.setupDiff) ? dgtSnapshot.setupDiff.length : 999;
-  if (diffCount >= 1 && diffCount <= 6) return { ok: true, reason: 'board_move_detected_after_setup' };
-  return { ok: false, reason: 'setup_not_ready' };
+  if (diffCount >= 1 && diffCount <= 12) return { ok: true, reason: 'board_play_detected_after_setup' };
+  return { ok: true, reason: 'clock_running_unverified_setup' };
 }
 function maybeAutoStartFromDgt(dgtSnapshot) {
   const game = db.activeGame();
@@ -221,9 +216,13 @@ function maybeAutoStartFromDgt(dgtSnapshot) {
 }
 function finalizeGame(gameId, result) {
   flushSats();
-  const game = db.getGame(gameId); if (!game) return { error: 'Game not found' };
+  let game = db.getGame(gameId); if (!game) return { error: 'Game not found' };
   const valid = ['king_won', 'challenger_won', 'draw', 'no_show']; if (!valid.includes(result)) return { error: 'Invalid result' };
-  if (result !== 'no_show' && !game.table_started_at) return { error: 'Game has not started at the table' };
+  if (result !== 'no_show' && !game.table_started_at) {
+    const started = markTableStarted(game, 'report_result_auto_start');
+    if (started.error) return started;
+    game = started.game;
+  }
   const startedAt = game.table_started_at ? parseTimeMs(game.table_started_at) : gameStartedAt;
   const duration = startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0;
   const gameSats = duration * parseInt(db.getConfig('sat_rate_per_second') || config.satRatePerSecond, 10);
@@ -251,7 +250,7 @@ function updateStats(game, result) {
   if (result === 'challenger_won') { db.run('UPDATE players SET games_played=games_played+1,games_lost=games_lost+1 WHERE id=?', [game.king_id]); db.run('UPDATE players SET games_played=games_played+1,games_won=games_won+1 WHERE id=?', [game.challenger_id]); }
   if (result === 'draw') { db.run('UPDATE players SET games_played=games_played+1,games_drawn=games_drawn+1 WHERE id IN (?,?)', [game.king_id, game.challenger_id]); }
 }
-function reportResult(playerId, result) { const game = db.activeGame(); if (!game) return { error: 'No active game' }; if (!game.table_started_at) return { error: 'Game has not started at the table' }; if (playerId !== game.king_id && playerId !== game.challenger_id) return { error: 'Not in current game' }; return finalizeGame(game.id, result); }
+function reportResult(playerId, result) { const game = db.activeGame(); if (!game) return { error: 'No active game' }; if (playerId !== game.king_id && playerId !== game.challenger_id) return { error: 'Not in current game' }; return finalizeGame(game.id, result); }
 function adminReorder(order) { if (!Array.isArray(order) || !order.length) return { error: 'Order required' }; const currentKingId = parseInt(db.getConfig('current_king_id') || '0', 10); const newKing = order[0]; const active = db.activeGame(); if (active && (newKing !== currentKingId || order[1] !== active.challenger_id)) finalizeGame(active.id, 'no_show'); db.reorderQueue(order.slice(1)); if (newKing !== currentKingId) crownKing(newKing); broadcast('queue_updated', { queue: db.getQueue() }); return { success: true }; }
 function adminReorderQueue(order) { if (!Array.isArray(order)) return { error: 'Order required' }; db.reorderQueue(order.map(Number).filter(Boolean)); broadcast('queue_updated', { queue: db.getQueue() }); return { success: true }; }
 function lockEvent(locked) { db.setConfig('event_locked', locked ? '1' : '0'); broadcast('event_lock', { locked: Boolean(locked) }); return { success: true }; }
