@@ -179,18 +179,45 @@ function startTableGame(options = {}) {
   if (game.table_started_at) return { success: true, game };
   const readiness = dgtStartReadiness(options.dgtSnapshot || dgt.snapshot());
   if (!readiness.ok) return { error: readiness.reason };
+  return markTableStarted(game, 'strict_dgt_ready');
+}
+function markTableStarted(game, reason) {
   const started = db.startGame(game.id); if (started.error) return started;
   gameStartedAt = parseTimeMs(started.table_started_at);
-  broadcast('game_started', { game: started, position: chess960.positionToDisplay(started.chess960_position), timeControl: timeControl() });
-  return { success: true, game: started };
+  const payload = { game: started, position: chess960.positionToDisplay(started.chess960_position), timeControl: timeControl(), reason };
+  broadcast('game_started', payload);
+  if (reason && reason !== 'strict_dgt_ready') {
+    db.log('game_auto_started_fallback', `Game #${started.id} auto-started by fallback: ${reason}`, { gameId: started.id, reason });
+    db.notify('game_auto_started_fallback', `Game #${started.id} auto-started after play was detected (${reason})`);
+    broadcast('game_auto_started_fallback', payload);
+  }
+  return { success: true, game: started, reason };
+}
+function dgtLateStartReadiness(dgtSnapshot) {
+  if (!dgtSnapshot || dgtSnapshot.stale) return { ok: false, reason: 'dgt_stale' };
+  if (!dgtSnapshot.clock || !dgtSnapshot.clock.running) return { ok: false, reason: 'clock_not_running' };
+  const clock = dgtSnapshot.clock;
+  const base = timeControl().base;
+  const white = Number(clock.white || 0), black = Number(clock.black || 0);
+  const clockHasStarted = Boolean(clock.activeSide) || (base > 0 && (white < base || black < base));
+  if (!clockHasStarted) return { ok: false, reason: 'clock_has_not_started' };
+  if (dgtSnapshot.setupOk) return { ok: true, reason: 'setup_ok_clock_started' };
+  const diffCount = Array.isArray(dgtSnapshot.setupDiff) ? dgtSnapshot.setupDiff.length : 999;
+  if (diffCount >= 1 && diffCount <= 6) return { ok: true, reason: 'board_move_detected_after_setup' };
+  return { ok: false, reason: 'setup_not_ready' };
 }
 function maybeAutoStartFromDgt(dgtSnapshot) {
   const game = db.activeGame();
   if (!game || game.table_started_at) return { started: false, reason: 'no_unstarted_game' };
   const readiness = dgtStartReadiness(dgtSnapshot);
-  if (!readiness.ok) return { started: false, reason: readiness.reason };
-  const r = startTableGame({ dgtSnapshot });
-  return r.error ? { started: false, error: r.error } : { started: true, game: r.game };
+  if (readiness.ok) {
+    const r = markTableStarted(game, 'strict_dgt_ready');
+    return r.error ? { started: false, error: r.error } : { started: true, game: r.game, reason: r.reason };
+  }
+  const late = dgtLateStartReadiness(dgtSnapshot);
+  if (!late.ok) return { started: false, reason: readiness.reason, fallbackReason: late.reason };
+  const r = markTableStarted(game, late.reason);
+  return r.error ? { started: false, error: r.error } : { started: true, game: r.game, reason: r.reason, fallback: true };
 }
 function finalizeGame(gameId, result) {
   flushSats();
