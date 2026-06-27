@@ -14,6 +14,7 @@ function renderPublicStage(req, res) { const baseUrl = publicBaseUrl(req); res.r
 router.get('/', render('join'));
 router.get('/stage', renderPublicStage);
 router.get('/board', (req, res) => { const baseUrl = publicBaseUrl(req); res.render('board', { state: engine.publicState(), player: null, baseUrl, joinUrl: `${baseUrl}/join` }); });
+router.get('/queue', (req, res) => { const baseUrl = publicBaseUrl(req); res.render('queue', { state: engine.publicState(), player: null, baseUrl, joinUrl: `${baseUrl}/join` }); });
 router.get('/watch', render('watch'));
 router.get('/leaderboard', render('leaderboard'));
 router.get('/join', render('join'));
