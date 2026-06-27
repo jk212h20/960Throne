@@ -7,6 +7,7 @@ const { config } = require('../config/env');
 let io;
 let gameStartedAt = null;
 let satTimer = null;
+let dgtSetupReadyGameId = null;
 
 function init(socketIo) {
   io = socketIo;
@@ -115,6 +116,7 @@ async function adminSetPairing({ kingId, challengerId, position = null } = {}) {
   const pos = await choosePosition(position);
   const gameId = db.createGame({ kingId: king.id, challengerId: challenger.id, position: pos, reignId });
   gameStartedAt = null;
+  dgtSetupReadyGameId = null;
   dgt.setExpectedPosition(pos);
   const game = db.getGame(gameId);
   broadcast('admin_pairing_set', { game, position: chess960.positionToDisplay(pos) });
@@ -130,6 +132,7 @@ async function callNextChallenger(forcedPosition = null) {
   const gameId = db.createGame({ kingId, challengerId: next.player_id, position: pos, reignId });
   db.removeQueueId(next.id);
   gameStartedAt = null;
+  dgtSetupReadyGameId = null;
   dgt.setExpectedPosition(pos);
   const game = db.getGame(gameId);
   const payload = { game, position: chess960.positionToDisplay(pos), timeControl: timeControl() };
@@ -193,23 +196,24 @@ function markTableStarted(game, reason) {
   }
   return { success: true, game: started, reason };
 }
-function dgtLateStartReadiness(dgtSnapshot) {
+function dgtLateStartReadiness(dgtSnapshot, game) {
   if (!dgtSnapshot || dgtSnapshot.stale) return { ok: false, reason: 'dgt_stale' };
   if (!dgtSnapshot.clock || !dgtSnapshot.clock.running) return { ok: false, reason: 'clock_not_running' };
   if (dgtSnapshot.setupOk) return { ok: true, reason: 'setup_ok_clock_started' };
   const diffCount = Array.isArray(dgtSnapshot.setupDiff) ? dgtSnapshot.setupDiff.length : 999;
-  if (diffCount >= 1 && diffCount <= 12) return { ok: true, reason: 'board_play_detected_after_setup' };
-  return { ok: true, reason: 'clock_running_unverified_setup' };
+  if (game && dgtSetupReadyGameId === game.id && diffCount >= 1 && diffCount <= 12) return { ok: true, reason: 'board_play_detected_after_confirmed_setup' };
+  return { ok: false, reason: 'setup_not_confirmed_for_new_game' };
 }
 function maybeAutoStartFromDgt(dgtSnapshot) {
   const game = db.activeGame();
   if (!game || game.table_started_at) return { started: false, reason: 'no_unstarted_game' };
+  if (dgtSnapshot && dgtSnapshot.setupOk) dgtSetupReadyGameId = game.id;
   const readiness = dgtStartReadiness(dgtSnapshot);
   if (readiness.ok) {
     const r = markTableStarted(game, 'strict_dgt_ready');
     return r.error ? { started: false, error: r.error } : { started: true, game: r.game, reason: r.reason };
   }
-  const late = dgtLateStartReadiness(dgtSnapshot);
+  const late = dgtLateStartReadiness(dgtSnapshot, game);
   if (!late.ok) return { started: false, reason: readiness.reason, fallbackReason: late.reason };
   const r = markTableStarted(game, late.reason);
   return r.error ? { started: false, error: r.error } : { started: true, game: r.game, reason: r.reason, fallback: true };
@@ -229,6 +233,7 @@ function finalizeGame(gameId, result) {
   db.finalizeGame(gameId, result, gameSats);
   dgt.clearExpectedPosition();
   gameStartedAt = null;
+  dgtSetupReadyGameId = null;
   if (result !== 'no_show') updateStats(game, result);
   if (result === 'challenger_won') {
     const reign = db.currentReign();
