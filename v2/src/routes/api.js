@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 const engine = require('../domain/eventEngine');
@@ -154,6 +155,47 @@ router.post('/queue/leave', requirePlayer, (req, res) => res.json(engine.leaveQu
 router.post('/game/report', requirePlayer, (req, res) => { const r = engine.reportResult(req.player.id, req.body.result); if (r.error) return res.status(400).json(r); res.json(r); });
 
 router.post('/claim/reserve', requirePlayer, (req, res) => { const amount = parseInt(req.body.amount || req.player.sat_balance, 10); const r = db.reservePayout(req.player.id, amount, 'lnurl-withdraw'); if (r.error) return res.status(400).json(r); res.json({ success: true, ...r }); });
+router.post('/claim/lnurl-withdraw', requirePlayer, async (req, res) => {
+  if (!lightningNode.configured()) return res.status(503).json({ error: 'Lightning payments not available. Ask an admin to pay manually.' });
+  const amount = parseInt(req.player.sat_balance || 0, 10);
+  if (!Number.isInteger(amount) || amount < 10) return res.status(400).json({ error: 'Minimum cashout is 10 sats' });
+  const reserved = db.reservePayout(req.player.id, amount, 'lnurl-withdraw', 'scan-to-collect');
+  if (reserved.error) return res.status(400).json(reserved);
+  const k1 = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  db.setPayoutWithdraw(reserved.payoutId, k1, expiresAt);
+  const base = config.baseUrl.replace(/\/$/, '');
+  const rawUrl = `${base}/api/withdraw/${k1}`;
+  const lnurl = lightningAuth.encodeLnurl(rawUrl);
+  const collectLink = `lightning:${lnurl}`;
+  res.json({ success: true, amount, payoutId: reserved.payoutId, k1, expiresAt, lnurl, collectLink, phoenixLink: `phoenix:${collectLink}`, qr: await QRCode.toDataURL(collectLink, { width: 320 }) });
+});
+router.get('/withdraw/:k1', (req, res) => {
+  const payout = db.getPayoutByWithdrawK1(req.params.k1);
+  if (!payout || !['reserved','paying','requested'].includes(payout.status)) return res.json({ status: 'ERROR', reason: 'Withdraw link not found or already used' });
+  if (payout.expires_at && Date.now() > new Date(payout.expires_at).getTime()) { db.payoutFail(payout.id, 'withdraw link expired'); return res.json({ status: 'ERROR', reason: 'Withdraw link expired' }); }
+  const base = config.baseUrl.replace(/\/$/, '');
+  res.json({ tag: 'withdrawRequest', callback: `${base}/api/withdraw/callback`, k1: payout.withdraw_k1, defaultDescription: `960 Throne cashout: ${payout.amount_sats} sats`, minWithdrawable: payout.amount_sats * 1000, maxWithdrawable: payout.amount_sats * 1000 });
+});
+router.get('/withdraw/callback', async (req, res) => {
+  const payout = db.getPayoutByWithdrawK1(req.query.k1);
+  if (!payout || !['reserved','requested'].includes(payout.status)) return res.json({ status: 'ERROR', reason: 'Withdraw link not found or already used' });
+  if (payout.expires_at && Date.now() > new Date(payout.expires_at).getTime()) { db.payoutFail(payout.id, 'withdraw link expired'); return res.json({ status: 'ERROR', reason: 'Withdraw link expired' }); }
+  const pr = String(req.query.pr || '');
+  if (!pr) return res.json({ status: 'ERROR', reason: 'Missing invoice' });
+  try {
+    const decoded = await lightningNode.decodeInvoice(pr);
+    const invoiceSats = Number(decoded.num_satoshis || decoded.num_satoshis_str || 0);
+    if (invoiceSats !== payout.amount_sats) return res.json({ status: 'ERROR', reason: `Invoice amount must be exactly ${payout.amount_sats} sats` });
+    db.payoutPaying(payout.id, pr);
+    const paid = await lightningNode.payInvoice(pr);
+    db.payoutComplete(payout.id, paid.payment_hash || 'lnd');
+    res.json({ status: 'OK' });
+  } catch (err) {
+    db.payoutFail(payout.id, err.message);
+    res.json({ status: 'ERROR', reason: `Payment failed: ${err.message}` });
+  }
+});
 router.post('/claim/lightning-address', requirePlayer, async (req, res) => {
   const amount = parseInt(req.body.amount || req.player.sat_balance, 10);
   let lightningAddress;

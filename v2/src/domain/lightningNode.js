@@ -24,6 +24,10 @@ async function createTopupInvoice(amountSats, memo = '960 Throne node top-up', e
   const result = await lndRequest('/v1/invoices', 'POST', { value: String(amountSats), memo, expiry: String(expiry) });
   return { paymentRequest: result.payment_request, rHash: result.r_hash, addIndex: result.add_index, amountSats, memo, expiry };
 }
+async function decodeInvoice(paymentRequest) {
+  if (!paymentRequest || typeof paymentRequest !== 'string') throw new Error('Payment request required');
+  return lndRequest(`/v1/payreq/${encodeURIComponent(paymentRequest)}`);
+}
 async function payInvoice(paymentRequest, amountSats = null) {
   if (!paymentRequest || typeof paymentRequest !== 'string') throw new Error('Payment request required');
   const body = { payment_request: paymentRequest, fee_limit: { fixed: '100' } };
@@ -88,4 +92,4 @@ async function payLightningAddress(address, amountSats, comment = '') {
   const payment = await payInvoice(invoice.invoice);
   return { success: true, address: lnurl.address, amountSats: amount, invoice: invoice.invoice, paymentHash: payment.payment_hash || payment.payment_hash_string || null, paymentPreimage: payment.payment_preimage || null, successAction: invoice.successAction };
 }
-module.exports = { configured, getBalances, createTopupInvoice, payInvoice, resolveLightningAddress, requestLightningAddressInvoice, payLightningAddress, normalizeLightningAddress };
+module.exports = { configured, getBalances, createTopupInvoice, decodeInvoice, payInvoice, resolveLightningAddress, requestLightningAddressInvoice, payLightningAddress, normalizeLightningAddress };

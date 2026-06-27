@@ -104,6 +104,8 @@ function createTables() {
     amount_sats INTEGER NOT NULL,
     method TEXT DEFAULT 'lnurl-withdraw',
     destination TEXT,
+    withdraw_k1 TEXT,
+    expires_at TEXT,
     invoice TEXT,
     payment_hash TEXT,
     status TEXT DEFAULT 'requested',
@@ -126,6 +128,8 @@ function migrate() {
   if (!columns('games').includes('table_started_at')) conn().run(`ALTER TABLE games ADD COLUMN table_started_at TEXT`);
   if (!columns('payouts').includes('method')) conn().run(`ALTER TABLE payouts ADD COLUMN method TEXT DEFAULT 'lnurl-withdraw'`);
   if (!columns('payouts').includes('destination')) conn().run(`ALTER TABLE payouts ADD COLUMN destination TEXT`);
+  if (!columns('payouts').includes('withdraw_k1')) conn().run(`ALTER TABLE payouts ADD COLUMN withdraw_k1 TEXT`);
+  if (!columns('payouts').includes('expires_at')) conn().run(`ALTER TABLE payouts ADD COLUMN expires_at TEXT`);
   if (!columns('payouts').includes('invoice')) conn().run(`ALTER TABLE payouts ADD COLUMN invoice TEXT`);
   if (!columns('payouts').includes('updated_at')) {
     conn().run(`ALTER TABLE payouts ADD COLUMN updated_at TEXT`);
@@ -206,6 +210,8 @@ function reservePayout(playerId, amount, method = 'lnurl-withdraw', destination 
   conn().run('INSERT INTO payouts(player_id,amount_sats,method,destination,status,updated_at) VALUES(?,?,?,?,?,?)', [playerId, amount, method, destination, 'reserved', now()]);
   save(); const payoutId = get('SELECT id FROM payouts ORDER BY id DESC LIMIT 1').id; log('payout_reserved', `Reserved ${amount} sats`, { payoutId, playerId, amount }); return { payoutId };
 }
+function setPayoutWithdraw(id, k1, expiresAt) { run('UPDATE payouts SET withdraw_k1=?, expires_at=?, updated_at=? WHERE id=?', [k1, expiresAt, now(), id]); }
+function getPayoutByWithdrawK1(k1) { return get('SELECT * FROM payouts WHERE withdraw_k1=?', [k1]); }
 function payoutPaying(id, invoice = null) { run('UPDATE payouts SET status=?, invoice=?, updated_at=? WHERE id=?', ['paying', invoice, now(), id]); }
 function payoutComplete(id, paymentHash = null) {
   const p = get('SELECT * FROM payouts WHERE id=?', [id]);
@@ -251,5 +257,5 @@ function resetEventData() {
   log('event_reset', 'Event data reset; player identities and balances preserved');
 }
 
-const api = { initialize, shutdown, save, backup, resetEventData, exec, get, run, log, getConfig, setConfig, createPlayer, getPlayer, getPlayerByToken, getPlayerByAuth, listPlayers, touchPlayer, setPlayerToken, setPlayerName, addToQueue, removeQueueId, removePlayerFromQueue, isPlayerInQueue, getQueue, getNextInQueue, reorderQueue, startReign, getReign, currentReign, endReign, updateReignStats, createGame, getGame, startGame, activeGame, finalizeGame, recentGames, addSats, eventTotalSatsEarned, reservePayout, payoutPaying, payoutComplete, payoutFail, listPayouts, activeVenueCode, validateVenueCode, createVenueCode, notifications, notify, eventLog };
+const api = { initialize, shutdown, save, backup, resetEventData, exec, get, run, log, getConfig, setConfig, createPlayer, getPlayer, getPlayerByToken, getPlayerByAuth, listPlayers, touchPlayer, setPlayerToken, setPlayerName, addToQueue, removeQueueId, removePlayerFromQueue, isPlayerInQueue, getQueue, getNextInQueue, reorderQueue, startReign, getReign, currentReign, endReign, updateReignStats, createGame, getGame, startGame, activeGame, finalizeGame, recentGames, addSats, eventTotalSatsEarned, reservePayout, setPayoutWithdraw, getPayoutByWithdrawK1, payoutPaying, payoutComplete, payoutFail, listPayouts, activeVenueCode, validateVenueCode, createVenueCode, notifications, notify, eventLog };
 module.exports = api;
