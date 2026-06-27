@@ -98,7 +98,7 @@ function openWallet(){
   if(/Android/i.test(ua)){
     // Android Chrome package-targeted intent: open Phoenix only; fallback to Play Store if missing.
     // Avoid the generic lightning: link here so Cash App/Blink do not win the chooser.
-    location.href='intent://'+lnurl+'#Intent;scheme=lightning;package='+PHOENIX_ANDROID_PACKAGE+';S.browser_fallback_url='+encodeURIComponent(PHOENIX_PLAY_STORE)+';end';
+    location.href='intent:'+lnurl+'#Intent;scheme=lightning;package='+PHOENIX_ANDROID_PACKAGE+';S.browser_fallback_url='+encodeURIComponent(PHOENIX_PLAY_STORE)+';end';
     setTimeout(()=>{ if(currentChallenge) showMsg('If Phoenix did not open, install Phoenix or use the QR/login code.',true); },1200);
     return;
   }
