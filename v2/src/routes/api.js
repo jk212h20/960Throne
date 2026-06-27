@@ -170,16 +170,11 @@ router.post('/claim/lnurl-withdraw', requirePlayer, async (req, res) => {
   const collectLink = `lightning:${lnurl}`;
   res.json({ success: true, amount, payoutId: reserved.payoutId, k1, expiresAt, lnurl, collectLink, phoenixLink: `phoenix:${collectLink}`, qr: await QRCode.toDataURL(collectLink, { width: 320 }) });
 });
-router.get('/withdraw/:k1', (req, res) => {
-  const payout = db.getPayoutByWithdrawK1(req.params.k1);
-  if (!payout || !['reserved','paying','requested'].includes(payout.status)) return res.json({ status: 'ERROR', reason: 'Withdraw link not found or already used' });
-  if (payout.expires_at && Date.now() > new Date(payout.expires_at).getTime()) { db.payoutFail(payout.id, 'withdraw link expired'); return res.json({ status: 'ERROR', reason: 'Withdraw link expired' }); }
-  const base = config.baseUrl.replace(/\/$/, '');
-  res.json({ tag: 'withdrawRequest', callback: `${base}/api/withdraw/callback`, k1: payout.withdraw_k1, defaultDescription: `960 Throne cashout: ${payout.amount_sats} sats`, minWithdrawable: payout.amount_sats * 1000, maxWithdrawable: payout.amount_sats * 1000 });
-});
 router.get('/withdraw/callback', async (req, res) => {
   const payout = db.getPayoutByWithdrawK1(req.query.k1);
-  if (!payout || !['reserved','requested'].includes(payout.status)) return res.json({ status: 'ERROR', reason: 'Withdraw link not found or already used' });
+  if (!payout) return res.json({ status: 'ERROR', reason: 'Withdraw link not found or already used' });
+  if (payout.status === 'completed' || payout.status === 'paying') return res.json({ status: 'OK' });
+  if (!['reserved','requested'].includes(payout.status)) return res.json({ status: 'ERROR', reason: 'Withdraw link not found or already used' });
   if (payout.expires_at && Date.now() > new Date(payout.expires_at).getTime()) { db.payoutFail(payout.id, 'withdraw link expired'); return res.json({ status: 'ERROR', reason: 'Withdraw link expired' }); }
   const pr = String(req.query.pr || '');
   if (!pr) return res.json({ status: 'ERROR', reason: 'Missing invoice' });
@@ -195,6 +190,13 @@ router.get('/withdraw/callback', async (req, res) => {
     db.payoutFail(payout.id, err.message);
     res.json({ status: 'ERROR', reason: `Payment failed: ${err.message}` });
   }
+});
+router.get('/withdraw/:k1', (req, res) => {
+  const payout = db.getPayoutByWithdrawK1(req.params.k1);
+  if (!payout || !['reserved','paying','requested'].includes(payout.status)) return res.json({ status: 'ERROR', reason: 'Withdraw link not found or already used' });
+  if (payout.expires_at && Date.now() > new Date(payout.expires_at).getTime()) { db.payoutFail(payout.id, 'withdraw link expired'); return res.json({ status: 'ERROR', reason: 'Withdraw link expired' }); }
+  const base = config.baseUrl.replace(/\/$/, '');
+  res.json({ tag: 'withdrawRequest', callback: `${base}/api/withdraw/callback`, k1: payout.withdraw_k1, defaultDescription: `960 Throne cashout: ${payout.amount_sats} sats`, minWithdrawable: payout.amount_sats * 1000, maxWithdrawable: payout.amount_sats * 1000 });
 });
 router.post('/claim/lightning-address', requirePlayer, async (req, res) => {
   const amount = parseInt(req.body.amount || req.player.sat_balance, 10);
