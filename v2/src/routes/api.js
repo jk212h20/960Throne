@@ -11,6 +11,7 @@ const { config, redactedStatus } = require('../config/env');
 const { makeAdminToken, requireAdmin, requirePlayer, requireRelay } = require('./middleware');
 
 const router = express.Router();
+function friendlyLightningFailure(err) { const msg = err && err.message ? err.message : String(err || 'payment failed'); if (/no route|unable to find.*route|route.*not found/i.test(msg)) return 'No Lightning route found. Your balance has been restored; try again later, use a different wallet, or ask admin for Bitcoin cashout.'; return `Payment failed: ${msg}`; }
 router.get('/healthz', (req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 router.get('/version', (req, res) => res.json({ name: '960Throne v2', version: require('../../package.json').version, node: process.version }));
 router.get('/state', (req, res) => res.json(engine.getState()));
@@ -172,6 +173,17 @@ router.post('/claim/lnurl-withdraw', requirePlayer, async (req, res) => {
   const collectLink = `lightning:${lnurl}`;
   res.json({ success: true, amount, payoutId: reserved.payoutId, k1, expiresAt, lnurl, collectLink, phoenixLink: `phoenix:${collectLink}`, qr: await QRCode.toDataURL(collectLink, { width: 320 }) });
 });
+router.post('/claim/bitcoin-onchain', requirePlayer, (req, res) => {
+  const amount = parseInt(req.player.sat_balance || 0, 10);
+  const address = String(req.body.address || '').trim();
+  if (!Number.isInteger(amount) || amount < 10) return res.status(400).json({ error: 'Minimum cashout is 10 sats' });
+  if (!/^(bc1|[13])[a-zA-HJ-NP-Z0-9]{20,100}$/.test(address)) return res.status(400).json({ error: 'Enter a valid Bitcoin address.' });
+  const reserved = db.reservePayout(req.player.id, amount, 'bitcoin-onchain', address);
+  if (reserved.error) return res.status(400).json(reserved);
+  db.notify('bitcoin_cashout_requested', `${req.player.name} requested on-chain Bitcoin cashout of ${amount} sats`);
+  db.log('bitcoin_cashout_requested', `Bitcoin cashout requested by ${req.player.name}`, { playerId: req.player.id, payoutId: reserved.payoutId, amount, address });
+  res.json({ success: true, amount, payoutId: reserved.payoutId, message: 'Bitcoin cashout requested. An admin will send it and mark it complete.' });
+});
 router.get('/withdraw/callback', async (req, res) => {
   const payout = db.getPayoutByWithdrawK1(req.query.k1);
   if (!payout) return res.json({ status: 'ERROR', reason: 'Withdraw link not found or already used' });
@@ -190,7 +202,7 @@ router.get('/withdraw/callback', async (req, res) => {
     res.json({ status: 'OK' });
   } catch (err) {
     db.payoutFail(payout.id, err.message);
-    res.json({ status: 'ERROR', reason: `Payment failed: ${err.message}` });
+    res.json({ status: 'ERROR', reason: friendlyLightningFailure(err) });
   }
 });
 router.get('/withdraw/:k1', (req, res) => {
@@ -217,7 +229,7 @@ router.post('/claim/lightning-address', requirePlayer, async (req, res) => {
     res.json({ success: true, amount, payoutId: reserved.payoutId, paymentHash: paid.paymentHash, message: `⚡ ${amount} sats sent to ${lightningAddress}` });
   } catch (err) {
     db.payoutFail(reserved.payoutId, err.message);
-    res.status(500).json({ error: `Payment failed: ${err.message}`, payoutId: reserved.payoutId, hint: err.message.includes('Bolt12') ? 'Try a standard LNURL Lightning Address wallet.' : undefined });
+    res.status(500).json({ error: friendlyLightningFailure(err), payoutId: reserved.payoutId, hint: err.message.includes('Bolt12') ? 'Try a standard LNURL Lightning Address wallet.' : undefined });
   }
 });
 router.post('/claim/mock-complete', requireAdmin, (req, res) => res.json(db.payoutComplete(parseInt(req.body.payoutId, 10), 'mock')));
