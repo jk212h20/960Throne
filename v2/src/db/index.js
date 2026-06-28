@@ -62,6 +62,17 @@ function createTables() {
     last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`);
   d.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_players_auth_unique ON players(auth_type, auth_id) WHERE auth_id IS NOT NULL AND auth_id != ''`);
+  d.run(`CREATE TABLE IF NOT EXISTS player_auth_aliases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    auth_type TEXT NOT NULL,
+    auth_id TEXT NOT NULL,
+    player_id INTEGER NOT NULL,
+    old_player_id INTEGER,
+    reason TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(auth_type, auth_id),
+    FOREIGN KEY(player_id) REFERENCES players(id)
+  )`);
   d.run(`CREATE TABLE IF NOT EXISTS queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     player_id INTEGER NOT NULL UNIQUE,
@@ -160,11 +171,32 @@ function createPlayer({ name, authType = 'pin', authId = null, pin = '', session
 }
 function getPlayer(id) { return get('SELECT * FROM players WHERE id=?', [id]); }
 function getPlayerByToken(token) { return token ? get('SELECT * FROM players WHERE session_token=?', [token]) : null; }
-function getPlayerByAuth(authType, authId) { return authType && authId ? get('SELECT * FROM players WHERE auth_type=? AND auth_id=?', [authType, authId]) : null; }
+function getPlayerByAuth(authType, authId) { if (!authType || !authId) return null; const direct = get('SELECT * FROM players WHERE auth_type=? AND auth_id=?', [authType, authId]); if (direct) return direct; const alias = get('SELECT player_id FROM player_auth_aliases WHERE auth_type=? AND auth_id=?', [authType, authId]); return alias ? getPlayer(alias.player_id) : null; }
 function listPlayers() { return exec('SELECT * FROM players ORDER BY name COLLATE NOCASE'); }
 function touchPlayer(id) { run('UPDATE players SET last_seen_at=? WHERE id=?', [now(), id]); }
 function setPlayerToken(id, token) { run('UPDATE players SET session_token=?, last_seen_at=? WHERE id=?', [token, now(), id]); }
 function setPlayerName(id, name) { run('UPDATE players SET name=?, last_seen_at=? WHERE id=?', [name, now(), id]); log('player_named', `Player #${id} set display name`, { playerId: id, name }); }
+function mergePlayers(primaryId, duplicateId, reason = 'admin merge') {
+  primaryId = parseInt(primaryId, 10); duplicateId = parseInt(duplicateId, 10);
+  if (!primaryId || !duplicateId || primaryId === duplicateId) return { error: 'Primary and duplicate players are required' };
+  const primary = getPlayer(primaryId); const dup = getPlayer(duplicateId);
+  if (!primary || !dup) return { error: 'Player not found' };
+  const dupAuthType = dup.auth_type; const dupAuthId = dup.auth_id;
+  run(`UPDATE players SET
+      sat_balance=sat_balance+?, reserved_sats=reserved_sats+?, total_sats_earned=total_sats_earned+?, total_sats_claimed=total_sats_claimed+?,
+      games_played=games_played+?, games_won=games_won+?, games_lost=games_lost+?, games_drawn=games_drawn+?, times_as_king=times_as_king+?,
+      total_reign_seconds=total_reign_seconds+?, longest_reign_seconds=MAX(longest_reign_seconds,?), longest_win_streak=MAX(longest_win_streak,?), last_seen_at=?
+    WHERE id=?`, [dup.sat_balance||0, dup.reserved_sats||0, dup.total_sats_earned||0, dup.total_sats_claimed||0, dup.games_played||0, dup.games_won||0, dup.games_lost||0, dup.games_drawn||0, dup.times_as_king||0, dup.total_reign_seconds||0, dup.longest_reign_seconds||0, dup.longest_win_streak||0, now(), primaryId]);
+  run('UPDATE payouts SET player_id=?, updated_at=? WHERE player_id=?', [primaryId, now(), duplicateId]);
+  run('UPDATE queue SET player_id=? WHERE player_id=?', [primaryId, duplicateId]);
+  run('UPDATE games SET king_id=? WHERE king_id=?', [primaryId, duplicateId]);
+  run('UPDATE games SET challenger_id=? WHERE challenger_id=?', [primaryId, duplicateId]);
+  run('UPDATE reigns SET king_id=? WHERE king_id=?', [primaryId, duplicateId]);
+  const currentKing = getConfig('current_king_id'); if (String(currentKing) === String(duplicateId)) setConfig('current_king_id', String(primaryId));
+  if (dupAuthType && dupAuthId && dupAuthType !== 'merged') run('INSERT OR REPLACE INTO player_auth_aliases(auth_type,auth_id,player_id,old_player_id,reason) VALUES(?,?,?,?,?)', [dupAuthType, dupAuthId, primaryId, duplicateId, reason]);
+  run('UPDATE players SET name=?, auth_type=?, auth_id=?, session_token=NULL, sat_balance=0, reserved_sats=0, total_sats_earned=0, total_sats_claimed=0, games_played=0, games_won=0, games_lost=0, games_drawn=0, times_as_king=0, total_reign_seconds=0, longest_reign_seconds=0, longest_win_streak=0, last_seen_at=? WHERE id=?', [`${dup.name} (merged into #${primaryId})`, 'merged', `merged:${duplicateId}:into:${primaryId}`, now(), duplicateId]);
+  save(); log('players_merged', `Merged player #${duplicateId} into #${primaryId}`, { primaryId, duplicateId, reason }); return { success: true, primary: getPlayer(primaryId), duplicate: getPlayer(duplicateId) };
+}
 
 function addToQueue(playerId) {
   const pos = (scalar('SELECT COALESCE(MAX(position),0)+1 FROM queue') || 1);
@@ -257,5 +289,5 @@ function resetEventData() {
   log('event_reset', 'Event data reset; player identities and balances preserved');
 }
 
-const api = { initialize, shutdown, save, backup, resetEventData, exec, get, run, log, getConfig, setConfig, createPlayer, getPlayer, getPlayerByToken, getPlayerByAuth, listPlayers, touchPlayer, setPlayerToken, setPlayerName, addToQueue, removeQueueId, removePlayerFromQueue, isPlayerInQueue, getQueue, getNextInQueue, reorderQueue, startReign, getReign, currentReign, endReign, updateReignStats, createGame, getGame, startGame, activeGame, finalizeGame, recentGames, addSats, eventTotalSatsEarned, reservePayout, setPayoutWithdraw, getPayoutByWithdrawK1, payoutPaying, payoutComplete, payoutFail, listPayouts, activeVenueCode, validateVenueCode, createVenueCode, notifications, notify, eventLog };
+const api = { initialize, shutdown, save, backup, resetEventData, exec, get, run, log, getConfig, setConfig, createPlayer, getPlayer, getPlayerByToken, getPlayerByAuth, listPlayers, touchPlayer, setPlayerToken, setPlayerName, mergePlayers, addToQueue, removeQueueId, removePlayerFromQueue, isPlayerInQueue, getQueue, getNextInQueue, reorderQueue, startReign, getReign, currentReign, endReign, updateReignStats, createGame, getGame, startGame, activeGame, finalizeGame, recentGames, addSats, eventTotalSatsEarned, reservePayout, setPayoutWithdraw, getPayoutByWithdrawK1, payoutPaying, payoutComplete, payoutFail, listPayouts, activeVenueCode, validateVenueCode, createVenueCode, notifications, notify, eventLog };
 module.exports = api;
