@@ -36,6 +36,19 @@ async function payInvoice(paymentRequest, amountSats = null) {
   if (result.payment_error) throw new Error(`LND payment failed: ${result.payment_error}`);
   return result;
 }
+async function sendOnChain(address, amountSats, options = {}) {
+  if (!configured()) throw new Error('LND node not configured');
+  const addr = String(address || '').trim();
+  const amount = Number(amountSats);
+  if (!/^(bc1|[13])[a-zA-HJ-NP-Z0-9]{20,100}$/.test(addr)) throw new Error('Invalid Bitcoin address');
+  if (!Number.isInteger(amount) || amount < 1000) throw new Error('Minimum Bitcoin cashout is 1000 sats');
+  const body = { addr, amount: String(amount), target_conf: Number(options.targetConf || 6) };
+  if (options.satPerVbyte) body.sat_per_vbyte = String(options.satPerVbyte);
+  const result = await lndRequest('/v1/transactions', 'POST', body);
+  const txid = result.txid || result.tx_hash || result.transaction_id || null;
+  if (!txid) throw new Error(`LND on-chain send returned no txid: ${JSON.stringify(result).slice(0, 300)}`);
+  return { success: true, txid, address: addr, amountSats: amount, raw: result };
+}
 async function checkBip353(user, domain) {
   try {
     const dnsName = `${user}.user._bitcoin-payment.${domain}`;
@@ -92,4 +105,4 @@ async function payLightningAddress(address, amountSats, comment = '') {
   const payment = await payInvoice(invoice.invoice);
   return { success: true, address: lnurl.address, amountSats: amount, invoice: invoice.invoice, paymentHash: payment.payment_hash || payment.payment_hash_string || null, paymentPreimage: payment.payment_preimage || null, successAction: invoice.successAction };
 }
-module.exports = { configured, getBalances, createTopupInvoice, decodeInvoice, payInvoice, resolveLightningAddress, requestLightningAddressInvoice, payLightningAddress, normalizeLightningAddress };
+module.exports = { configured, getBalances, createTopupInvoice, decodeInvoice, payInvoice, resolveLightningAddress, requestLightningAddressInvoice, payLightningAddress, sendOnChain, normalizeLightningAddress };

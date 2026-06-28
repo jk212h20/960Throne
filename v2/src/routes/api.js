@@ -173,16 +173,23 @@ router.post('/claim/lnurl-withdraw', requirePlayer, async (req, res) => {
   const collectLink = `lightning:${lnurl}`;
   res.json({ success: true, amount, payoutId: reserved.payoutId, k1, expiresAt, lnurl, collectLink, phoenixLink: `phoenix:${collectLink}`, qr: await QRCode.toDataURL(collectLink, { width: 320 }) });
 });
-router.post('/claim/bitcoin-onchain', requirePlayer, (req, res) => {
+router.post('/claim/bitcoin-onchain', requirePlayer, async (req, res) => {
+  if (!lightningNode.configured()) return res.status(503).json({ error: 'Bitcoin cashout not available. Ask an admin to pay manually.' });
   const amount = parseInt(req.player.sat_balance || 0, 10);
   const address = String(req.body.address || '').trim();
-  if (!Number.isInteger(amount) || amount < 10) return res.status(400).json({ error: 'Minimum cashout is 10 sats' });
+  if (!Number.isInteger(amount) || amount < 1000) return res.status(400).json({ error: 'Minimum Bitcoin cashout is 1000 sats' });
   if (!/^(bc1|[13])[a-zA-HJ-NP-Z0-9]{20,100}$/.test(address)) return res.status(400).json({ error: 'Enter a valid Bitcoin address.' });
   const reserved = db.reservePayout(req.player.id, amount, 'bitcoin-onchain', address);
   if (reserved.error) return res.status(400).json(reserved);
-  db.notify('bitcoin_cashout_requested', `${req.player.name} requested on-chain Bitcoin cashout of ${amount} sats`);
-  db.log('bitcoin_cashout_requested', `Bitcoin cashout requested by ${req.player.name}`, { playerId: req.player.id, payoutId: reserved.payoutId, amount, address });
-  res.json({ success: true, amount, payoutId: reserved.payoutId, message: 'Bitcoin cashout requested. An admin will send it and mark it complete.' });
+  try {
+    const sent = await lightningNode.sendOnChain(address, amount, { targetConf: 6 });
+    db.payoutComplete(reserved.payoutId, sent.txid);
+    db.log('bitcoin_cashout_sent', `Bitcoin cashout sent for ${req.player.name}`, { playerId: req.player.id, payoutId: reserved.payoutId, amount, address, txid: sent.txid });
+    res.json({ success: true, amount, payoutId: reserved.payoutId, txid: sent.txid, message: `Bitcoin cashout sent. TXID: ${sent.txid}` });
+  } catch (err) {
+    db.payoutFail(reserved.payoutId, err.message);
+    res.status(500).json({ error: `Bitcoin cashout failed and balance was restored: ${err.message}`, payoutId: reserved.payoutId });
+  }
 });
 router.get('/withdraw/callback', async (req, res) => {
   const payout = db.getPayoutByWithdrawK1(req.query.k1);
